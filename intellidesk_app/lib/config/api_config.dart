@@ -7,10 +7,13 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 class ApiConfig {
   ApiConfig._(); // Prevent instantiation
 
+  /// Local machine LAN IP address for physical device debugging
+  static const String serverIp = '172.22.14.64';
+  static const String serverPort = '3000';
+
   static String get host {
-    if (kIsWeb) return 'http://localhost:3000';
-    if (Platform.isAndroid) return 'http://10.0.2.2:3000';
-    return 'http://localhost:3000'; // iOS / macOS / Windows
+    if (kIsWeb) return 'http://localhost:$serverPort';
+    return 'http://$serverIp:$serverPort';
   }
 
   static String get baseUrl => '$host/api/v1';

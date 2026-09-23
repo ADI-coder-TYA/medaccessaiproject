@@ -46,6 +46,214 @@ export const RELIEF_HARDSHIP_REGEX = /\b(rent|evict|eviction|landlord|homeless|h
 
 export const TICKET_CONFIRM_REGEX = /^(yes|yes please|please submit|submit ticket|submit grant|confirm|go ahead|create ticket|open ticket|please help me apply|yes open ticket)\b/i;
 
+/**
+ * Diagnostic summary context produced by the Multimodal Fusion & Vision screening engine.
+ */
+export interface DiagnosticSummaryContext {
+  riskTier: string; // e.g. "Moderate Need" | "Critical Referral" | "Low Risk"
+  riskScore: number; // e.g. 0.72
+  uncertainty: string; // e.g. "±0.03"
+  topFeatures: string[]; // e.g. ["High Pain Scale", "Localized Skin Rash"]
+  heatMapGenerated: boolean;
+  primaryDiagnosis?: string;
+  differentialDiagnoses?: Array<{ condition: string; probability: number }>;
+  clinicalRecommendations?: string[];
+  patientNotes?: string;
+}
+
+export const MANDATORY_DISCLAIMER = 'This is an AI-assisted screening tool, not a final medical diagnosis.';
+
+/**
+ * Builds ChatML prompt for Qwen2.5 to explain screening findings in empathetic, plain language.
+ */
+export function buildDiagnosticInterpretationPrompt(
+  context: DiagnosticSummaryContext,
+  patientQuery?: string
+): { system: string; user: string } {
+  const isCritical =
+    context.riskTier.toLowerCase().includes('critical') ||
+    context.riskScore >= 0.75;
+  const isModerate =
+    !isCritical &&
+    (context.riskTier.toLowerCase().includes('moderate') || context.riskScore >= 0.40);
+
+  const riskPercent = Math.round(context.riskScore * 100);
+  const featureList = context.topFeatures && context.topFeatures.length > 0
+    ? context.topFeatures.join(', ')
+    : 'Clinical symptom presentation';
+
+  const system = `You are MedAccess AI's Clinical Interpretation & Psychological First Aid Assistant powered by Qwen2.5.
+Your role is to explain clinical health screening results in empathetic, clear, patient-friendly language.
+CRITICAL CLINICAL RULES:
+1. Explain the diagnostic finding (${context.primaryDiagnosis || context.riskTier}) and salient features (${featureList}) in warm, plain language.
+2. Mandatory Disclaimer: You MUST explicitly include this exact phrase: "${MANDATORY_DISCLAIMER}"
+3. Actionable Next Steps:
+   ${
+     isCritical
+       ? '- The assessment is CRITICAL. You must strongly urge the patient to proceed to the Emergency Room (ER) or call emergency services immediately.'
+       : isModerate
+       ? '- The assessment indicates MODERATE NEED. Advise scheduling a clinic or telemedicine consultation within 24-48 hours. Suggest comfort measures such as applying a cool compress, staying hydrated, and resting.'
+       : '- The assessment indicates LOW RISK. Reassure the patient, advise gentle monitoring for 7 days, and suggest routine clinical follow-up if symptoms persist.'
+   }
+4. Address the patient's emotional distress or worry with Psychological First Aid (grounding, reassurance, active validation). Keep responses concise (3-5 sentences).`;
+
+  const user = patientQuery
+    ? `Patient query: "${patientQuery}". Diagnostic context: Risk Score ${riskPercent}% (${context.riskTier}, uncertainty ${context.uncertainty}), primary finding: "${context.primaryDiagnosis || 'Symptom cluster'}", salient features: ${featureList}, Grad-CAM visual heatmap: ${context.heatMapGenerated ? 'Generated' : 'None'}. Please explain and advise.`
+    : `Please interpret my screening result. Risk Score: ${riskPercent}% (${context.riskTier}, uncertainty ${context.uncertainty}). Salient features: ${featureList}. Grad-CAM heatmap generated: ${context.heatMapGenerated}. What does this mean and what should I do next?`;
+
+  return { system, user };
+}
+
+/**
+ * Psychological First Aid deterministic interpretation engine ensuring 100% compliance with
+ * mandatory clinical disclaimers and risk-tiered next steps.
+ */
+export function generateRogerianDiagnosticInterpretation(
+  context: DiagnosticSummaryContext,
+  patientQuery?: string
+): string {
+  const isCritical =
+    context.riskTier.toLowerCase().includes('critical') ||
+    context.riskScore >= 0.75;
+  const isModerate =
+    !isCritical &&
+    (context.riskTier.toLowerCase().includes('moderate') || context.riskScore >= 0.40);
+
+  const riskPercent = Math.round(context.riskScore * 100);
+  const condition = context.primaryDiagnosis || (isCritical ? 'Acute Clinical Presentation' : isModerate ? 'Mild-to-Moderate Inflammation' : 'Localized Benign Condition');
+  const features = context.topFeatures.length > 0 ? context.topFeatures.slice(0, 3).join(' and ') : 'your reported symptoms';
+
+  let interpretation = '';
+  let nextSteps = '';
+
+  if (isCritical) {
+    interpretation = `I can see why this is concerning—your screening identified significant clinical indicators for ${condition}, driven primarily by ${features} (Risk Score: ${riskPercent}% ${context.uncertainty}).`;
+    nextSteps = `Because of the critical urgency level, please proceed to the Emergency Room (ER) immediately or contact local emergency services. Do not drive yourself if experiencing dizziness or severe pain.`;
+  } else if (isModerate) {
+    interpretation = `Thank you for checking in. Your screening indicates moderate clinical attention for ${condition}, influenced primarily by ${features} (Risk Score: ${riskPercent}% ${context.uncertainty}).${context.heatMapGenerated ? ' Our visual attention heatmap highlighted localized inflammation in the symptom area.' : ''}`;
+    nextSteps = `We recommend that you schedule a clinic consultation within 48 hours for an in-person evaluation. In the meantime, apply a clean cold compress to soothe the area, stay well hydrated, and rest.`;
+  } else {
+    interpretation = `Your screening reflects a low risk level (Score: ${riskPercent}% ${context.uncertainty}) consistent with a mild, self-limiting presentation of ${condition}.`;
+    nextSteps = `Continue gentle monitoring over the next few days, keep the area clean and protected, and consult a healthcare provider if symptoms worsen or persist beyond 7 days.`;
+  }
+
+  let queryResponse = '';
+  if (patientQuery) {
+    const qLower = patientQuery.toLowerCase();
+    if (qLower.includes('contagious') || qLower.includes('spread')) {
+      queryResponse = `Regarding your question about contagion: avoid sharing personal towels or touching the affected area until a clinician evaluates it.`;
+    } else if (qLower.includes('pain') || qLower.includes('hurt') || qLower.includes('compress')) {
+      queryResponse = `To manage discomfort, applying a cool damp cloth for 10-15 minutes can provide soothing relief.`;
+    } else if (qLower.includes('scared') || qLower.includes('worried') || qLower.includes('anxious')) {
+      queryResponse = `It is completely natural to feel anxious when health concerns arise. Take a slow, steady breath with me—you have taken the right first step by screening early.`;
+    }
+  }
+
+  const parts = [interpretation];
+  if (queryResponse) parts.push(queryResponse);
+  parts.push(`Recommended Next Steps: ${nextSteps}`);
+  parts.push(`Disclaimer: ${MANDATORY_DISCLAIMER}`);
+
+  return parts.join('\n\n');
+}
+
+/**
+ * Interprets clinical screening results with local ONNX Qwen2.5 or Rogerian PFA engine.
+ */
+export async function interpretDiagnosticResult(
+  context: DiagnosticSummaryContext,
+  patientQuery?: string,
+  history: Array<{ sender: string; message: string }> = []
+): Promise<CounselorResponseResult> {
+  const startTime = Date.now();
+  const isCritical =
+    context.riskTier.toLowerCase().includes('critical') ||
+    context.riskScore >= 0.75;
+  const suggestedResources = isCritical ? EMERGENCY_RESOURCES : null;
+
+  let reply = '';
+  try {
+    const generator = await getCounselorPipeline();
+    if (generator) {
+      const { system, user } = buildDiagnosticInterpretationPrompt(context, patientQuery);
+      const messages = [
+        { role: 'system', content: system },
+        ...history.slice(-4).map((msg) => ({
+          role: msg.sender === 'PATIENT' || msg.sender === 'USER' ? 'user' : 'assistant',
+          content: msg.message
+        })),
+        { role: 'user', content: user }
+      ];
+
+      const genPromise = generator(messages, {
+        max_new_tokens: 120,
+        temperature: 0.6,
+        top_p: 0.85,
+        do_sample: true
+      });
+
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Inference timeout')), 3000)
+      );
+
+      const output: any = await Promise.race([genPromise, timeoutPromise]);
+      if (Array.isArray(output) && output.length > 0) {
+        const genText = output[0]?.generated_text;
+        if (Array.isArray(genText)) {
+          const lastMsg = genText.at(-1);
+          reply = lastMsg?.content?.trim() || '';
+        } else if (typeof genText === 'string') {
+          reply = genText.replace(/<\|.*?\|>/g, '').trim();
+          if (reply.includes('assistant\n')) {
+            reply = reply.split('assistant\n').pop()?.trim() || reply;
+          }
+        }
+      }
+    }
+  } catch (_) {
+    // Seamless fallback to Rogerian clinical interpretation
+  }
+
+  // Fallback if model output is empty or too short
+  if (!reply || reply.length < 30) {
+    reply = generateRogerianDiagnosticInterpretation(context, patientQuery);
+  }
+
+  // Ensure mandatory disclaimer is ALWAYS present
+  if (!reply.includes(MANDATORY_DISCLAIMER)) {
+    reply += `\n\nDisclaimer: ${MANDATORY_DISCLAIMER}`;
+  }
+
+  // Address specific patient query topics if not already addressed in model output
+  if (patientQuery) {
+    const qLower = patientQuery.toLowerCase();
+    const rLower = reply.toLowerCase();
+    if ((qLower.includes('contagious') || qLower.includes('spread')) &&
+        !rLower.includes('contag') && !rLower.includes('towels')) {
+      reply += '\n\nRegarding contagion: Keep the area covered, avoid scratching, and avoid sharing personal towels until evaluated by a healthcare professional.';
+    } else if ((qLower.includes('pain') || qLower.includes('hurt') || qLower.includes('compress')) &&
+        !rLower.includes('compress') && !rLower.includes('cloth')) {
+      reply += '\n\nTo manage discomfort: Applying a clean, cool damp compress for 10-15 minutes can provide soothing relief.';
+    }
+  }
+
+  // Ensure next steps are present if model missed them
+  if (isCritical && !reply.toLowerCase().includes('emergency') && !reply.toLowerCase().includes('er')) {
+    reply += '\n\nUrgent Action: Please proceed to the ER immediately or call local emergency services.';
+  }
+
+  const latencyMs = Date.now() - startTime;
+
+  return {
+    reply,
+    isCrisisResponse: isCritical,
+    requiresConfirmation: false,
+    isTicketLogged: false,
+    resources: suggestedResources,
+    latencyMs
+  };
+}
+
 export interface EmergencyResourceCard {
   name: string;
   number: string;
@@ -160,9 +368,18 @@ export async function generateCounselorResponse(
   ticketId: string | null,
   studentMessage: string,
   history: Array<{ sender: string; message: string }> = [],
-  options: { isTicketCreated?: boolean; requiresConfirmation?: boolean } = {}
+  options: { 
+    isTicketCreated?: boolean; 
+    requiresConfirmation?: boolean;
+    diagnosticContext?: DiagnosticSummaryContext;
+  } = {}
 ): Promise<CounselorResponseResult> {
   const startTime = Date.now();
+
+  // Route directly to diagnostic interpretation if context is present
+  if (options.diagnosticContext) {
+    return interpretDiagnosticResult(options.diagnosticContext, studentMessage, history);
+  }
 
   // Step A: Safety & Harm Detection
   const isCrisisResponse = CRITICAL_SELF_HARM_REGEX.test(studentMessage);

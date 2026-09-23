@@ -25,6 +25,9 @@ import { DatabaseService } from './services/dbService.js';
 
 import authRouter from './routes/auth.js';
 import { requireAuth, requireRole } from './middleware/authMiddleware.js';
+import diagnosticsRouter from './modules/diagnostics/routes/diagnosticsRouter.js';
+import { pharmacyRouter } from './modules/pharmacy/routes/pharmacyRouter.js';
+import { cdssRouter } from './modules/cdss/routes/cdssRouter.js';
 
 const app = express();
 app.use(cors());
@@ -38,6 +41,9 @@ initializeSocket(server);
 app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/chat', chatRouter);
 app.use('/api/v1/intake', asyncIntakeRouter);
+app.use('/api/v1/diagnostics', diagnosticsRouter);
+app.use('/api/v1/pharmacy', pharmacyRouter);
+app.use('/api/v1/cdss', cdssRouter);
 app.use('/api/v1/patients', patientsRouter);
 app.use('/api/v1/students', patientsRouter);
 app.use('/api/v1/claims', tenantScopeMiddleware, claimsRouter);

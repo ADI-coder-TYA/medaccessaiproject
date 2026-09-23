@@ -1,0 +1,507 @@
+import { Router, Request, Response } from 'express';
+import { ClinicalImageClassifier } from '../vision/imageClassifier.js';
+import { MultimodalRiskNetwork } from '../fusion/multimodalRiskNetwork.js';
+import { GradCamGenerator } from '../explainability/gradCamGenerator.js';
+import { FeatureImportanceEngine } from '../explainability/featureImportance.js';
+import { HealthScreeningsDbService } from '../db/healthScreeningsDbService.js';
+import { SymptomInputPayload } from '../fusion/types.js';
+import { AudioFeatureExtractor, CoughClassifier } from '../audio/index.js';
+import { FHIRConverterService } from '../fhir/FHIRConverterService.js';
+import { ReferralLetterGenerator } from '../fhir/ReferralLetterGenerator.js';
+import { ScreeningDeltaAnalyzer } from '../progression/ScreeningDeltaAnalyzer.js';
+import { EmergencyFacilityService } from '../facilities/EmergencyFacilityService.js';
+import { pharmacyRouter } from '../../pharmacy/routes/pharmacyRouter.js';
+import { 
+  interpretDiagnosticResult, 
+  generateCounselorResponse, 
+  DiagnosticSummaryContext 
+} from '../../../services/crisisCounselorService.js';
+import { rPPGSignalProcessor } from '../vitals/rPPGSignalProcessor.js';
+import { BioSignalFrame } from '../vitals/types.js';
+import { cdssRouter } from '../../cdss/routes/cdssRouter.js';
+
+const router = Router();
+
+// Mount RxSentinel Pharmacy Subsystem & CDSS
+router.use('/pharmacy', pharmacyRouter);
+router.use('/cdss', cdssRouter);
+
+/**
+ * POST /api/v1/diagnostics/analyze
+ * End-to-end multimodal screening pipeline:
+ * Vision feature extraction + Multimodal fusion + Grad-CAM heatmap + SHAP feature importance + Persistence
+ */
+router.post('/analyze', async (req: Request, res: Response) => {
+  try {
+    const {
+      patientId,
+      previousScreeningId,
+      institutionId = 'edu-admin-123',
+      imageUrl,
+      symptoms,
+      audioBase64,
+      audioFeatures
+    } = req.body;
+
+    if (!symptoms || !symptoms.symptoms || !Array.isArray(symptoms.symptoms)) {
+      return res.status(400).json({
+        error: 'Invalid payload: "symptoms" with an array of symptom strings is required.'
+      });
+    }
+
+    const symptomPayload: SymptomInputPayload = {
+      bodyLocation: symptoms.bodyLocation || 'General / Unspecified',
+      durationDays: Number(symptoms.durationDays) || 1,
+      painScale: Number(symptoms.painScale) || 0,
+      symptoms: symptoms.symptoms,
+      vitals: symptoms.vitals,
+      demographics: symptoms.demographics,
+      additionalNotes: symptoms.additionalNotes
+    };
+
+    // 1. Clinical Computer Vision Pipeline (if image provided)
+    let visionResult;
+    let gradCamResult;
+    if (imageUrl) {
+      visionResult = await ClinicalImageClassifier.extractEmbeddings({
+        imageUrl,
+        categoryHint: symptoms.categoryHint
+      });
+
+      // Generate Grad-CAM Heatmap
+      gradCamResult = GradCamGenerator.generateHeatmap(
+        visionResult.predictedCondition,
+        visionResult.featureVector,
+        visionResult.featureMapDimensions
+      );
+    }
+
+    // 2. Audio Biomarker Buffer (if audio provided)
+    let audioBuffer: Buffer | undefined;
+    if (audioBase64 && typeof audioBase64 === 'string') {
+      const b64Data = audioBase64.startsWith('data:') ? audioBase64.split(',')[1] : audioBase64;
+      audioBuffer = Buffer.from(b64Data, 'base64');
+    }
+
+    // 3. Multimodal Fusion Engine (Vision + Symptoms + Demographics + Audio)
+    const riskResult = await MultimodalRiskNetwork.assessRisk(symptomPayload, visionResult, {
+      audioBuffer,
+      audioFeatures
+    });
+
+    // 3. Explainability & Feature Importance (SHAP/LIME)
+    const shapResult = FeatureImportanceEngine.calculateShapValues(symptomPayload, riskResult, visionResult);
+
+    // 4. Persistence into Supabase `health_screenings`
+    const rppgPayload = symptomPayload.vitals?.rppgResult || null;
+    const physiologicalAlerts = rppgPayload?.alerts || [];
+
+    const savedScreening = await HealthScreeningsDbService.createScreening({
+      patientId,
+      previousScreeningId,
+      institutionId,
+      imageUrl,
+      symptomPayload,
+      multimodalRiskScore: riskResult.riskScore,
+      uncertaintyBounds: riskResult.uncertaintyBounds as any,
+      xaiHeatmapUrl: gradCamResult?.overlaySvgDataUri || null,
+      clinicalFindings: visionResult?.topFindings || [],
+      riskLevel: riskResult.riskLevel,
+      status: 'COMPLETED',
+      rppgVitalsPayload: rppgPayload,
+      physiologicalAlerts
+    });
+
+    // 5. Compute Longitudinal Progression Delta if previous screening is linked
+    let longitudinalDelta = null;
+    if (savedScreening.previous_screening_id) {
+      try {
+        longitudinalDelta = await ScreeningDeltaAnalyzer.analyzeDelta(
+          savedScreening.previous_screening_id,
+          savedScreening
+        );
+      } catch (deltaErr) {
+        console.warn('⚠️ [Diagnostics API] Could not compute inline longitudinal delta:', deltaErr);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      screeningId: savedScreening.id,
+      riskAssessment: riskResult,
+      visionAnalysis: visionResult,
+      explainability: {
+        gradCam: gradCamResult,
+        shap: shapResult
+      },
+      longitudinalDelta,
+      persistedRecord: savedScreening
+    });
+  } catch (err: any) {
+    console.error('❌ [Diagnostics API] Error processing health screening:', err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || 'Internal screening failure'
+    });
+  }
+});
+
+/**
+ * GET /api/v1/diagnostics/screenings/patient/:patientId
+ */
+router.get('/screenings/patient/:patientId', async (req: Request, res: Response) => {
+  try {
+    const patientId = String(req.params.patientId);
+    const screenings = await HealthScreeningsDbService.getScreeningsByPatient(patientId);
+    return res.status(200).json({ success: true, screenings });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/v1/diagnostics/screenings/:id
+ */
+router.get('/screenings/:id', async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const screening = await HealthScreeningsDbService.getScreeningById(id);
+    if (!screening) {
+      return res.status(404).json({ success: false, error: 'Screening not found' });
+    }
+    return res.status(200).json({ success: true, screening });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/v1/diagnostics/screenings/:id/fhir
+ * Returns standard HL7 FHIR Release 4 (v4.0.1) Observation & DiagnosticReport bundle.
+ * Technical Guardrails 2 & 4: Strict LOINC/UCUM alignment and patient fallback.
+ */
+router.get('/screenings/:id/fhir', async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const screening = await HealthScreeningsDbService.getScreeningById(id);
+    if (!screening) {
+      return res.status(404).json({
+        resourceType: 'OperationOutcome',
+        issue: [
+          {
+            severity: 'error',
+            code: 'not-found',
+            diagnostics: `Health screening record "${id}" not found.`
+          }
+        ]
+      });
+    }
+
+    const fhirBundle = FHIRConverterService.buildFHIRDiagnosticReport(screening);
+    res.setHeader('Content-Type', 'application/fhir+json');
+    return res.status(200).json(fhirBundle);
+  } catch (err: any) {
+    console.error('❌ [Diagnostics API] Error generating FHIR R4 export:', err);
+    return res.status(500).json({
+      resourceType: 'OperationOutcome',
+      issue: [
+        {
+          severity: 'fatal',
+          code: 'exception',
+          diagnostics: err.message || 'Internal failure generating FHIR representation.'
+        }
+      ]
+    });
+  }
+});
+
+/**
+ * GET /api/v1/diagnostics/screenings/:id/referral
+ * Streams a formal Clinical Referral Letter PDF generated via PDFKit.
+ * Technical Guardrail 3: Direct response stream piping.
+ */
+router.get(['/screenings/:id/referral', '/screenings/:id/referral-letter'], async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const screening = await HealthScreeningsDbService.getScreeningById(id);
+    if (!screening) {
+      return res.status(404).json({ success: false, error: 'Screening not found' });
+    }
+
+    await ReferralLetterGenerator.generateReferralPdfStream(screening, res);
+  } catch (err: any) {
+    console.error('❌ [Diagnostics API] Error generating Referral Letter PDF:', err);
+    if (!res.headersSent) {
+      return res.status(500).json({ success: false, error: err.message || 'Failed to generate referral letter' });
+    }
+  }
+});
+
+/**
+ * POST /api/v1/diagnostics/interpret
+ * Generates an empathetic Qwen2.5 explanation & next steps for screening results.
+ */
+router.post('/interpret', async (req: Request, res: Response) => {
+  try {
+    const { diagnosticContext, query } = req.body;
+    if (!diagnosticContext) {
+      return res.status(400).json({ success: false, error: 'diagnosticContext is required.' });
+    }
+
+    const result = await interpretDiagnosticResult(diagnosticContext as DiagnosticSummaryContext, query);
+    return res.status(200).json({
+      success: true,
+      interpretation: result.reply,
+      isCrisis: result.isCrisisResponse,
+      resources: result.resources,
+      latencyMs: result.latencyMs
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/v1/diagnostics/audio/classify
+ * Standalone Audio Biomarker Extraction & Cough Classification endpoint.
+ * Accepts WAV/PCM base64 or audio feature vector.
+ */
+router.post('/audio/classify', async (req: Request, res: Response) => {
+  try {
+    const { audioBase64, audioFeatures } = req.body;
+
+    let features = audioFeatures;
+    let extractionResult = null;
+
+    if (!features && audioBase64) {
+      let rawBuf: Buffer;
+      if (typeof audioBase64 === 'string' && audioBase64.startsWith('data:')) {
+        const base64Data = audioBase64.split(',')[1];
+        rawBuf = Buffer.from(base64Data, 'base64');
+      } else {
+        rawBuf = Buffer.from(audioBase64, 'base64');
+      }
+
+      extractionResult = await AudioFeatureExtractor.extractFeatures(rawBuf);
+      features = extractionResult.featureVector;
+    }
+
+    if (!features) {
+      return res.status(400).json({
+        success: false,
+        error: 'Either "audioBase64" or "audioFeatures" (16-d array) is required.'
+      });
+    }
+
+    const classification = await CoughClassifier.classify(features);
+
+    return res.status(200).json({
+      success: true,
+      classification,
+      extraction: extractionResult
+    });
+  } catch (err: any) {
+    console.error('❌ [Diagnostics API] Error classifying cough audio:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/v1/diagnostics/chat
+ * Multi-turn chat with local ONNX Qwen2.5 / Rogerian assistant grounded in patient screening context.
+ */
+router.post('/chat', async (req: Request, res: Response) => {
+  try {
+    const { message, diagnosticContext, history = [] } = req.body;
+    if (!message) {
+      return res.status(400).json({ success: false, error: 'message is required.' });
+    }
+
+    const result = await generateCounselorResponse(
+      null,
+      message,
+      history,
+      { diagnosticContext }
+    );
+
+    return res.status(200).json({
+      success: true,
+      reply: result.reply,
+      isCrisis: result.isCrisisResponse,
+      resources: result.resources,
+      latencyMs: result.latencyMs
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/v1/diagnostics/progression/delta
+ * Calculates longitudinal progression metrics (SSIM, risk delta, vital shifts, clinical status)
+ * between baseline (T0) and follow-up (T1) screenings.
+ */
+router.post('/progression/delta', async (req: Request, res: Response) => {
+  try {
+    const { baselineScreeningId, followupScreeningId, baselineScreening, followupScreening } = req.body;
+    const baseline = baselineScreeningId || baselineScreening;
+    const followup = followupScreeningId || followupScreening;
+
+    if (!baseline || !followup) {
+      return res.status(400).json({
+        success: false,
+        error: 'Both baseline (ID or object) and follow-up (ID or object) are required.'
+      });
+    }
+
+    const comparison = await ScreeningDeltaAnalyzer.analyzeDelta(baseline, followup);
+    return res.status(200).json({ success: true, comparison });
+  } catch (err: any) {
+    console.error('❌ [Diagnostics API] Error analyzing progression delta:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/v1/diagnostics/screenings/patient/:patientId/longitudinal
+ * Returns chronological longitudinal history for patient with pairwise deltas and overall trajectory.
+ */
+router.get('/screenings/patient/:patientId/longitudinal', async (req: Request, res: Response) => {
+  try {
+    const patientId = String(req.params.patientId);
+    const screenings = await HealthScreeningsDbService.getScreeningsByPatientAsc(patientId);
+
+    if (screenings.length === 0) {
+      return res.status(200).json({
+        success: true,
+        patientId,
+        screenings: [],
+        timelineDeltas: [],
+        overallComparison: null
+      });
+    }
+
+    // Compute pairwise consecutive deltas
+    const timelineDeltas = [];
+    for (let i = 1; i < screenings.length; i++) {
+      try {
+        const delta = await ScreeningDeltaAnalyzer.analyzeDelta(screenings[i - 1], screenings[i]);
+        timelineDeltas.push(delta);
+      } catch (e) {
+        console.warn(`⚠️ [Diagnostics API] Pairwise delta computation skipped for index ${i}:`, e);
+      }
+    }
+
+    // Compute overall progression from first (T0) to last (TN)
+    let overallComparison = null;
+    if (screenings.length > 1) {
+      try {
+        overallComparison = await ScreeningDeltaAnalyzer.analyzeDelta(
+          screenings[0],
+          screenings[screenings.length - 1]
+        );
+      } catch (e) {
+        console.warn('⚠️ [Diagnostics API] Overall delta computation skipped:', e);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      patientId,
+      totalScreenings: screenings.length,
+      screenings,
+      timelineDeltas,
+      overallComparison
+    });
+  } catch (err: any) {
+    console.error('❌ [Diagnostics API] Error fetching longitudinal screenings:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/v1/diagnostics/facilities/nearby
+ * Retrieves nearest emergency care facilities, trauma centers, and campus health clinics
+ * within a requested radius (default 20 km) based on patient GPS coordinates.
+ */
+router.get('/facilities/nearby', async (req: Request, res: Response) => {
+  try {
+    const lat = req.query.lat ? parseFloat(String(req.query.lat)) : 40.7128;
+    const lng = req.query.lng ? parseFloat(String(req.query.lng)) : -74.0060;
+    const radiusKm = req.query.radiusKm ? parseFloat(String(req.query.radiusKm)) : 20.0;
+    const type = req.query.type as any;
+
+    if (isNaN(lat) || isNaN(lng)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid coordinates: "lat" and "lng" must be valid numeric floating point values.'
+      });
+    }
+
+    const result = EmergencyFacilityService.getNearbyFacilities(lat, lng, radiusKm, type);
+    return res.status(200).json({
+      success: true,
+      ...result
+    });
+  } catch (err: any) {
+    console.error('❌ [Diagnostics API] Error querying nearby emergency facilities:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/v1/diagnostics/vitals/process-rppg
+ * Processes camera optical photoplethysmography (rPPG) frame stream.
+ * Extracts Heart Rate, HRV (RMSSD), Respiration Rate, SpO2 (AC/DC normalized),
+ * and checks physiological red-flags.
+ */
+router.post('/vitals/process-rppg', async (req: Request, res: Response) => {
+  try {
+    const { frames, red, green, blue, timestampsMs, samplingRate = 30.0 } = req.body;
+
+    const processor = new rPPGSignalProcessor(Number(samplingRate) || 30.0);
+    let result;
+
+    if (Array.isArray(frames) && frames.length > 0) {
+      if (frames.length < 60) {
+        return res.status(400).json({
+          success: false,
+          error: `Insufficient optical frames: received ${frames.length} frames, minimum 60 required (>= 2 seconds).`
+        });
+      }
+      result = processor.processFrames(frames as BioSignalFrame[]);
+    } else if (Array.isArray(green) && green.length > 0) {
+      if (green.length < 60) {
+        return res.status(400).json({
+          success: false,
+          error: `Insufficient optical samples: received ${green.length} samples, minimum 60 required (>= 2 seconds).`
+        });
+      }
+      result = processor.processSignals({
+        red: Array.isArray(red) ? red : green,
+        green,
+        blue: Array.isArray(blue) ? blue : green,
+        timestampsMs: Array.isArray(timestampsMs) ? timestampsMs : undefined,
+        samplingRate: Number(samplingRate) || 30.0
+      });
+    } else {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid payload: "frames" array or "green" signal array is required.'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      vitals: result
+    });
+  } catch (err: any) {
+    console.error('❌ [Diagnostics API] Error processing rPPG vitals:', err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || 'Signal processing error'
+    });
+  }
+});
+
+export default router;

@@ -53,6 +53,18 @@ const REQUIRED_BUCKETS: BucketConfig[] = [
       'audio/webm',
       'audio/aac'
     ]
+  },
+  {
+    name: 'clinical-diagnostics',
+    public: true,
+    fileSizeLimit: 30 * 1024 * 1024, // 30 MB
+    allowedMimeTypes: [
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'image/heic',
+      'application/json'
+    ]
   }
 ];
 

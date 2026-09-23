@@ -166,3 +166,28 @@ ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS currency text default 'INR';
 ALTER TABLE public.funds ADD COLUMN IF NOT EXISTS currency text default 'INR';
 ALTER TABLE public.institutions ADD COLUMN IF NOT EXISTS currency text default 'INR';
 
+-- 7. Health Screenings Table (Clinical Multimodal Diagnostics)
+CREATE TABLE IF NOT EXISTS public.health_screenings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    patient_id UUID REFERENCES public.students(id) ON DELETE CASCADE,
+    institution_id TEXT NOT NULL DEFAULT 'edu-admin-123',
+    image_url TEXT,
+    symptom_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    multimodal_risk_score DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    uncertainty_bounds JSONB NOT NULL DEFAULT '{"confidence": 0.0, "ci_lower": 0.0, "ci_upper": 0.0, "epistemic_variance": 0.0}'::jsonb,
+    xai_heatmap_url TEXT,
+    clinical_findings JSONB DEFAULT '[]'::jsonb,
+    risk_level TEXT NOT NULL DEFAULT 'LOW',
+    status TEXT NOT NULL DEFAULT 'COMPLETED',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.health_screenings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Enable full access for service_role on health_screenings" ON public.health_screenings FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Patients can view their own health screenings" ON public.health_screenings FOR SELECT TO authenticated USING (patient_id = auth.uid());
+CREATE INDEX IF NOT EXISTS health_screenings_patient_id_idx ON public.health_screenings (patient_id);
+CREATE INDEX IF NOT EXISTS health_screenings_institution_id_idx ON public.health_screenings (institution_id);
+CREATE INDEX IF NOT EXISTS health_screenings_created_at_idx ON public.health_screenings (created_at DESC);
+GRANT ALL PRIVILEGES ON TABLE public.health_screenings TO service_role;
+

@@ -11,6 +11,8 @@ import '../../widgets/role_guard.dart';
 import 'claim_intake_screen.dart';
 import 'clinical_chat_screen.dart';
 import 'claim_status_screen.dart';
+import '../../modules/diagnostics/ui/diagnostic_intake_screen.dart';
+import '../../modules/diagnostics/ui/symptom_questionnaire_screen.dart';
 
 class PatientMainScreen extends StatefulWidget {
   const PatientMainScreen({super.key});
@@ -38,6 +40,7 @@ class _PatientMainScreenState extends State<PatientMainScreen> {
                 child: Column(
                   children: [
                     _buildPatientHeader(isMobile, isConnected, user),
+                    if (_selectedIndex == 0) _buildAiHealthCheckupCard(context, isMobile),
                     Expanded(
                       child: isMobile
                           ? _buildBodyView(_selectedIndex)
@@ -275,6 +278,26 @@ class _PatientMainScreenState extends State<PatientMainScreen> {
               ),
             ),
           ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0D9488),
+              foregroundColor: Colors.white,
+              padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 12, vertical: 6),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              elevation: 0,
+            ),
+            icon: const Icon(Icons.biotech, size: 16),
+            label: Text(
+              isMobile ? 'Checkup' : 'AI Health Checkup',
+              style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: isMobile ? 11 : 12),
+            ),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SymptomQuestionnaireScreen()),
+              );
+            },
+          ),
           const SizedBox(width: 8),
           Container(
             padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 12, vertical: 5),
@@ -311,6 +334,104 @@ class _PatientMainScreenState extends State<PatientMainScreen> {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAiHealthCheckupCard(BuildContext context, bool isMobile) {
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 24, vertical: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0D9488), Color(0xFF0F766E)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0D9488).withOpacity(0.22),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.18),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.biotech, color: Colors.white, size: 28),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'AI Health Checkup & Screening',
+                      style: GoogleFonts.outfit(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: isMobile ? 14 : 16,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'NEW',
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Interactive questionnaire & clinical computer vision with Grad-CAM heatmaps.',
+                  style: GoogleFonts.inter(
+                    color: Colors.white.withOpacity(0.85),
+                    fontSize: isMobile ? 11 : 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: const Color(0xFF0D9488),
+              elevation: 0,
+              padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 18, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SymptomQuestionnaireScreen()),
+              );
+            },
+            child: Text(
+              'Start',
+              style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13),
             ),
           ),
         ],

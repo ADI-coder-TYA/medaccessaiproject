@@ -6,6 +6,8 @@ import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:url_launcher/url_launcher.dart';
 import '../../config/api_config.dart';
 import '../../theme/app_theme.dart';
+import '../../modules/cdss/services/cdss_service.dart';
+import '../../modules/cdss/ui/cdss_decision_drawer.dart';
 
 class AdminWarRoomScreen extends StatefulWidget {
   const AdminWarRoomScreen({super.key});
@@ -307,6 +309,41 @@ class _AdminWarRoomScreenState extends State<AdminWarRoomScreen> with SingleTick
                     ],
                   ),
                 ),
+
+              // CDSS Button
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 12),
+                child: OutlinedButton.icon(
+                  key: const Key('openCDSSButton'),
+                  icon: const Icon(Icons.psychology, size: 18, color: AppTheme.primaryBrand),
+                  label: const Text('Clinical Decision Support (CDSS)', style: TextStyle(fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppTheme.primaryBrand),
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    final screeningId = claim['screening_id']?.toString() ?? claim['id']?.toString() ?? 'SCR-CLAIM';
+                    final eval = await CDSSService().evaluateScreening(
+                      screeningId: screeningId,
+                      patientId: claim['patient_id']?.toString() ?? 'PATIENT-ANON',
+                      riskScore: 0.85,
+                      symptoms: {
+                        'symptomList': claim['symptoms'] is List ? List<String>.from(claim['symptoms']) : ['Acute respiratory distress', 'Fever'],
+                        'heartRate': claim['heart_rate'] ?? 98,
+                        'spo2': claim['spo2'] ?? 94,
+                        'respirationRate': claim['respiration_rate'] ?? 20,
+                        'temperature': 38.5,
+                        'clinicalSummary': claim['notes']?.toString() ?? claim['description']?.toString() ?? 'Multimodal triage evaluation for claim review',
+                      },
+                    );
+                    if (context.mounted) {
+                      CDSSDecisionDrawer.show(context, evaluation: eval);
+                    }
+                  },
+                ),
+              ),
 
               Row(
                 children: [

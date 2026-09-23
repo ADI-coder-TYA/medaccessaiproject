@@ -20,6 +20,9 @@ class ApiConfig {
 
   static String get socketUrl => host;
 
+  static const String supabaseUrl = 'https://iwxdsspvsenlhiigkakw.supabase.co';
+  static const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml3eGRzc3B2c2VubGhpaWdrYWt3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NjE4ODUwMywiZXhwIjoyMTAxNzY0NTAzfQ.GVNgQP9GvaIXJaKfND3r9TXwWQS9vkICdrcCWsF3Lws';
+
   static String institutionId = 'inst-001';
   static String? currentInstitutionId;
 

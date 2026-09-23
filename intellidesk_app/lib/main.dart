@@ -16,6 +16,8 @@ import 'config/api_config.dart';
 import 'providers/claims_provider.dart';
 import 'providers/clinical_chat_provider.dart';
 import 'providers/war_room_provider.dart';
+import 'modules/diagnostics/providers/diagnostics_provider.dart';
+import 'modules/diagnostics/providers/diagnostic_state_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,6 +33,8 @@ void main() async {
         ChangeNotifierProvider(create: (_) => ClaimsProvider()),
         ChangeNotifierProvider(create: (_) => ClinicalChatProvider()),
         ChangeNotifierProvider(create: (_) => WarRoomProvider()),
+        ChangeNotifierProvider(create: (_) => DiagnosticsProvider()),
+        ChangeNotifierProvider(create: (_) => DiagnosticStateProvider()),
         ChangeNotifierProvider(create: (_) => OfflineQueueManager()),
         ChangeNotifierProvider(create: (_) => JobTrackingManager(
           socket: io.io(ApiConfig.socketUrl, io.OptionBuilder().setTransports(['websocket']).build()),

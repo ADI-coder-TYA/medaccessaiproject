@@ -26,6 +26,7 @@ class UserProfile {
   });
 
   String get fullName => name;
+  String get institutionName => institutionId;
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     return UserProfile(

@@ -18,6 +18,7 @@ import 'providers/clinical_chat_provider.dart';
 import 'providers/war_room_provider.dart';
 import 'modules/diagnostics/providers/diagnostics_provider.dart';
 import 'modules/diagnostics/providers/diagnostic_state_provider.dart';
+import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -89,43 +90,7 @@ class MyApp extends StatelessWidget {
               ),
               useMaterial3: true,
             )
-          : ThemeData(
-              brightness: Brightness.light,
-              scaffoldBackgroundColor: const Color(0xFFF8FAFC), // Subtle Slate Tint
-              primaryColor: const Color(0xFF0D9488), // Deep Clinical Teal
-              splashColor: Colors.transparent,
-              highlightColor: Colors.transparent,
-              hoverColor: Colors.transparent,
-              colorScheme: const ColorScheme.light(
-                primary: Color(0xFF0D9488), // Deep Clinical Teal
-                primaryContainer: Color(0xFF0F766E), // Dark Clinical Teal
-                secondary: Color(0xFF0284C7), // Soft Cyan / Sky Wellness
-                secondaryContainer: Color(0xFF38BDF8),
-                surface: Color(0xFFFFFFFF), // Clean Medical White
-                error: Color(0xFFEF4444), // Urgent Coral
-                surfaceContainerHighest: Color(0xFFF1F5F9),
-              ),
-              textTheme: GoogleFonts.outfitTextTheme(ThemeData.light().textTheme).copyWith(
-                headlineLarge: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w700, letterSpacing: -0.5),
-                headlineMedium: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w700, letterSpacing: -0.5),
-                headlineSmall: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w700, letterSpacing: -0.5),
-                titleLarge: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w700, letterSpacing: -0.5),
-              ),
-              appBarTheme: const AppBarTheme(
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                foregroundColor: Color(0xFF0F172A),
-              ),
-              pageTransitionsTheme: const PageTransitionsTheme(
-                builders: {
-                  TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
-                  TargetPlatform.iOS: FadeUpwardsPageTransitionsBuilder(),
-                  TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
-                  TargetPlatform.macOS: FadeUpwardsPageTransitionsBuilder(),
-                },
-              ),
-              useMaterial3: true,
-            ),
+          : AppTheme.lightTheme,
       home: const AuthGate(),
     );
   }

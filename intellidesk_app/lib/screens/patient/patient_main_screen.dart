@@ -8,11 +8,11 @@ import '../../providers/ticket_provider.dart';
 import '../profile/user_profile_screen.dart';
 import '../../widgets/boutique_background.dart';
 import '../../widgets/role_guard.dart';
-import 'claim_intake_screen.dart';
-import 'clinical_chat_screen.dart';
-import 'claim_status_screen.dart';
+import 'patient_clinical_dashboard.dart';
+import 'pharmacy_hub_screen.dart';
+import 'emergency_hub_screen.dart';
+import 'health_records_screen.dart';
 import '../../modules/diagnostics/ui/diagnostic_intake_screen.dart';
-import '../../modules/diagnostics/ui/symptom_questionnaire_screen.dart';
 
 class PatientMainScreen extends StatefulWidget {
   const PatientMainScreen({super.key});
@@ -23,6 +23,12 @@ class PatientMainScreen extends StatefulWidget {
 
 class _PatientMainScreenState extends State<PatientMainScreen> {
   int _selectedIndex = 0;
+
+  void _onNavigateTab(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,19 +41,19 @@ class _PatientMainScreenState extends State<PatientMainScreen> {
           final user = context.select<AuthProvider, dynamic>((p) => p.user);
 
           return Scaffold(
+            backgroundColor: const Color(0xFF0B132B), // Deep Clinical Navy
             body: BoutiqueBackground(
               child: SafeArea(
                 child: Column(
                   children: [
                     _buildPatientHeader(isMobile, isConnected, user),
-                    if (_selectedIndex == 0) _buildAiHealthCheckupCard(context, isMobile),
                     Expanded(
                       child: isMobile
                           ? _buildBodyView(_selectedIndex)
                           : Row(
                               children: [
                                 Material(
-                                  color: Colors.white.withValues(alpha: 0.6),
+                                  color: const Color(0xFF0F172A).withValues(alpha: 0.95),
                                   child: Container(
                                     decoration: const BoxDecoration(
                                       border: Border(
@@ -59,58 +65,58 @@ class _PatientMainScreenState extends State<PatientMainScreen> {
                                     ),
                                     child: NavigationRail(
                                       selectedIndex: _selectedIndex,
-                                      onDestinationSelected: (int index) {
-                                        setState(() {
-                                          _selectedIndex = index;
-                                        });
-                                      },
+                                      onDestinationSelected: _onNavigateTab,
                                       labelType: NavigationRailLabelType.all,
                                       backgroundColor: Colors.transparent,
                                       selectedLabelTextStyle: GoogleFonts.outfit(
-                                        color: const Color(0xFF0D9488),
+                                        color: const Color(0xFF5EEAD4),
                                         fontWeight: FontWeight.bold,
                                         fontSize: 12,
                                       ),
                                       unselectedLabelTextStyle: GoogleFonts.outfit(
-                                        color: const Color(0xFF0F172A).withValues(alpha: 0.7),
+                                        color: Colors.grey[400],
                                         fontSize: 11,
                                         fontWeight: FontWeight.w500,
                                       ),
                                       unselectedIconTheme: IconThemeData(
-                                        color: const Color(0xFF0F172A).withValues(alpha: 0.5),
-                                        size: 24,
+                                        color: Colors.grey[500],
+                                        size: 22,
                                       ),
                                       selectedIconTheme: const IconThemeData(
-                                        color: Color(0xFF0D9488),
+                                        color: Color(0xFF14B8A6),
                                         size: 26,
                                       ),
-                                      indicatorColor: const Color(0xFF0D9488).withValues(alpha: 0.12),
+                                      indicatorColor: const Color(0xFF0D9488).withValues(alpha: 0.25),
                                       destinations: const [
                                         NavigationRailDestination(
-                                          icon: Icon(Icons.medical_services_outlined),
-                                          selectedIcon: Icon(Icons.medical_services),
-                                          label: Text('Intake & Claims'),
+                                          icon: Icon(Icons.dashboard_outlined),
+                                          selectedIcon: Icon(Icons.dashboard_rounded),
+                                          label: Text('AI Hub'),
                                         ),
                                         NavigationRailDestination(
-                                          icon: Icon(Icons.psychology_outlined),
-                                          selectedIcon: Icon(Icons.psychology),
-                                          label: Text('AI Counselor'),
+                                          icon: Icon(Icons.health_and_safety_outlined),
+                                          selectedIcon: Icon(Icons.health_and_safety_rounded),
+                                          label: Text('Checkup'),
                                         ),
                                         NavigationRailDestination(
-                                          icon: Icon(Icons.receipt_long_outlined),
-                                          selectedIcon: Icon(Icons.receipt_long),
-                                          label: Text('Claim Tracker'),
+                                          icon: Icon(Icons.medication_outlined),
+                                          selectedIcon: Icon(Icons.medication_rounded),
+                                          label: Text('Pharmacy'),
                                         ),
                                         NavigationRailDestination(
-                                          icon: Icon(Icons.person_outline),
-                                          selectedIcon: Icon(Icons.person),
-                                          label: Text('Health Profile'),
+                                          icon: Icon(Icons.emergency_outlined),
+                                          selectedIcon: Icon(Icons.emergency_rounded),
+                                          label: Text('Emergency'),
+                                        ),
+                                        NavigationRailDestination(
+                                          icon: Icon(Icons.folder_shared_outlined),
+                                          selectedIcon: Icon(Icons.folder_shared_rounded),
+                                          label: Text('Records'),
                                         ),
                                       ],
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 8),
                                 Expanded(child: _buildBodyView(_selectedIndex)),
                               ],
                             ),
@@ -129,57 +135,88 @@ class _PatientMainScreenState extends State<PatientMainScreen> {
   Widget _buildBodyView(int index) {
     switch (index) {
       case 0:
-        return const ClaimIntakeScreen();
+        return PatientClinicalDashboard(onNavigateTab: _onNavigateTab);
       case 1:
-        return const ClinicalChatScreen();
+        return const DiagnosticIntakeScreen();
       case 2:
-        return ClaimStatusScreen(
-          onNavigateToClaims: () => setState(() => _selectedIndex = 0),
-        );
+        return const PharmacyHubScreen();
       case 3:
-        return const UserProfileScreen();
+        return const EmergencyHubScreen();
+      case 4:
+        return const HealthRecordsScreen();
       default:
-        return const ClaimIntakeScreen();
+        return PatientClinicalDashboard(onNavigateTab: _onNavigateTab);
     }
   }
 
   Widget _buildMobileNavBar() {
     return Container(
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: Color(0x1A1F1B2C), width: 1)),
-      ),
-      child: NavigationBar(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: (int index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
-        backgroundColor: Colors.white.withValues(alpha: 0.85),
-        indicatorColor: const Color(0xFF0D9488).withValues(alpha: 0.15),
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.medical_services_outlined, color: Color(0xFF0F172A)),
-            selectedIcon: Icon(Icons.medical_services, color: Color(0xFF0D9488)),
-            label: 'Claims',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.psychology_outlined, color: Color(0xFF0F172A)),
-            selectedIcon: Icon(Icons.psychology, color: Color(0xFF0D9488)),
-            label: 'Counselor',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined, color: Color(0xFF0F172A)),
-            selectedIcon: Icon(Icons.receipt_long, color: Color(0xFF0D9488)),
-            label: 'Status',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline, color: Color(0xFF0F172A)),
-            selectedIcon: Icon(Icons.person, color: Color(0xFF0D9488)),
-            label: 'Profile',
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: const Border(top: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
           ),
         ],
+      ),
+      child: NavigationBarTheme(
+        data: NavigationBarThemeData(
+          backgroundColor: Colors.white,
+          indicatorColor: const Color(0xFF0D9488).withOpacity(0.12),
+          labelTextStyle: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return GoogleFonts.outfit(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF0D9488),
+              );
+            }
+            return GoogleFonts.outfit(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: const Color(0xFF94A3B8),
+            );
+          }),
+        ),
+        child: NavigationBar(
+          selectedIndex: _selectedIndex,
+          onDestinationSelected: _onNavigateTab,
+          height: 66,
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          indicatorColor: const Color(0xFF0D9488).withOpacity(0.12),
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.dashboard_outlined, color: Color(0xFF94A3B8), size: 22),
+              selectedIcon: Icon(Icons.dashboard_rounded, color: Color(0xFF0D9488), size: 22),
+              label: 'AI Hub',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.health_and_safety_outlined, color: Color(0xFF94A3B8), size: 22),
+              selectedIcon: Icon(Icons.health_and_safety_rounded, color: Color(0xFF0D9488), size: 22),
+              label: 'Checkup',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.medication_outlined, color: Color(0xFF94A3B8), size: 22),
+              selectedIcon: Icon(Icons.medication_rounded, color: Color(0xFF0D9488), size: 22),
+              label: 'Pharmacy',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.emergency_outlined, color: Color(0xFF94A3B8), size: 22),
+              selectedIcon: Icon(Icons.emergency_rounded, color: Color(0xFFEF4444), size: 22),
+              label: 'Emergency',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.folder_shared_outlined, color: Color(0xFF94A3B8), size: 22),
+              selectedIcon: Icon(Icons.folder_shared_rounded, color: Color(0xFF0D9488), size: 22),
+              label: 'Records',
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -187,13 +224,13 @@ class _PatientMainScreenState extends State<PatientMainScreen> {
   Widget _buildPatientHeader(bool isMobile, bool isConnected, dynamic user) {
     return Container(
       padding: EdgeInsets.symmetric(
-        horizontal: isMobile ? 12 : 24,
-        vertical: isMobile ? 10 : 14,
+        horizontal: isMobile ? 14 : 24,
+        vertical: isMobile ? 10 : 12,
       ),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.75),
-        border: const Border(
-          bottom: BorderSide(color: Color(0x1A1F1B2C), width: 1),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1),
         ),
       ),
       child: Row(
@@ -202,9 +239,10 @@ class _PatientMainScreenState extends State<PatientMainScreen> {
           Expanded(
             child: InkWell(
               onTap: () {
-                setState(() {
-                  _selectedIndex = 3;
-                });
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const UserProfileScreen()),
+                );
               },
               borderRadius: BorderRadius.circular(12),
               child: Row(
@@ -218,9 +256,9 @@ class _PatientMainScreenState extends State<PatientMainScreen> {
                       ),
                     ),
                     child: CircleAvatar(
-                      radius: isMobile ? 14 : 17,
-                      backgroundColor: Colors.white,
-                      child: Icon(Icons.person, color: const Color(0xFF0D9488), size: isMobile ? 16 : 18),
+                      radius: isMobile ? 15 : 18,
+                      backgroundColor: const Color(0xFFF1F5F9),
+                      child: const Icon(Icons.person, color: Color(0xFF0D9488), size: 18),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -239,7 +277,7 @@ class _PatientMainScreenState extends State<PatientMainScreen> {
                                 overflow: TextOverflow.ellipsis,
                                 style: GoogleFonts.outfit(
                                   color: const Color(0xFF0F172A),
-                                  fontSize: isMobile ? 13 : 15,
+                                  fontSize: isMobile ? 14 : 15,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -248,13 +286,14 @@ class _PatientMainScreenState extends State<PatientMainScreen> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF0D9488).withValues(alpha: 0.12),
+                                color: const Color(0xFF0D9488).withOpacity(0.12),
                                 borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFF0D9488).withOpacity(0.4)),
                               ),
                               child: Text(
-                                'PATIENT HEALTH PORTAL',
+                                'CLINICAL AI',
                                 style: GoogleFonts.outfit(
-                                  color: const Color(0xFF0D9488),
+                                  color: const Color(0xFF0F766E),
                                   fontSize: 8.5,
                                   fontWeight: FontWeight.w800,
                                 ),
@@ -267,7 +306,7 @@ class _PatientMainScreenState extends State<PatientMainScreen> {
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.outfit(
                             color: const Color(0xFF64748B),
-                            fontSize: isMobile ? 10 : 11,
+                            fontSize: isMobile ? 10.5 : 11,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -278,38 +317,18 @@ class _PatientMainScreenState extends State<PatientMainScreen> {
               ),
             ),
           ),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0D9488),
-              foregroundColor: Colors.white,
-              padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 12, vertical: 6),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              elevation: 0,
-            ),
-            icon: const Icon(Icons.biotech, size: 16),
-            label: Text(
-              isMobile ? 'Checkup' : 'AI Health Checkup',
-              style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: isMobile ? 11 : 12),
-            ),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const SymptomQuestionnaireScreen()),
-              );
-            },
-          ),
-          const SizedBox(width: 8),
+          // Live Network Status Indicator
           Container(
-            padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 12, vertical: 5),
+            padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 10, vertical: 4),
             decoration: BoxDecoration(
               color: isConnected
-                  ? const Color(0xFFDCFCE7).withValues(alpha: 0.95)
-                  : const Color(0xFFFEE2E2).withValues(alpha: 0.95),
-              borderRadius: BorderRadius.circular(20),
+                  ? const Color(0xFFECFDF5)
+                  : const Color(0xFFFEF2F2),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: isConnected
-                    ? const Color(0xFF16A34A).withValues(alpha: 0.2)
-                    : const Color(0xFFDC2626).withValues(alpha: 0.2),
+                    ? const Color(0xFF10B981).withOpacity(0.5)
+                    : const Color(0xFFEF4444).withOpacity(0.5),
               ),
             ),
             child: Row(
@@ -319,119 +338,21 @@ class _PatientMainScreenState extends State<PatientMainScreen> {
                   width: 6,
                   height: 6,
                   decoration: BoxDecoration(
-                    color: isConnected ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
+                    color: isConnected ? const Color(0xFF10B981) : const Color(0xFFEF4444),
                     shape: BoxShape.circle,
                   ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 5),
                 Text(
                   isConnected ? 'LIVE' : 'OFFLINE',
                   style: GoogleFonts.outfit(
-                    color: isConnected ? const Color(0xFF15803D) : const Color(0xFFB91C1C),
-                    fontSize: isMobile ? 9 : 10,
+                    color: isConnected ? const Color(0xFF065F46) : const Color(0xFFB91C1C),
+                    fontSize: isMobile ? 9.5 : 10.5,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 0.5,
                   ),
                 ),
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAiHealthCheckupCard(BuildContext context, bool isMobile) {
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 24, vertical: 8),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0D9488), Color(0xFF0F766E)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0D9488).withOpacity(0.22),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.18),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.biotech, color: Colors.white, size: 28),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      'AI Health Checkup & Screening',
-                      style: GoogleFonts.outfit(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: isMobile ? 14 : 16,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        'NEW',
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Interactive questionnaire & clinical computer vision with Grad-CAM heatmaps.',
-                  style: GoogleFonts.inter(
-                    color: Colors.white.withOpacity(0.85),
-                    fontSize: isMobile ? 11 : 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: const Color(0xFF0D9488),
-              elevation: 0,
-              padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 18, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const SymptomQuestionnaireScreen()),
-              );
-            },
-            child: Text(
-              'Start',
-              style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13),
             ),
           ),
         ],

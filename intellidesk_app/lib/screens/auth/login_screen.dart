@@ -109,7 +109,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Autonomous Clinical Triage, Medical Claim Verification & Emergency Copay Engine',
+                      'Next-Gen Multimodal AI Diagnostics, Touchless Vitals & Comprehensive Clinical Care Suite',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.outfit(
                         fontSize: 13,

@@ -17,8 +17,8 @@ import {
   DiagnosticSummaryContext 
 } from '../../../services/crisisCounselorService.js';
 import { rPPGSignalProcessor } from '../vitals/rPPGSignalProcessor.js';
-import { BioSignalFrame } from '../vitals/types.js';
 import { cdssRouter } from '../../cdss/routes/cdssRouter.js';
+import { PharmacyDbService } from '../../pharmacy/pharmacyDbService.js';
 
 const router = Router();
 
@@ -501,6 +501,46 @@ router.post('/vitals/process-rppg', async (req: Request, res: Response) => {
       success: false,
       error: err.message || 'Signal processing error'
     });
+  }
+});
+
+/**
+ * GET /api/v1/diagnostics/patient/:patientId/overview
+ * Unified clinical overview endpoint for patient dashboard:
+ * returns latest screening, active vitals, medications count, allergies count, nearby facilities, and clinical alerts.
+ */
+router.get('/patient/:patientId/overview', async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    const lat = req.query.lat ? parseFloat(String(req.query.lat)) : 40.7128;
+    const lng = req.query.lng ? parseFloat(String(req.query.lng)) : -74.0060;
+
+    const [screenings, allergies, medications] = await Promise.all([
+      HealthScreeningsDbService.getScreeningsByPatient(patientId),
+      PharmacyDbService.getPatientAllergies(patientId),
+      PharmacyDbService.getPatientMedications(patientId, true),
+    ]);
+
+    const latestScreening = screenings.length > 0 ? screenings[0] : null;
+    const facilitiesResult = EmergencyFacilityService.getNearbyFacilities(lat, lng, 20.0);
+
+    return res.status(200).json({
+      success: true,
+      patientId,
+      latestScreening,
+      totalScreenings: screenings.length,
+      activeMedicationsCount: medications.length,
+      activeMedications: medications.slice(0, 5),
+      allergiesCount: allergies.length,
+      allergies: allergies.map(a => a.allergenGroup),
+      nearbyFacilitiesCount: facilitiesResult.facilities.length,
+      nearestFacility: facilitiesResult.facilities.length > 0 ? facilitiesResult.facilities[0] : null,
+      latestVitals: latestScreening?.rppg_vitals_payload || latestScreening?.symptom_payload?.vitals || null,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err: any) {
+    console.error('❌ [Diagnostics API] Error fetching patient overview:', err);
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 

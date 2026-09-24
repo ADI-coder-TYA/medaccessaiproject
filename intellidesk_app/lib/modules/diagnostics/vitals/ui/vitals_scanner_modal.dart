@@ -15,6 +15,27 @@ class VitalsScannerModal extends StatefulWidget {
     this.enableSimulationMode = false,
   });
 
+  static Future<VitalsResult?> show(
+    BuildContext context, {
+    bool enableSimulationMode = false,
+  }) {
+    return showModalBottomSheet<VitalsResult>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        child: SizedBox(
+          height: MediaQuery.of(ctx).size.height * 0.88,
+          child: VitalsScannerModal(
+            enableSimulationMode: enableSimulationMode,
+            autoStart: true,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   State<VitalsScannerModal> createState() => _VitalsScannerModalState();
 }

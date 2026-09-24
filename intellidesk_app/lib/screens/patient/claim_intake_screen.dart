@@ -212,9 +212,12 @@ class _ClaimIntakeScreenState extends State<ClaimIntakeScreen> {
       appBar: AppBar(
         title: const Row(
           children: [
-            Icon(Icons.health_and_safety, color: Colors.white, size: 22),
+            Icon(Icons.health_and_safety, color: Color(0xFF0D9488), size: 22),
             SizedBox(width: 8),
-            Text('Submit Medical Claim / Copay'),
+            Text(
+              'Care Benefit & Coverage Intake',
+              style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold),
+            ),
           ],
         ),
       ),
@@ -242,7 +245,7 @@ class _ClaimIntakeScreenState extends State<ClaimIntakeScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Emergency Copay Relief Engine',
+                            'Institutional Health Coverage & Benefit Engine',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
@@ -251,7 +254,7 @@ class _ClaimIntakeScreenState extends State<ClaimIntakeScreen> {
                           ),
                           SizedBox(height: 4),
                           Text(
-                            'Autonomous ESI triage & instant hospital invoice verification. Approved copay grants are disbursed within minutes.',
+                            'Autonomous clinical ESI triage & invoice validation. Approved institutional benefits are settled automatically.',
                             style: TextStyle(fontSize: 12, color: AppTheme.textDark),
                           ),
                         ],
@@ -300,14 +303,14 @@ class _ClaimIntakeScreenState extends State<ClaimIntakeScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Instant Copay Disbursement Account
+              // Direct Care Benefit Settlement Account
               const Text(
-                'Instant Copay Payout Account (UPI ID / VPA or Bank IMPS)',
+                'Direct Care Benefit Settlement Account (UPI ID / Bank IMPS)',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
               ),
               const SizedBox(height: 4),
               const Text(
-                'Approved emergency funds will be instantly disbursed to this account via RazorpayX multi-rail settlement.',
+                'Approved institutional care subsidies will be settled to this account via secure direct rail.',
                 style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
               ),
               const SizedBox(height: 8),
@@ -540,7 +543,7 @@ class _ClaimIntakeScreenState extends State<ClaimIntakeScreen> {
                             SizedBox(width: 8),
                             Flexible(
                               child: Text(
-                                'Submit for Autonomous Triage & Copay',
+                                'Submit for Clinical Verification & Coverage',
                                 overflow: TextOverflow.ellipsis,
                                 maxLines: 1,
                                 style: TextStyle(

@@ -315,7 +315,7 @@ class _ClinicalChatScreenState extends State<ClinicalChatScreen> {
                     controller: _textController,
                     onSubmitted: (_) => _sendMessage(),
                     decoration: InputDecoration(
-                      hintText: 'Share what you are feeling or request copay support...',
+                      hintText: 'Describe your symptoms, ask medical questions, or request triage guidance...',
                       hintStyle: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
                       filled: true,

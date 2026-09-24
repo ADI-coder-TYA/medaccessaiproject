@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../providers/diagnostics_provider.dart';
 import '../models/symptom_vector.dart';
@@ -107,35 +108,47 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
   }
 
   void _proceedToCamera() {
-    final vitals = ClinicalVitals(
-      temperatureCelsius: double.tryParse(_tempController.text),
-      heartRate: double.tryParse(_hrController.text),
-      systolicBP: double.tryParse(_bpController.text),
-      oxygenSaturation: double.tryParse(_spo2Controller.text),
-      respiratoryRate: double.tryParse(_rrController.text),
-      source: _scannedVitals != null ? 'rppg_camera' : 'manual_input',
-      rppgResult: _scannedVitals?.toJson(),
-    );
+    try {
+      final vitals = ClinicalVitals(
+        temperatureCelsius: double.tryParse(_tempController.text),
+        heartRate: double.tryParse(_hrController.text),
+        systolicBP: double.tryParse(_bpController.text),
+        oxygenSaturation: double.tryParse(_spo2Controller.text),
+        respiratoryRate: double.tryParse(_rrController.text),
+        source: _scannedVitals != null ? 'rppg_camera' : 'manual_input',
+        rppgResult: _scannedVitals?.toJson(),
+      );
 
-    final vector = SymptomVector(
-      bodyLocation: _selectedBodyLocation,
-      durationDays: _durationDays,
-      painScale: _painScale.round(),
-      symptoms: _selectedSymptoms.toList(),
-      vitals: vitals,
-      additionalNotes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
-    );
+      final vector = SymptomVector(
+        bodyLocation: _selectedBodyLocation,
+        durationDays: _durationDays,
+        painScale: _painScale.round(),
+        symptoms: _selectedSymptoms.toList(),
+        vitals: vitals,
+        additionalNotes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+      );
 
-    context.read<DiagnosticsProvider>().updateSymptomVector(vector);
+      context.read<DiagnosticsProvider>().updateSymptomVector(vector);
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => DiagnosticCameraScreen(
-          symptomCategoryHint: _mapLocationToCategoryHint(_selectedBodyLocation),
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DiagnosticCameraScreen(
+            symptomCategoryHint: _mapLocationToCategoryHint(_selectedBodyLocation),
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFFEF4444),
+            content: Text('Error launching clinical camera: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   String _mapLocationToCategoryHint(String loc) {
@@ -175,6 +188,68 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
         label,
         style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
       ),
+    );
+  }
+
+  Widget _buildSectionHeader(String number, String title, {Widget? trailing}) {
+    return Row(
+      children: [
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: const Color(0xFF0D9488),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            number,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            '$number. $title',
+            style: GoogleFonts.outfit(
+              fontSize: 15.5,
+              fontWeight: FontWeight.bold,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        if (trailing != null) trailing,
+      ],
+    );
+  }
+
+  InputDecoration _buildInputDecoration({
+    required String labelText,
+    String? hintText,
+    Widget? prefixIcon,
+  }) {
+    return InputDecoration(
+      labelText: labelText,
+      hintText: hintText,
+      prefixIcon: prefixIcon,
+      labelStyle: const TextStyle(fontSize: 13),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: Colors.grey.withOpacity(0.25)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: Colors.grey.withOpacity(0.25)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFF0D9488), width: 1.5),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
     );
   }
 
@@ -254,14 +329,13 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
               const SizedBox(height: 18),
 
               // 1. Body Location Selector
-              const Text('1. Anatomical Symptom Location', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              _buildSectionHeader('1', 'Anatomical Symptom Location'),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 value: _selectedBodyLocation,
-                decoration: InputDecoration(
+                decoration: _buildInputDecoration(
+                  labelText: 'Body Location',
                   prefixIcon: const Icon(Icons.accessibility_new, color: Color(0xFF0D9488)),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                 ),
                 items: _bodyLocations
                     .map((loc) => DropdownMenuItem(value: loc, child: Text(loc)))
@@ -273,7 +347,7 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
               const SizedBox(height: 20),
 
               // 2. Symptoms Checklist
-              const Text('2. Specific Symptoms Observed', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              _buildSectionHeader('2', 'Specific Symptoms Observed'),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -283,11 +357,20 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
                   return FilterChip(
                     label: Text(sym),
                     selected: isSelected,
-                    selectedColor: const Color(0xFF0D9488).withOpacity(0.2),
-                    checkmarkColor: const Color(0xFF0D9488),
+                    selectedColor: const Color(0xFF0D9488),
+                    backgroundColor: const Color(0xFFF1F5F9),
+                    checkmarkColor: Colors.white,
                     labelStyle: TextStyle(
-                      color: isSelected ? const Color(0xFF0D9488) : (isDark ? Colors.white : Colors.black87),
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      color: isSelected ? Colors.white : const Color(0xFF334155),
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      fontSize: 12.5,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(
+                        color: isSelected ? const Color(0xFF0D9488) : const Color(0xFFE2E8F0),
+                        width: 1,
+                      ),
                     ),
                     onSelected: (selected) {
                       setState(() {
@@ -304,27 +387,25 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
               const SizedBox(height: 20),
 
               // 3. Pain Scale Slider (1 - 10)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('3. Pain Scale (0 - 10)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _painScale >= 7
-                          ? Colors.red.withOpacity(0.15)
-                          : (_painScale >= 4 ? Colors.amber.withOpacity(0.2) : Colors.green.withOpacity(0.15)),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      '${_painScale.round()} / 10',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: _painScale >= 7 ? Colors.red : (_painScale >= 4 ? Colors.amber[900] : Colors.green[800]),
-                      ),
+              _buildSectionHeader(
+                '3',
+                'Pain Scale (0 - 10)',
+                trailing: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _painScale >= 7
+                        ? Colors.red.withOpacity(0.15)
+                        : (_painScale >= 4 ? Colors.amber.withOpacity(0.2) : Colors.green.withOpacity(0.15)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '${_painScale.round()} / 10',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: _painScale >= 7 ? Colors.red : (_painScale >= 4 ? Colors.amber[900] : Colors.green[800]),
                     ),
                   ),
-                ],
+                ),
               ),
               Slider(
                 value: _painScale,
@@ -337,16 +418,14 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
               const SizedBox(height: 16),
 
               // 4. Duration & Vitals
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('4. Clinical Baseline & Vitals', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  TextButton.icon(
-                    onPressed: _openVitalsScanner,
-                    icon: const Icon(Icons.favorite, color: Color(0xFF0D9488), size: 18),
-                    label: const Text('Scan with Camera', style: TextStyle(color: Color(0xFF0D9488), fontWeight: FontWeight.bold)),
-                  ),
-                ],
+              _buildSectionHeader(
+                '4',
+                'Clinical Baseline & Vitals',
+                trailing: TextButton.icon(
+                  onPressed: _openVitalsScanner,
+                  icon: const Icon(Icons.favorite, color: Color(0xFF0D9488), size: 18),
+                  label: const Text('Scan with Camera', style: TextStyle(color: Color(0xFF0D9488), fontWeight: FontWeight.bold, fontSize: 12)),
+                ),
               ),
               const SizedBox(height: 8),
 
@@ -460,11 +539,10 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
                     child: TextFormField(
                       controller: _tempController,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: InputDecoration(
+                      decoration: _buildInputDecoration(
                         labelText: 'Temp (°C)',
                         hintText: 'e.g. 37.8',
                         prefixIcon: const Icon(Icons.thermostat, color: Color(0xFF0D9488)),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
                   ),
@@ -473,11 +551,10 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
                     child: TextFormField(
                       controller: _hrController,
                       keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: 'Heart Rate (bpm)',
+                      decoration: _buildInputDecoration(
+                        labelText: 'Heart Rate (BPM)',
                         hintText: 'e.g. 84',
                         prefixIcon: const Icon(Icons.favorite, color: Colors.redAccent),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
                   ),
@@ -490,11 +567,10 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
                     child: TextFormField(
                       controller: _spo2Controller,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: InputDecoration(
-                        labelText: 'Oxygen SpO2 (%)',
+                      decoration: _buildInputDecoration(
+                        labelText: 'SpO2 (%)',
                         hintText: 'e.g. 98.0',
                         prefixIcon: const Icon(Icons.air, color: Colors.lightBlueAccent),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
                   ),
@@ -503,11 +579,10 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
                     child: TextFormField(
                       controller: _rrController,
                       keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: 'Respiration (/min)',
+                      decoration: _buildInputDecoration(
+                        labelText: 'Resp. Rate (/min)',
                         hintText: 'e.g. 16',
                         prefixIcon: const Icon(Icons.waves, color: Colors.tealAccent),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
                   ),
@@ -520,11 +595,10 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
                     child: TextFormField(
                       controller: _bpController,
                       keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
+                      decoration: _buildInputDecoration(
                         labelText: 'Systolic BP (mmHg)',
                         hintText: 'e.g. 120',
                         prefixIcon: const Icon(Icons.speed, color: Color(0xFF0D9488)),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
                   ),
@@ -532,10 +606,9 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
                   Expanded(
                     child: DropdownButtonFormField<int>(
                       value: _durationDays,
-                      decoration: InputDecoration(
+                      decoration: _buildInputDecoration(
                         labelText: 'Duration',
                         prefixIcon: const Icon(Icons.calendar_today, color: Color(0xFF0D9488)),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       items: [1, 2, 3, 5, 7, 14, 30]
                           .map((d) => DropdownMenuItem(value: d, child: Text('$d days')))
@@ -554,15 +627,14 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
               const SizedBox(height: 20),
 
               // 6. Notes
-              const Text('6. Patient Notes / Context (Optional)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              _buildSectionHeader('6', 'Patient Notes / Context (Optional)'),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _notesController,
                 maxLines: 2,
-                decoration: InputDecoration(
+                decoration: _buildInputDecoration(
                   labelText: 'Clinical Notes',
                   hintText: 'Describe onset or any known allergies...',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
               const SizedBox(height: 20),

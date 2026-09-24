@@ -328,7 +328,10 @@ class _LongitudinalHistoryScreenState extends State<LongitudinalHistoryScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 4,
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -346,13 +349,15 @@ class _LongitudinalHistoryScreenState extends State<LongitudinalHistoryScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      pctStr,
-                      style: GoogleFonts.inter(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: color,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        pctStr,
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: color,
+                        ),
                       ),
                     ),
                   ],
@@ -411,18 +416,17 @@ class _LongitudinalHistoryScreenState extends State<LongitudinalHistoryScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.show_chart, color: AppTheme.primaryBrand, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Health Risk Score Trajectory',
-                    style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                ],
+              const Icon(Icons.show_chart, color: AppTheme.primaryBrand, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Health Risk Score Trajectory',
+                  style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
+              const SizedBox(width: 8),
               Text(
                 '${_screenings.length} Intakes',
                 style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[500], fontWeight: FontWeight.w600),
@@ -579,15 +583,19 @@ class _LongitudinalHistoryScreenState extends State<LongitudinalHistoryScreen> {
   }
 
   Widget _buildChartLegend() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _buildLegendDot(const Color(0xFF10B981), 'Low (≤40%)'),
-        const SizedBox(width: 14),
-        _buildLegendDot(const Color(0xFFF59E0B), 'Moderate (40-70%)'),
-        const SizedBox(width: 14),
-        _buildLegendDot(const Color(0xFFEF4444), 'Critical (≥70%)'),
-      ],
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 12,
+        runSpacing: 6,
+        children: [
+          _buildLegendDot(const Color(0xFF10B981), 'Low (≤40%)'),
+          _buildLegendDot(const Color(0xFFF59E0B), 'Moderate (40-70%)'),
+          _buildLegendDot(const Color(0xFFEF4444), 'Critical (≥70%)'),
+        ],
+      ),
     );
   }
 
@@ -615,40 +623,45 @@ class _LongitudinalHistoryScreenState extends State<LongitudinalHistoryScreen> {
         border: Border.all(color: Colors.grey.withOpacity(0.2)),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              Text(
-                'Comparing:',
-                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: [
+                  Text(
+                    'Comparing:',
+                    style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildSelectorDropdown(
+                    label: 'T0 Baseline',
+                    selectedIndex: _selectedT0Index,
+                    onChanged: (newIdx) {
+                      if (newIdx != null && newIdx != _selectedT0Index) {
+                        setState(() => _selectedT0Index = newIdx);
+                        _refreshDeltaComparison();
+                      }
+                    },
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 6.0),
+                    child: Icon(Icons.arrow_forward, size: 14, color: Colors.grey),
+                  ),
+                  _buildSelectorDropdown(
+                    label: 'T1 Follow-up',
+                    selectedIndex: _selectedT1Index,
+                    onChanged: (newIdx) {
+                      if (newIdx != null && newIdx != _selectedT1Index) {
+                        setState(() => _selectedT1Index = newIdx);
+                        _refreshDeltaComparison();
+                      }
+                    },
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              _buildSelectorDropdown(
-                label: 'T0 Baseline',
-                selectedIndex: _selectedT0Index,
-                onChanged: (newIdx) {
-                  if (newIdx != null && newIdx != _selectedT0Index) {
-                    setState(() => _selectedT0Index = newIdx);
-                    _refreshDeltaComparison();
-                  }
-                },
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 6.0),
-                child: Icon(Icons.arrow_forward, size: 14, color: Colors.grey),
-              ),
-              _buildSelectorDropdown(
-                label: 'T1 Follow-up',
-                selectedIndex: _selectedT1Index,
-                onChanged: (newIdx) {
-                  if (newIdx != null && newIdx != _selectedT1Index) {
-                    setState(() => _selectedT1Index = newIdx);
-                    _refreshDeltaComparison();
-                  }
-                },
-              ),
-            ],
+            ),
           ),
           IconButton(
             icon: Icon(
@@ -720,27 +733,31 @@ class _LongitudinalHistoryScreenState extends State<LongitudinalHistoryScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.remove_red_eye_outlined, color: AppTheme.primaryBrand, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Visual Progression Comparison',
-                    style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: Colors.grey.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(6),
-                ),
+              const Icon(Icons.remove_red_eye_outlined, color: AppTheme.primaryBrand, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
                 child: Text(
-                  _isSideBySideMode ? 'Side-by-Side' : 'Interactive Slider',
-                  style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey[700]),
+                  'Visual Progression Comparison',
+                  style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      _isSideBySideMode ? 'Side-by-Side' : 'Interactive Slider',
+                      style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey[700]),
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -888,21 +905,24 @@ class _LongitudinalHistoryScreenState extends State<LongitudinalHistoryScreen> {
   }
 
   Widget _buildSliderPill(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.85),
-        borderRadius: BorderRadius.circular(6),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 4),
-        ],
-      ),
-      child: Text(
-        label,
-        style: GoogleFonts.inter(
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          color: Colors.white,
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.85),
+          borderRadius: BorderRadius.circular(6),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 4),
+          ],
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
         ),
       ),
     );
@@ -1138,11 +1158,15 @@ class _LongitudinalHistoryScreenState extends State<LongitudinalHistoryScreen> {
                         Text(
                           DateFormat('MMMM d, yyyy • h:mm a').format(scr.createdAt),
                           style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 2),
                         Text(
                           'Risk Score: ${(scr.riskScore * 100).toStringAsFixed(0)}% • ${scr.riskLevel.name.toUpperCase()}',
                           style: GoogleFonts.inter(fontSize: 11, color: Colors.grey[500]),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),

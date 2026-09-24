@@ -309,51 +309,62 @@ class _ClaimStatusScreenState extends State<ClaimStatusScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(28.0),
-        child: GlassCard(
-          padding: const EdgeInsets.all(28),
-          borderRadius: 24,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0D9488).withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+                child: GlassCard(
+                  padding: const EdgeInsets.all(20),
+                  borderRadius: 16,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0D9488).withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.assignment_outlined, size: 36, color: Color(0xFF0D9488)),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        'No Care Documentation Submitted',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A)),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'You have not submitted any out-of-network invoices or care documentation yet. Once uploaded, automated clinical validation and coverage status will appear here.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.outfit(fontSize: 12.5, color: const Color(0xFF64748B)),
+                      ),
+                      const SizedBox(height: 18),
+                      ElevatedButton.icon(
+                        onPressed: widget.onNavigateToClaims,
+                        icon: const Icon(Icons.add_circle, size: 16),
+                        label: const Text('Add Care Documentation'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0D9488),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 0,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                child: const Icon(Icons.assignment_outlined, size: 42, color: Color(0xFF0D9488)),
               ),
-              const SizedBox(height: 16),
-              Text(
-                'No Claims Submitted Yet',
-                style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A)),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'You have not submitted any medical copay or emergency relief requests yet. Once you submit a claim with your prescription or hospital bill, live AI triage and copay progress will appear here.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF64748B)),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                onPressed: widget.onNavigateToClaims,
-                icon: const Icon(Icons.add_circle, size: 18),
-                label: const Text('Submit Emergency / Copay Claim'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0D9488),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  elevation: 0,
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -515,14 +526,14 @@ class _ClaimStatusScreenState extends State<ClaimStatusScreen> {
 
           // Triage Progress Stepper
           Text(
-            'Triage & Copay Progress',
+            'Clinical Triage & Benefit Verification',
             style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A)),
           ),
           const SizedBox(height: 14),
 
           _buildStep(
             stepNumber: 1,
-            title: 'Claim & Symptoms Submitted',
+            title: 'Care Documentation Received',
             subtitle: 'Intake received and queued for NLP distress analysis.',
             isDone: currentStep >= 1,
             isCurrent: currentStep == 1,
@@ -537,16 +548,16 @@ class _ClaimStatusScreenState extends State<ClaimStatusScreen> {
           _buildStep(
             stepNumber: 3,
             title: 'Invoice OCR & Fraud Sentinel',
-            subtitle: 'Verified Hospital Invoice: $currencySymbol$extractedAmount | Copay Relief: $currencySymbol$copayAmount',
+            subtitle: 'Verified Hospital Invoice: $currencySymbol$extractedAmount | Care Benefit: $currencySymbol$copayAmount',
             isDone: currentStep >= 3,
             isCurrent: currentStep == 3,
           ),
           _buildStep(
             stepNumber: 4,
-            title: currentStep >= 4 ? 'Copay Relief Disbursed ✓' : 'Copay Relief Disbursement',
+            title: currentStep >= 4 ? 'Care Benefit Settled ✓' : 'Institutional Benefit Settlement',
             subtitle: currentStep >= 4
-                ? 'Automated fund allocation released to healthcare facility.'
-                : 'Pending final automated fund allocation release.',
+                ? 'Care benefit subsidy allocated and released to healthcare network.'
+                : 'Pending final institutional verification and release.',
             isDone: currentStep >= 4,
             isCurrent: currentStep == 4,
             isLast: true,

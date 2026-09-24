@@ -288,7 +288,7 @@ class _ClinicalCameraScreenState extends State<ClinicalCameraScreen> {
                       // Analyzing Overlay
                       if (_isAnalyzing || provider.isValidatingImage)
                         Container(
-                          color: Colors.black71,
+                          color: Colors.black54,
                           child: Center(
                             child: Column(
                               mainAxisSize: MainAxisSize.min,

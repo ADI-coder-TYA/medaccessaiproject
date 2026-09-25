@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../providers/diagnostics_provider.dart';
 import '../models/symptom_vector.dart';
-import '../services/inference_engine_interface.dart';
 import '../services/audio_recorder_service.dart';
 import '../../pharmacy/models/medication_entity.dart';
 import '../../pharmacy/services/rx_sentinel_service.dart';
@@ -255,45 +254,11 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final diag = context.watch<DiagnosticsProvider>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Clinical Health Intake', style: TextStyle(fontWeight: FontWeight.bold)),
-        actions: [
-          PopupMenuButton<ExecutionMode>(
-            initialValue: diag.executionMode,
-            tooltip: 'Inference Engine',
-            icon: Icon(
-              diag.executionMode == ExecutionMode.localTflite ? Icons.memory : Icons.cloud_done,
-              color: const Color(0xFF0D9488),
-            ),
-            onSelected: (mode) => diag.setExecutionMode(mode),
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: ExecutionMode.backendApi,
-                child: Row(
-                  children: [
-                    Icon(Icons.cloud_outlined, color: Color(0xFF0D9488)),
-                    SizedBox(width: 8),
-                    Text('Cloud AI (Accurate)'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: ExecutionMode.localTflite,
-                child: Row(
-                  children: [
-                    Icon(Icons.memory, color: Color(0xFF0D9488)),
-                    SizedBox(width: 8),
-                    Text('On-Device Edge (Offline)'),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
       body: SafeArea(
         child: Form(
@@ -301,32 +266,6 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16.0),
             children: [
-              // Mode banner
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0D9488).withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFF0D9488).withOpacity(0.3)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      diag.executionMode == ExecutionMode.localTflite ? Icons.bolt : Icons.health_and_safety,
-                      color: const Color(0xFF0D9488),
-                      size: 20,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Engine: ${diag.executionMode.label}',
-                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF0D9488)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 18),
 
               // 1. Body Location Selector
               _buildSectionHeader('1', 'Anatomical Symptom Location'),
@@ -831,6 +770,47 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
               ),
             ),
           ]
+          // If error / silent audio:
+          else if (status == AudioRecorderStatus.error) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.error_outline, color: Colors.redAccent, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _audioRecorder.errorMessage ?? 'No cough sound detected. Please speak or cough directly into the microphone.',
+                          style: const TextStyle(fontSize: 13, color: Colors.redAccent, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0D9488),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    ),
+                    icon: const Icon(Icons.mic, size: 16),
+                    label: const Text('Try Again (Speak / Cough into Mic)'),
+                    onPressed: () => _startRecording(diag),
+                  ),
+                ],
+              ),
+            ),
+          ]
           // If recorded:
           else if (hasRecordedAudio) ...[
             Container(
@@ -871,6 +851,60 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
                       ),
                     ],
                   ),
+                  if (diag.isClassifyingCough) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      children: const [
+                        SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0D9488)),
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          'Analyzing acoustic biomarkers on neural network...',
+                          style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Color(0xFF0D9488)),
+                        ),
+                      ],
+                    ),
+                  ] else if (diag.lastCoughClassification != null) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: diag.lastCoughClassification!['classification']?['isRedFlagRespiratory'] == true
+                            ? Colors.red.withValues(alpha: 0.1)
+                            : const Color(0xFF0D9488).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            diag.lastCoughClassification!['classification']?['isRedFlagRespiratory'] == true
+                                ? Icons.warning_amber_rounded
+                                : Icons.check_circle_outline,
+                            size: 16,
+                            color: diag.lastCoughClassification!['classification']?['isRedFlagRespiratory'] == true
+                                ? Colors.redAccent
+                                : const Color(0xFF0D9488),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Acoustic Classification: ${diag.lastCoughClassification!['classification']?['predictedCategory'] ?? 'Analyzed'} (${(((diag.lastCoughClassification!['classification']?['confidence'] ?? 0.0) as num) * 100).toStringAsFixed(1)}%)',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: diag.lastCoughClassification!['classification']?['isRedFlagRespiratory'] == true
+                                    ? Colors.redAccent
+                                    : const Color(0xFF0D9488),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   OutlinedButton.icon(
                     key: const Key('retakeCoughSoundButton'),
@@ -925,12 +959,20 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('5s Respiratory acoustic sample captured (16 kHz mono WAV)'),
+              content: Text('Respiratory acoustic sample captured (16 kHz mono WAV)'),
               duration: Duration(seconds: 2),
               backgroundColor: Color(0xFF0D9488),
             ),
           );
         }
+      } else if (_audioRecorder.errorMessage != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_audioRecorder.errorMessage!),
+            duration: const Duration(seconds: 3),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
       }
     });
   }
@@ -969,7 +1011,7 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '6. RxSentinel Medication Safety',
+                      '6. Medication Safety Review',
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                     Text(

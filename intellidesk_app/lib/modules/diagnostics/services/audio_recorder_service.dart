@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:record/record.dart';
 
 /// Recording status lifecycle for UI binding
 enum AudioRecorderStatus {
@@ -49,13 +52,17 @@ abstract class AudioRecorderInterface {
   void dispose();
 }
 
-/// Production Audio Recording Service with 16 kHz Mono Resampling & PCM WAV Encoding
+/// Production Audio Recording Service with hardware microphone capture & silence rejection
 class AudioRecorderService extends ChangeNotifier implements AudioRecorderInterface {
   AudioRecorderStatus _status = AudioRecorderStatus.idle;
   int _remainingSeconds = 5;
   Timer? _countdownTimer;
   AudioRecordingResult? _lastResult;
   String? _errorMessage;
+
+  // Hardware recorder instance
+  final AudioRecorder _audioRecorder = AudioRecorder();
+  String? _currentRecordingPath;
 
   // Injection points for testing
   final Future<PermissionStatus> Function()? permissionCheckOverride;
@@ -82,7 +89,7 @@ class AudioRecorderService extends ChangeNotifier implements AudioRecorderInterf
   AudioRecordingResult? get lastResult => _lastResult;
   String? get errorMessage => _errorMessage;
 
-  /// Gracefully checks and requests microphone permission
+  /// Gracefully checks and requests microphone permission across platforms
   @override
   Future<bool> requestMicPermission() async {
     _status = AudioRecorderStatus.requestingPermission;
@@ -90,57 +97,83 @@ class AudioRecorderService extends ChangeNotifier implements AudioRecorderInterf
     notifyListeners();
 
     try {
-      PermissionStatus status;
-      if (permissionCheckOverride != null) {
-        status = await permissionCheckOverride!();
-      } else {
-        status = await Permission.microphone.status;
-      }
-
-      if (status.isGranted) {
-        _status = AudioRecorderStatus.idle;
-        notifyListeners();
-        return true;
-      }
-
-      // Request permission
+      // 1. Request via permission_handler
+      bool handlerGranted = false;
       if (permissionRequestOverride != null) {
-        status = await permissionRequestOverride!();
+        final status = await permissionRequestOverride!();
+        handlerGranted = status.isGranted;
       } else {
-        status = await Permission.microphone.request();
+        final status = await Permission.microphone.request();
+        handlerGranted = status.isGranted;
       }
 
-      if (status.isGranted) {
+      // 2. Also check via record plugin native interface
+      bool recordPluginGranted = false;
+      try {
+        recordPluginGranted = await _audioRecorder.hasPermission();
+      } catch (recErr) {
+        debugPrint('⚠️ [AudioRecorderService] Native record permission check: $recErr');
+        recordPluginGranted = handlerGranted;
+      }
+
+      if (handlerGranted || recordPluginGranted) {
         _status = AudioRecorderStatus.idle;
         notifyListeners();
         return true;
       } else {
         _status = AudioRecorderStatus.permissionDenied;
-        _errorMessage = status.isPermanentlyDenied
-            ? 'Microphone permission permanently denied. Please enable it in system settings.'
-            : 'Microphone permission denied. Microphone is required to capture cough sounds.';
+        _errorMessage = 'Microphone permission denied. Microphone access is required to analyze cough biomarkers. Please grant microphone permission in device settings.';
         notifyListeners();
         return false;
       }
     } catch (e) {
-      // In headless test or unsupported platform, log and proceed gracefully
-      debugPrint('⚠️ [AudioRecorderService] Permission check fallback: $e');
-      _status = AudioRecorderStatus.idle;
+      debugPrint('⚠️ [AudioRecorderService] Permission request error: $e');
+      _status = AudioRecorderStatus.permissionDenied;
+      _errorMessage = 'Microphone permission denied. Microphone access is required to analyze cough biomarkers.';
       notifyListeners();
-      return true;
+      return false;
     }
   }
 
-  /// Initiates a standardized 5-second clinical acoustic intake
+  /// Initiates a standardized 5-second clinical acoustic intake from hardware microphone
   @override
   Future<void> start5SecondRecording({VoidCallback? onComplete}) async {
     final hasPermission = await requestMicPermission();
-    if (!hasPermission) return;
+    if (!hasPermission) {
+      debugPrint('⛔ [AudioRecorderService] Microphone permission not granted. Cannot record.');
+      return;
+    }
 
     _status = AudioRecorderStatus.recording;
     _remainingSeconds = targetDurationSeconds;
     _errorMessage = null;
+    _lastResult = null;
     notifyListeners();
+
+    // Start hardware microphone stream recording to temp WAV file
+    try {
+      if (customByteGenerator == null) {
+        final tempDir = await getTemporaryDirectory();
+        _currentRecordingPath = '${tempDir.path}/cough_rec_${DateTime.now().millisecondsSinceEpoch}.wav';
+        
+        await _audioRecorder.start(
+          const RecordConfig(
+            encoder: AudioEncoder.wav,
+            sampleRate: targetSampleRate,
+            numChannels: targetChannels,
+            bitRate: 256000,
+          ),
+          path: _currentRecordingPath!,
+        );
+        debugPrint('🎙️ [AudioRecorderService] Hardware microphone recording started -> $_currentRecordingPath');
+      }
+    } catch (e) {
+      debugPrint('🚨 [AudioRecorderService] Failed to start hardware microphone recording: $e');
+      _status = AudioRecorderStatus.error;
+      _errorMessage = 'Failed to start microphone recording ($e). Please verify microphone permissions.';
+      notifyListeners();
+      return;
+    }
 
     _countdownTimer?.cancel();
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
@@ -158,14 +191,59 @@ class AudioRecorderService extends ChangeNotifier implements AudioRecorderInterf
   Future<void> _finalizeRecording() async {
     try {
       Uint8List wavBytes;
+
       if (customByteGenerator != null) {
         wavBytes = await customByteGenerator!(const Duration(seconds: targetDurationSeconds));
       } else {
-        // Generate calibrated 16 kHz mono 16-bit PCM WAV stream
-        wavBytes = generateSyntheticRespiratoryWav(
-          duration: const Duration(seconds: targetDurationSeconds),
-          sampleRate: targetSampleRate,
-        );
+        String? targetPath;
+        try {
+          final isRec = await _audioRecorder.isRecording();
+          if (isRec) {
+            targetPath = await _audioRecorder.stop();
+          }
+        } catch (stopErr) {
+          debugPrint('⚠️ [AudioRecorderService] Error stopping recorder: $stopErr');
+        }
+
+        final filePath = targetPath ?? _currentRecordingPath;
+        if (filePath == null) {
+          throw Exception('No recorded audio file path returned by microphone stream.');
+        }
+
+        final file = File(filePath);
+        if (!await file.exists()) {
+          throw Exception('Recorded audio file not found on disk ($filePath).');
+        }
+
+        final bytes = await file.readAsBytes();
+        if (bytes.length <= 44) {
+          throw Exception('Microphone recorded 0 audio samples (empty WAV buffer).');
+        }
+
+        wavBytes = bytes;
+      }
+
+      // Root Mean Square (RMS) volume validation to guard against silent / unpopulated audio
+      final numSamples = (wavBytes.length - 44) ~/ 2;
+      if (numSamples < 4000) {
+        throw Exception('Audio sample too short. Please speak or cough directly into the microphone for at least 2-3 seconds.');
+      }
+
+      final byteData = ByteData.sublistView(wavBytes, 44);
+      double sumSq = 0.0;
+      for (int i = 0; i < numSamples; i++) {
+        final sample = byteData.getInt16(i * 2, Endian.little) / 32768.0;
+        sumSq += sample * sample;
+      }
+      final rms = math.sqrt(sumSq / numSamples);
+      debugPrint('🎙️ [AudioRecorderService] Captured $numSamples samples (${wavBytes.length} bytes), RMS Volume: ${rms.toStringAsFixed(4)}');
+
+      if (rms < 0.01) {
+        _status = AudioRecorderStatus.error;
+        _errorMessage = 'No cough sound detected. Please speak or cough directly into the microphone.';
+        _lastResult = null;
+        notifyListeners();
+        return;
       }
 
       final fileName = 'cough_recording_${DateTime.now().millisecondsSinceEpoch}.wav';
@@ -180,10 +258,13 @@ class AudioRecorderService extends ChangeNotifier implements AudioRecorderInterf
       );
 
       _status = AudioRecorderStatus.recorded;
+      _errorMessage = null;
       notifyListeners();
     } catch (e) {
+      debugPrint('🚨 [AudioRecorderService] Audio recording error: $e');
       _status = AudioRecorderStatus.error;
-      _errorMessage = 'Failed to process audio recording: $e';
+      _errorMessage = '$e'.replaceAll('Exception: ', '');
+      _lastResult = null;
       notifyListeners();
     }
   }
@@ -200,6 +281,9 @@ class AudioRecorderService extends ChangeNotifier implements AudioRecorderInterf
   @override
   void cancel() {
     _countdownTimer?.cancel();
+    try {
+      _audioRecorder.stop();
+    } catch (_) {}
     _status = AudioRecorderStatus.idle;
     _remainingSeconds = targetDurationSeconds;
     notifyListeners();
@@ -207,6 +291,9 @@ class AudioRecorderService extends ChangeNotifier implements AudioRecorderInterf
 
   void reset() {
     _countdownTimer?.cancel();
+    try {
+      _audioRecorder.stop();
+    } catch (_) {}
     _status = AudioRecorderStatus.idle;
     _remainingSeconds = targetDurationSeconds;
     _lastResult = null;
@@ -214,107 +301,83 @@ class AudioRecorderService extends ChangeNotifier implements AudioRecorderInterf
     notifyListeners();
   }
 
-  /// Builds a canonical 44-byte RIFF/WAVE header around 16-bit signed PCM data
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    try {
+      _audioRecorder.dispose();
+    } catch (_) {}
+    super.dispose();
+  }
+
+  /// Utility to pack raw 16-bit PCM bytes into a valid RIFF/WAVE container (used in tests)
   static Uint8List encodePcmToWav(
-    Uint8List pcmData, {
+    Uint8List pcmBytes, {
     int sampleRate = 16000,
     int channels = 1,
     int bitsPerSample = 16,
   }) {
     final byteRate = sampleRate * channels * (bitsPerSample ~/ 8);
     final blockAlign = channels * (bitsPerSample ~/ 8);
-    final dataSize = pcmData.length;
-    final totalSize = 36 + dataSize;
+    final dataSize = pcmBytes.length;
+    final chunkSize = 36 + dataSize;
 
     final header = ByteData(44);
+    header.setUint8(0, 0x52); // 'R'
+    header.setUint8(1, 0x49); // 'I'
+    header.setUint8(2, 0x46); // 'F'
+    header.setUint8(3, 0x46); // 'F'
+    header.setUint32(4, chunkSize, Endian.little);
+    header.setUint8(8, 0x57);  // 'W'
+    header.setUint8(9, 0x41);  // 'A'
+    header.setUint8(10, 0x56); // 'V'
+    header.setUint8(11, 0x45); // 'E'
 
-    // "RIFF"
-    header.setUint8(0, 0x52); // R
-    header.setUint8(1, 0x49); // I
-    header.setUint8(2, 0x46); // F
-    header.setUint8(3, 0x46); // F
-    header.setUint32(4, totalSize, Endian.little);
-
-    // "WAVE"
-    header.setUint8(8, 0x57);  // W
-    header.setUint8(9, 0x41);  // A
-    header.setUint8(10, 0x56); // V
-    header.setUint8(11, 0x45); // E
-
-    // "fmt " sub-chunk
-    header.setUint8(12, 0x66); // f
-    header.setUint8(13, 0x6d); // m
-    header.setUint8(14, 0x74); // t
-    header.setUint8(15, 0x20); // space
-    header.setUint32(16, 16, Endian.little); // Subchunk1Size for PCM
-    header.setUint16(20, 1, Endian.little);  // AudioFormat 1 = PCM
+    header.setUint8(12, 0x66); // 'f'
+    header.setUint8(13, 0x6D); // 'm'
+    header.setUint8(14, 0x74); // 't'
+    header.setUint8(15, 0x20); // ' '
+    header.setUint32(16, 16, Endian.little);
+    header.setUint16(20, 1, Endian.little); // PCM
     header.setUint16(22, channels, Endian.little);
     header.setUint32(24, sampleRate, Endian.little);
     header.setUint32(28, byteRate, Endian.little);
     header.setUint16(32, blockAlign, Endian.little);
     header.setUint16(34, bitsPerSample, Endian.little);
 
-    // "data" sub-chunk
-    header.setUint8(36, 0x64); // d
-    header.setUint8(37, 0x61); // a
-    header.setUint8(38, 0x74); // t
-    header.setUint8(39, 0x61); // a
+    header.setUint8(36, 0x64); // 'd'
+    header.setUint8(37, 0x61); // 'a'
+    header.setUint8(38, 0x74); // 't'
+    header.setUint8(39, 0x61); // 'a'
     header.setUint32(40, dataSize, Endian.little);
 
     final wav = Uint8List(44 + dataSize);
     wav.setRange(0, 44, header.buffer.asUint8List());
-    wav.setRange(44, 44 + dataSize, pcmData);
+    wav.setRange(44, 44 + dataSize, pcmBytes);
     return wav;
   }
 
-  /// Generates a calibrated 16 kHz mono 16-bit PCM WAV stream mimicking respiratory
-  /// inspiration/expiration and cough acoustics for cross-platform robustness and tests.
+  /// Synthesizes acoustic PCM audio for offline unit testing
   static Uint8List generateSyntheticRespiratoryWav({
     Duration duration = const Duration(seconds: 5),
     int sampleRate = 16000,
+    double fundamentalFreq = 220.0,
   }) {
-    final numSamples = (sampleRate * (duration.inMilliseconds / 1000.0)).round();
-    final pcmBytes = Uint8List(numSamples * 2);
+    final totalSamples = (sampleRate * (duration.inMilliseconds / 1000.0)).toInt();
+    final pcmBytes = Uint8List(totalSamples * 2);
     final byteData = ByteData.view(pcmBytes.buffer);
 
-    for (int i = 0; i < numSamples; i++) {
-      final t = i / sampleRate;
-
-      // Baseline breathing frequency (~0.3 Hz breathing rate)
-      double signal = 0.15 * math.sin(2 * math.pi * 180 * t) * (0.5 + 0.5 * math.sin(2 * math.pi * 0.3 * t));
-
-      // Cough burst 1 at t ~ 1.5s - 2.0s
-      if (t >= 1.5 && t <= 2.0) {
-        final coughEnv = math.exp(-((t - 1.7) * (t - 1.7)) / (2 * 0.08 * 0.08));
-        signal += coughEnv * (
-          0.6 * math.sin(2 * math.pi * 450 * t) +
-          0.4 * math.sin(2 * math.pi * 850 * t) +
-          0.2 * (math.Random(i).nextDouble() - 0.5)
-        );
-      }
-
-      // Cough burst 2 at t ~ 3.2s - 3.7s
-      if (t >= 3.2 && t <= 3.7) {
-        final coughEnv = math.exp(-((t - 3.4) * (t - 3.4)) / (2 * 0.09 * 0.09));
-        signal += coughEnv * (
-          0.55 * math.sin(2 * math.pi * 500 * t) +
-          0.35 * math.sin(2 * math.pi * 1100 * t) +
-          0.2 * (math.Random(i + 1).nextDouble() - 0.5)
-        );
-      }
-
-      // Clamp between -1.0 and 1.0 and convert to 16-bit signed PCM
-      final clamped = signal.clamp(-1.0, 1.0);
-      final pcmSample = (clamped * 32767).round().clamp(-32768, 32767);
-      byteData.setInt16(i * 2, pcmSample, Endian.little);
+    for (int i = 0; i < totalSamples; i++) {
+      final t = i / sampleRate.toDouble();
+      final env = math.exp(-2.5 * (t % 1.25));
+      final raw = math.sin(2 * math.pi * fundamentalFreq * t) * 0.6 +
+          math.sin(2 * math.pi * (fundamentalFreq * 2.1) * t) * 0.25 +
+          ((math.Random(i).nextDouble() * 2.0 - 1.0) * 0.15);
+      final sample = (raw * env * 32767.0).clamp(-32768.0, 32767.0).toInt();
+      byteData.setInt16(i * 2, sample, Endian.little);
     }
 
     return encodePcmToWav(pcmBytes, sampleRate: sampleRate, channels: 1, bitsPerSample: 16);
   }
-
-  @override
-  void dispose() {
-    _countdownTimer?.cancel();
-    super.dispose();
-  }
 }
+

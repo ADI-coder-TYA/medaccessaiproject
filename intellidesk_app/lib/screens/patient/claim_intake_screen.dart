@@ -420,7 +420,7 @@ class _ClaimIntakeScreenState extends State<ClaimIntakeScreen> {
                           Expanded(
                             child: Text(
                               _rxScanSummary == null
-                                  ? 'RxSentinel Prescription Safety Check'
+                                  ? 'Prescription Safety & Interaction Check'
                                   : (_rxScanSummary!.hasSafetyConflict
                                       ? 'DDI / ALLERGY WARNING DETECTED'
                                       : 'PRESCRIPTION SAFE & VERIFIED'),

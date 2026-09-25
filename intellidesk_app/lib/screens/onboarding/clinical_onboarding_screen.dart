@@ -15,14 +15,14 @@ class _ClinicalOnboardingScreenState extends State<ClinicalOnboardingScreen> {
   static const _slides = [
     _OnboardSlide(
       icon: Icons.monitor_heart_outlined,
-      title: 'AI Clinical Triage',
-      body: 'Submit your medical emergency in seconds. Our on-device AI grades severity using the Emergency Severity Index (ESI) and routes your claim instantly.',
+      title: 'Rapid Clinical Triage',
+      body: 'Submit your medical emergency in seconds. The system grades severity using the Emergency Severity Index (ESI) and routes your claim instantly.',
       color: Color(0xFF0D9488),
     ),
     _OnboardSlide(
       icon: Icons.receipt_long_outlined,
-      title: 'Smart Invoice OCR',
-      body: 'Attach any hospital bill, pharmacy receipt, or lab invoice. MedAccess AI reads and verifies it automatically — no manual data entry needed.',
+      title: 'Digital Invoice Scanner',
+      body: 'Attach any hospital bill, pharmacy receipt, or lab invoice. The app scans and verifies it automatically — no manual data entry needed.',
       color: Color(0xFF0284C7),
     ),
     _OnboardSlide(
@@ -33,8 +33,8 @@ class _ClinicalOnboardingScreenState extends State<ClinicalOnboardingScreen> {
     ),
     _OnboardSlide(
       icon: Icons.psychology_outlined,
-      title: '24/7 Mental Health Support',
-      body: 'Feeling overwhelmed? Our local AI counselor provides Psychological First Aid around the clock — completely private, no cloud required.',
+      title: '24/7 First Aid & Support',
+      body: 'Feeling overwhelmed? Our confidential health assistant provides guidance around the clock — completely private, no cloud required.',
       color: Color(0xFF0D9488),
     ),
   ];

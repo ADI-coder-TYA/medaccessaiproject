@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../config/api_config.dart';
 import '../models/user_profile.dart';
 import '../models/user_role.dart';
 import '../services/api_service.dart';
@@ -140,20 +139,28 @@ class AuthProvider extends ChangeNotifier {
 
   /// One-tap demo login as Alex Rivera (Patient / Member)
   Future<void> loginAsPatient() async {
-    _user = const UserProfile(
-      id: 'usr_pat_001',
-      name: 'Alex Rivera',
+    final success = await login(
       email: 'alex.rivera@campushealth.edu',
-      role: UserRole.patient,
-      department: 'General Health & Outpatient Care',
-      institutionId: 'inst-001',
-      phone: '+91 98765 43210',
-      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-      token: 'jwt_mock_token_patient_alex_rivera',
+      password: 'Patient@123',
+      role: UserRole.student,
     );
-    await _persistSession();
-    _syncApiConfig();
-    notifyListeners();
+    if (!success) {
+      _user = const UserProfile(
+        id: 'usr_pat_001',
+        name: 'Alex Rivera',
+        email: 'alex.rivera@campushealth.edu',
+        studentId: 'PAT-2026-001',
+        role: UserRole.patient,
+        department: 'General Health & Outpatient Care',
+        institutionId: 'inst-001',
+        phone: '+91 98765 43210',
+        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+        token: 'jwt_mock_token_patient_alex_rivera',
+      );
+      await _persistSession();
+      _syncApiConfig();
+      notifyListeners();
+    }
   }
 
   /// Backward compatibility alias
@@ -161,20 +168,27 @@ class AuthProvider extends ChangeNotifier {
 
   /// One-tap demo login as Dr. Sarah Chen (Chief Medical Officer)
   Future<void> loginAsAdmin() async {
-    _user = const UserProfile(
-      id: 'usr_adm_999',
-      name: 'Dr. Sarah Chen, MD',
+    final success = await login(
       email: 'admin@campushealth.edu',
+      password: 'Patient@123',
       role: UserRole.admin,
-      department: 'Clinical Triage & Emergency Copay Desk',
-      institutionId: 'inst-001',
-      phone: '+91 98111 22334',
-      avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150',
-      token: 'jwt_mock_token_admin_sarah_chen',
     );
-    await _persistSession();
-    _syncApiConfig();
-    notifyListeners();
+    if (!success) {
+      _user = const UserProfile(
+        id: 'usr_adm_999',
+        name: 'Dr. Sarah Chen, MD',
+        email: 'admin@campushealth.edu',
+        role: UserRole.admin,
+        department: 'Clinical Triage & Emergency Copay Desk',
+        institutionId: 'inst-001',
+        phone: '+91 98111 22334',
+        avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150',
+        token: 'jwt_mock_token_admin_sarah_chen',
+      );
+      await _persistSession();
+      _syncApiConfig();
+      notifyListeners();
+    }
   }
 
   /// Register new Healthcare Facility Admin and batch-import patient roster

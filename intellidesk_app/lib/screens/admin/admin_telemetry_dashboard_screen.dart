@@ -315,7 +315,7 @@ class ClinicalVitalsTelemetryGrid extends StatelessWidget {
                   accentColor: const Color(0xFFF59E0B),
                 ),
                 _buildClinicalCard(
-                  title: 'RxSentinel Safety Interceptions',
+                  title: 'Medication Safety Interceptions',
                   value: '${data.rxSentinelInterceptions} Blocked',
                   badgeText: '100% Intercept',
                   isUrgentBadge: false,
@@ -328,7 +328,7 @@ class ClinicalVitalsTelemetryGrid extends StatelessWidget {
                   value: '${(data.cdssConcordanceRate * 100).toStringAsFixed(1)}%',
                   badgeText: 'Doctor Confirmed',
                   isUrgentBadge: false,
-                  subtitle: 'Physician confirmation of AI differential diagnoses',
+                  subtitle: 'Physician confirmation of differential diagnoses',
                   icon: Icons.verified_user,
                   accentColor: const Color(0xFF0D9488),
                 ),

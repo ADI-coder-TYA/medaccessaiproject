@@ -408,15 +408,19 @@ class _CDSSDecisionDrawerState extends State<CDSSDecisionDrawer> {
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '${ddx.code} - ${ddx.title}',
-                style: TextStyle(
-                  color: isTop ? const Color(0xFF14B8A6) : Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
+              Expanded(
+                child: Text(
+                  '${ddx.code} - ${ddx.title}',
+                  style: TextStyle(
+                    color: isTop ? const Color(0xFF14B8A6) : Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
                 ),
               ),
+              const SizedBox(width: 8),
               Text(
                 '$pct%',
                 style: TextStyle(
@@ -465,18 +469,25 @@ class _CDSSDecisionDrawerState extends State<CDSSDecisionDrawer> {
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                rx.genericName,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13.5,
+              Expanded(
+                child: Text(
+                  rx.genericName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13.5,
+                  ),
                 ),
               ),
-              Text(
-                '${rx.dosage} (${rx.frequency})',
-                style: const TextStyle(color: Colors.tealAccent, fontSize: 12),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  '${rx.dosage} (${rx.frequency})',
+                  style: const TextStyle(color: Colors.tealAccent, fontSize: 12),
+                  textAlign: TextAlign.end,
+                ),
               ),
             ],
           ),
@@ -544,8 +555,8 @@ class _CDSSDecisionDrawerState extends State<CDSSDecisionDrawer> {
           ],
           const SizedBox(height: 6),
           Text(
-            'Provenance SHA256: ${app.signatureHash.substring(0, 16)}...',
-            style: TextStyle(color: Colors.grey[500], fontSize: 10, fontFamily: 'monospace'),
+            'Provenance SHA256: ${app.signatureHash.length >= 16 ? app.signatureHash.substring(0, 16) : app.signatureHash}...',
+            style: const TextStyle(color: Colors.grey, fontSize: 10, fontFamily: 'monospace'),
           ),
         ],
       ),
@@ -591,9 +602,12 @@ class _CDSSDecisionDrawerState extends State<CDSSDecisionDrawer> {
                     child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                   )
                 : const Icon(Icons.check_circle_outline, color: Colors.white),
-            label: const Text(
-              'Approve Treatment Pathway (ICD-11)',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            label: const FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                'Approve Treatment Pathway (ICD-11)',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
             ),
             onPressed: _isSubmitting ? null : () => _handleApproval(isOverride: false),
           ),
@@ -664,9 +678,12 @@ class _CDSSDecisionDrawerState extends State<CDSSDecisionDrawer> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                     icon: const Icon(Icons.save_as, color: Colors.white),
-                    label: const Text(
-                      'Sign & Confirm Override',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    label: const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'Sign & Confirm Override',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
                     ),
                     onPressed: _isSubmitting ? null : () => _handleApproval(isOverride: true),
                   ),

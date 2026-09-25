@@ -59,7 +59,7 @@ class _ClinicalChatScreenState extends State<ClinicalChatScreen> {
       setState(() {
         _messages.add({
           'sender': 'COUNSELOR_AI',
-          'message': 'Hello. I am the MedAccess AI Clinical & Psychological First Aid Assistant. How are you feeling right now? Please share what medical support or distress you are experiencing.',
+          'message': 'Hello. I am your Clinical & First Aid Assistant. How are you feeling right now? Please share what medical support or distress you are experiencing.',
           'timestamp': DateTime.now().toIso8601String(),
         });
       });
@@ -183,7 +183,7 @@ class _ClinicalChatScreenState extends State<ClinicalChatScreen> {
           children: [
             Icon(Icons.psychology, color: Colors.white, size: 22),
             SizedBox(width: 8),
-            Text('24/7 Clinical & PFA Counselor'),
+            Text('24/7 Clinical & First Aid Support'),
           ],
         ),
       ),

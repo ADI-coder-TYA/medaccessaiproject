@@ -53,10 +53,12 @@ class TicketProvider extends ChangeNotifier {
 
     _socketService.connect();
 
-    try {
-      _tickets = await _apiService.fetchTickets();
-    } catch (e) {
-      debugPrint('Error fetching initial tickets: $e');
+    if (ApiConfig.userRole == 'ADMIN' || ApiConfig.userRole == 'CLINICAL_ADMIN') {
+      try {
+        _tickets = await _apiService.fetchTickets();
+      } catch (e) {
+        debugPrint('Error fetching initial tickets: $e');
+      }
     }
 
     _isLoading = false;

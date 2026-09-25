@@ -8,6 +8,7 @@ import 'package:intellidesk_app/modules/diagnostics/providers/diagnostics_provid
 import 'package:intellidesk_app/modules/diagnostics/providers/diagnostic_state_provider.dart';
 import 'package:intellidesk_app/screens/patient/patient_main_screen.dart';
 import 'package:intellidesk_app/screens/patient/patient_clinical_dashboard.dart';
+import 'package:intellidesk_app/services/socket_service.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -55,7 +56,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       // Executive Header
-      expect(find.text('AI Sentinel Active'), findsOneWidget);
+      expect(find.text('Clinical Monitoring Active'), findsOneWidget);
       expect(find.text('SOS 911'), findsOneWidget);
 
       // Hero Multimodal Clinical Checkup Card (Core Flagship Feature)
@@ -82,10 +83,10 @@ void main() {
 
       // AI Clinical Suites Grid
       expect(find.text('Multimodal Checkup'), findsOneWidget);
-      expect(find.text('RxSentinel Pharmacy'), findsOneWidget);
+      expect(find.text('Pharmacy & Safety'), findsOneWidget);
       expect(find.text('Emergency Locator'), findsOneWidget);
       expect(find.text('Healing Progression'), findsOneWidget);
-      expect(find.text('AI Health Chat'), findsOneWidget);
+      expect(find.text('Clinical Health Chat'), findsOneWidget);
       expect(find.text('Medical Passport & EHR'), findsOneWidget);
 
       // Emergency Medical Passport & Care Plan Card
@@ -114,7 +115,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       // Check all 5 navigation destination labels
-      expect(find.text('AI Hub'), findsWidgets);
+      expect(find.text('Dashboard'), findsWidgets);
       expect(find.text('Checkup'), findsWidgets);
       expect(find.text('Pharmacy'), findsWidgets);
       expect(find.text('Emergency'), findsWidgets);
@@ -131,9 +132,9 @@ void main() {
       await tester.tap(find.text('Pharmacy').first);
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Should show RxSentinel Smart Pharmacy screen
-      expect(find.text('RxSentinel Smart Pharmacy'), findsOneWidget);
-      expect(find.text('AI Drug Safety Sentinel'), findsOneWidget);
+      // Should show Clinical Pharmacy Hub screen
+      expect(find.text('Clinical Pharmacy Hub'), findsOneWidget);
+      expect(find.text('Medication Safety Check'), findsOneWidget);
 
       // Tap on Emergency tab
       await tester.tap(find.text('Emergency').first);
@@ -153,11 +154,13 @@ void main() {
       expect(find.text('Medical Passport'), findsOneWidget);
       expect(find.text('Coverage & Benefits'), findsOneWidget);
 
-      // Tap back on AI Hub tab
-      await tester.tap(find.text('AI Hub').first);
+      // Tap back on Dashboard tab
+      await tester.tap(find.text('Dashboard').first);
       await tester.pump(const Duration(milliseconds: 300));
 
+      SocketService().disconnect();
       await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(milliseconds: 100));
     });
 
     testWidgets('RecordsScreen Coverage & Benefits renders without overflow on standard mobile viewport', (tester) async {

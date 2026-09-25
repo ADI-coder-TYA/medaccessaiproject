@@ -7,7 +7,7 @@ import '../models/cdss_evaluation.dart';
 class CDSSService {
   final String _baseUrl;
 
-  CDSSService({String? baseUrl}) : _baseUrl = baseUrl ?? ApiConfig.baseUrl;
+  CDSSService({String? baseUrl}) : _baseUrl = baseUrl ?? ApiConfig.host;
 
   /**
    * Evaluates patient screening data against WHO ICD-11 knowledge base.

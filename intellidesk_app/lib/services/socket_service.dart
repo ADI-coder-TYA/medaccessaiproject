@@ -6,10 +6,10 @@ import '../config/api_config.dart';
 class SocketService {
   static final SocketService _instance = SocketService._internal();
   factory SocketService() => _instance;
-  SocketService._internal() : url = ApiConfig.socketUrl;
+  SocketService._internal();
 
   io.Socket? _socket;
-  final String url;
+  String get url => ApiConfig.socketUrl;
   
   Function(Ticket)? onTicketCreated;
   Function(Ticket)? onTicketUpdated;
@@ -56,7 +56,9 @@ class SocketService {
 
     _socket!.onConnect((_) {
       debugPrint('🔌 [SocketService] Connected to $url');
-      _socket?.emit('join_admin', {'institutionId': institutionId});
+      if (ApiConfig.userRole == 'ADMIN' || ApiConfig.userRole == 'CLINICAL_ADMIN') {
+        _socket?.emit('join_admin', {'institutionId': institutionId});
+      }
       _socket?.emit('join_institution', institutionId);
       if (onConnectionStateChanged != null) {
         onConnectionStateChanged!(true);

@@ -24,6 +24,16 @@ class PatientMainScreen extends StatefulWidget {
 class _PatientMainScreenState extends State<PatientMainScreen> {
   int _selectedIndex = 0;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<TicketProvider>().init();
+      }
+    });
+  }
+
   void _onNavigateTab(int index) {
     setState(() {
       _selectedIndex = index;
@@ -91,7 +101,7 @@ class _PatientMainScreenState extends State<PatientMainScreen> {
                                         NavigationRailDestination(
                                           icon: Icon(Icons.dashboard_outlined),
                                           selectedIcon: Icon(Icons.dashboard_rounded),
-                                          label: Text('AI Hub'),
+                                          label: Text('Dashboard'),
                                         ),
                                         NavigationRailDestination(
                                           icon: Icon(Icons.health_and_safety_outlined),
@@ -193,7 +203,7 @@ class _PatientMainScreenState extends State<PatientMainScreen> {
             NavigationDestination(
               icon: Icon(Icons.dashboard_outlined, color: Color(0xFF94A3B8), size: 22),
               selectedIcon: Icon(Icons.dashboard_rounded, color: Color(0xFF0D9488), size: 22),
-              label: 'AI Hub',
+              label: 'Dashboard',
             ),
             NavigationDestination(
               icon: Icon(Icons.health_and_safety_outlined, color: Color(0xFF94A3B8), size: 22),
@@ -291,7 +301,7 @@ class _PatientMainScreenState extends State<PatientMainScreen> {
                                 border: Border.all(color: const Color(0xFF0D9488).withOpacity(0.4)),
                               ),
                               child: Text(
-                                'CLINICAL AI',
+                                'PATIENT PORTAL',
                                 style: GoogleFonts.outfit(
                                   color: const Color(0xFF0F766E),
                                   fontSize: 8.5,

@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 import '../../config/api_config.dart';
-import '../../theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../modules/diagnostics/providers/diagnostics_provider.dart';
 import '../../modules/diagnostics/providers/diagnostic_state_provider.dart';
@@ -76,7 +75,7 @@ class _PatientClinicalDashboardState extends State<PatientClinicalDashboard> wit
     setState(() => _isLoadingOverview = true);
 
     try {
-      final uri = Uri.parse('${ApiConfig.baseUrl}/api/v1/diagnostics/patient/$patientId/overview');
+      final uri = Uri.parse('${ApiConfig.baseUrl}/diagnostics/patient/$patientId/overview');
       final res = await http.get(uri).timeout(const Duration(seconds: 4));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -165,7 +164,7 @@ class _PatientClinicalDashboardState extends State<PatientClinicalDashboard> wit
             const SizedBox(height: 18),
 
             // 4. Clinical AI Core Suites (Interactive Grid)
-            _buildSectionHeader('AI Diagnostic & Clinical Suites', 'Tap to launch intelligent multimodal pipelines'),
+            _buildSectionHeader('Clinical Health Suites', 'Tap to launch clinical evaluations and health tools'),
             const SizedBox(height: 12),
             _buildSuitesGrid(),
             const SizedBox(height: 20),
@@ -266,7 +265,7 @@ class _PatientClinicalDashboardState extends State<PatientClinicalDashboard> wit
                       const SizedBox(width: 4),
                       const Flexible(
                         child: Text(
-                          'AI Sentinel Active',
+                          'Clinical Monitoring Active',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(color: Color(0xFF0F766E), fontSize: 10, fontWeight: FontWeight.bold),
@@ -508,8 +507,8 @@ class _PatientClinicalDashboardState extends State<PatientClinicalDashboard> wit
           },
         ),
         _buildActionTile(
-          title: 'RxSentinel Pharmacy',
-          subtitle: 'Prescription OCR & DDI',
+          title: 'Pharmacy & Safety',
+          subtitle: 'Prescriptions & Safety',
           icon: Icons.medication,
           gradient: const [Color(0xFF6366F1), Color(0xFF818CF8)],
           onTap: () {
@@ -531,7 +530,7 @@ class _PatientClinicalDashboardState extends State<PatientClinicalDashboard> wit
         ),
         _buildActionTile(
           title: 'Healing Progression',
-          subtitle: 'Lesion SSIM & Curves',
+          subtitle: 'Lesion Recovery Tracking',
           icon: Icons.show_chart,
           gradient: const [Color(0xFF0284C7), Color(0xFF38BDF8)],
           onTap: () {
@@ -542,8 +541,8 @@ class _PatientClinicalDashboardState extends State<PatientClinicalDashboard> wit
           },
         ),
         _buildActionTile(
-          title: 'AI Health Chat',
-          subtitle: 'Qwen 2.5 PFA Assistant',
+          title: 'Clinical Health Chat',
+          subtitle: 'Guidance & First Aid',
           icon: Icons.chat_bubble_outline,
           gradient: const [Color(0xFF8B5CF6), Color(0xFFA78BFA)],
           onTap: () {
@@ -778,7 +777,7 @@ class _PatientClinicalDashboardState extends State<PatientClinicalDashboard> wit
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'RxSentinel Safety Monitoring',
+                  'Medication Safety Monitoring',
                   style: TextStyle(color: Color(0xFF0F172A), fontSize: 13, fontWeight: FontWeight.bold),
                 ),
                 Text(
@@ -1055,7 +1054,7 @@ class _PatientClinicalDashboardState extends State<PatientClinicalDashboard> wit
                     Icon(Icons.auto_awesome, color: Color(0xFF5EEAD4), size: 14),
                     SizedBox(width: 6),
                     Text(
-                      'CORE CLINICAL AI',
+                      'CLINICAL TRIAGE',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 10.5,

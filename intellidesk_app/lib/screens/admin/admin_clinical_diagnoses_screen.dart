@@ -617,42 +617,50 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
                           children: [
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF0D9488).withValues(alpha: 0.12),
-                                        shape: BoxShape.circle,
+                                Expanded(
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF0D9488).withValues(alpha: 0.12),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(Icons.biotech, color: Color(0xFF0D9488), size: 22),
                                       ),
-                                      child: const Icon(Icons.biotech, color: Color(0xFF0D9488), size: 22),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        const Text(
-                                          'WHO ICD-11 PRIMARY DIAGNOSIS',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                            color: Color(0xFF0D9488),
-                                            letterSpacing: 0.5,
-                                          ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'WHO ICD-11 PRIMARY DIAGNOSIS',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                                color: Color(0xFF0D9488),
+                                                letterSpacing: 0.5,
+                                              ),
+                                            ),
+                                            Text(
+                                              primaryTitle,
+                                              style: GoogleFonts.outfit(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold,
+                                                color: const Color(0xFF0F172A),
+                                              ),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
                                         ),
-                                        Text(
-                                          primaryTitle,
-                                          style: GoogleFonts.outfit(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                            color: const Color(0xFF0F172A),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
+                                const SizedBox(width: 8),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                   decoration: BoxDecoration(
@@ -781,13 +789,13 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
                               icon: Icons.mic,
                               iconColor: const Color(0xFF0284C7),
                               title: '5s Acoustic Respiratory WAV',
-                              value: '${acoustic['predicted_class'] ?? 'Normal Airway'} (${((acoustic['confidence'] as num?)?.toDouble() ?? 0.92 * 100).toStringAsFixed(0)}% AI Conf)',
+                              value: '${acoustic['predicted_class'] ?? 'Normal Airway'} (${((acoustic['confidence'] as num?)?.toDouble() ?? 0.92 * 100).toStringAsFixed(0)}% Conf)',
                             ),
                             const Divider(color: Color(0xFFF1F5F9), height: 16),
                             _buildModalTelemetryRow(
                               icon: Icons.shield_outlined,
                               iconColor: const Color(0xFFD97706),
-                              title: 'RxSentinel Allergy & DDI Shield',
+                              title: 'Medication Allergy & DDI Shield',
                               value: screening['symptom_payload']?['has_safety_conflict'] == true
                                   ? (screening['symptom_payload']?['safety_conflict_summary'] ?? 'Contraindication Warning Detected')
                                   : 'No active drug-drug or allergen conflicts detected',
@@ -1018,52 +1026,76 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
     final totalCheckups = _allScreenings.length;
     final ddiInterceptions = _patients.where((p) => p['hasDDIConflict'] == true).length;
 
-    return Row(
-      children: [
-        Expanded(
-          child: _buildMetricCard(
-            title: 'Screened Patients',
-            value: '$totalPatients',
-            icon: Icons.people_outline,
-            iconColor: const Color(0xFF0D9488),
-            badgeText: 'Active',
-            badgeColor: const Color(0xFF0D9488),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _buildMetricCard(
-            title: 'Urgent / High Flags',
-            value: '$criticalHighCount',
-            icon: Icons.warning_amber_rounded,
-            iconColor: const Color(0xFFEF4444),
-            badgeText: 'Escalated',
-            badgeColor: const Color(0xFFEF4444),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _buildMetricCard(
-            title: 'Diagnostic Encounters',
-            value: '$totalCheckups',
-            icon: Icons.biotech_outlined,
-            iconColor: const Color(0xFF0284C7),
-            badgeText: 'Multimodal',
-            badgeColor: const Color(0xFF0284C7),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _buildMetricCard(
-            title: 'Safety Interceptions',
-            value: '$ddiInterceptions',
-            icon: Icons.shield_outlined,
-            iconColor: const Color(0xFFD97706),
-            badgeText: 'DDI / Allergy',
-            badgeColor: const Color(0xFFD97706),
-          ),
-        ),
-      ],
+    final cards = [
+      _buildMetricCard(
+        title: 'Screened Patients',
+        value: '$totalPatients',
+        icon: Icons.people_outline,
+        iconColor: const Color(0xFF0D9488),
+        badgeText: 'Active',
+        badgeColor: const Color(0xFF0D9488),
+      ),
+      _buildMetricCard(
+        title: 'Urgent / High Flags',
+        value: '$criticalHighCount',
+        icon: Icons.warning_amber_rounded,
+        iconColor: const Color(0xFFEF4444),
+        badgeText: 'Escalated',
+        badgeColor: const Color(0xFFEF4444),
+      ),
+      _buildMetricCard(
+        title: 'Diagnostic Encounters',
+        value: '$totalCheckups',
+        icon: Icons.biotech_outlined,
+        iconColor: const Color(0xFF0284C7),
+        badgeText: 'Multimodal',
+        badgeColor: const Color(0xFF0284C7),
+      ),
+      _buildMetricCard(
+        title: 'Safety Interceptions',
+        value: '$ddiInterceptions',
+        icon: Icons.shield_outlined,
+        iconColor: const Color(0xFFD97706),
+        badgeText: 'DDI / Allergy',
+        badgeColor: const Color(0xFFD97706),
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 640) {
+          return Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(child: cards[0]),
+                  const SizedBox(width: 8),
+                  Expanded(child: cards[1]),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(child: cards[2]),
+                  const SizedBox(width: 8),
+                  Expanded(child: cards[3]),
+                ],
+              ),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: cards[0]),
+            const SizedBox(width: 8),
+            Expanded(child: cards[1]),
+            const SizedBox(width: 8),
+            Expanded(child: cards[2]),
+            const SizedBox(width: 8),
+            Expanded(child: cards[3]),
+          ],
+        );
+      },
     );
   }
 
@@ -1096,15 +1128,20 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Icon(icon, color: iconColor, size: 18),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                decoration: BoxDecoration(
-                  color: badgeColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  badgeText,
-                  style: TextStyle(color: badgeColor, fontSize: 8.5, fontWeight: FontWeight.bold),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: badgeColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    badgeText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: badgeColor, fontSize: 8.5, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
             ],
@@ -1472,29 +1509,35 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 14,
-                        backgroundColor: const Color(0xFF0D9488).withValues(alpha: 0.12),
-                        child: Text(
-                          patientName.isNotEmpty ? patientName[0].toUpperCase() : 'P',
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0D9488)),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 14,
+                          backgroundColor: const Color(0xFF0D9488).withValues(alpha: 0.12),
+                          child: Text(
+                            patientName.isNotEmpty ? patientName[0].toUpperCase() : 'P',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0D9488)),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        patientName,
-                        style: GoogleFonts.outfit(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF0F172A),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            patientName,
+                            style: GoogleFonts.outfit(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: const Color(0xFF0F172A),
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text('($pid)', style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-                    ],
+                        const SizedBox(width: 6),
+                        Text('($pid)', style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
@@ -1532,7 +1575,7 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
                   if (hasImage) _buildQuickPill('Visual Rash OCR', Icons.camera_alt_outlined, const Color(0xFF0D9488)),
                   _buildQuickPill('Acoustic Breathing WAV', Icons.mic_none, const Color(0xFF0284C7)),
                   _buildQuickPill('Contactless rPPG Vitals', Icons.favorite_border, const Color(0xFFEA580C)),
-                  _buildQuickPill('RxSentinel DDI Checked', Icons.shield_outlined, const Color(0xFF10B981)),
+                  _buildQuickPill('Medication DDI Checked', Icons.shield_outlined, const Color(0xFF10B981)),
                 ],
               ),
               const SizedBox(height: 14),

@@ -13,7 +13,8 @@
     "seed:audits": "tsx scripts/seed_audit_logs.ts",
     "seed:all": "tsx scripts/seed_policies.ts && tsx scripts/seed_funds.ts && tsx scripts/seed_audit_logs.ts",
     "test:workflows": "tsx scripts/testMedAccessSuite.ts",
-    "test:advanced": "tsx scripts/testMedAccessAdvancedSuite.ts"
+    "test:advanced": "tsx scripts/testMedAccessAdvancedSuite.ts",
+    "test:diagnostics": "tsx scripts/testDiagnosticsSuite.ts"
   },
   "keywords": [],
   "author": "",

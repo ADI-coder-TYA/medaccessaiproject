@@ -34,8 +34,8 @@ import { cdssRouter } from './modules/cdss/routes/cdssRouter.js';
 
 const app = express();
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const server = http.createServer(app);
 
@@ -43,10 +43,14 @@ initializeSocket(server);
 
 app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/chat', chatRouter);
+app.use('/chat', chatRouter);
 app.use('/api/v1/intake', asyncIntakeRouter);
 app.use('/api/v1/diagnostics', diagnosticsRouter);
+app.use('/diagnostics', diagnosticsRouter);
 app.use('/api/v1/pharmacy', pharmacyRouter);
+app.use('/pharmacy', pharmacyRouter);
 app.use('/api/v1/cdss', cdssRouter);
+app.use('/cdss', cdssRouter);
 app.use('/api/v1/patients', patientsRouter);
 app.use('/api/v1/students', patientsRouter);
 app.use('/api/v1/claims', tenantScopeMiddleware, claimsRouter);
@@ -66,6 +70,18 @@ app.get('/health', async (req, res) => {
     service: 'MedAccess AI Clinical Triage & Copay Engine',
     database: dbHealth,
   });
+});
+
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err?.type === 'entity.too.large') {
+    console.error(`⚠️ [PayloadTooLarge] Request entity exceeded limit: ${err.message}`);
+    return res.status(413).json({
+      success: false,
+      error: 'Payload Too Large',
+      message: 'The submitted audio, image, or diagnostic payload exceeds the maximum allowed size (50MB).',
+    });
+  }
+  next(err);
 });
 
 const PORT = process.env.PORT || 3000;

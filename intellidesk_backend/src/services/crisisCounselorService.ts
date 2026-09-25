@@ -82,7 +82,7 @@ export function buildDiagnosticInterpretationPrompt(
     ? context.topFeatures.join(', ')
     : 'Clinical symptom presentation';
 
-  const system = `You are MedAccess AI's Clinical Interpretation & Psychological First Aid Assistant powered by Qwen2.5.
+  const system = `You are MedAccess's Clinical Interpretation & First Aid Assistant.
 Your role is to explain clinical health screening results in empathetic, clear, patient-friendly language.
 CRITICAL CLINICAL RULES:
 1. Explain the diagnostic finding (${context.primaryDiagnosis || context.riskTier}) and salient features (${featureList}) in warm, plain language.

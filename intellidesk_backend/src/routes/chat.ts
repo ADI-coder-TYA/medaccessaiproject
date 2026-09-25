@@ -11,6 +11,8 @@ import {
 import { getIO } from '../services/socketManager.js';
 import { evaluateLifeSafety } from '../services/safetyGuardrails.js';
 import { classifyCategoryDynamic } from '../utils/categoryClassifier.js';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { PharmacyDbService } from '../modules/pharmacy/pharmacyDbService.js';
 
 const chatRouter = Router();
 
@@ -70,7 +72,6 @@ chatRouter.post('/message', async (req: Request, res: Response) => {
     const isExplicitConfirmation = parsed.confirmTicket === true || TICKET_CONFIRM_REGEX.test(parsed.message.trim());
     const isHardshipInquiry = RELIEF_HARDSHIP_REGEX.test(parsed.message);
 
-    // Assemble rich context message if this is a confirmation turn so ML model sees the real situation
     let effectiveMessage = parsed.message;
     if (isExplicitConfirmation) {
       if (parsed.contextMessage) {
@@ -117,7 +118,6 @@ chatRouter.post('/message', async (req: Request, res: Response) => {
       activeTicketId = ticket.id;
       isNewTicketCreated = true;
 
-      // Dispatch Async Background Job to IntakeWorker (BullMQ) with full context
       try {
         const triageJob = await intakeQueue.add(
           'process-chat-triage',
@@ -143,7 +143,6 @@ chatRouter.post('/message', async (req: Request, res: Response) => {
       }
     }
 
-    // Persist student message in ticket_messages if ticket exists
     if (activeTicketId) {
       try {
         await supabase.from('ticket_messages').insert([
@@ -159,7 +158,6 @@ chatRouter.post('/message', async (req: Request, res: Response) => {
       }
     }
 
-    // Fetch recent chat history for context
     let history: Array<{ sender: string; message: string }> = [];
     if (activeTicketId) {
       try {
@@ -178,7 +176,6 @@ chatRouter.post('/message', async (req: Request, res: Response) => {
       }
     }
 
-    // Generate Real-Time Psychological First Aid Counselor Response
     const counselorResponse = await generateCounselorResponse(
       activeTicketId,
       parsed.message,
@@ -186,7 +183,6 @@ chatRouter.post('/message', async (req: Request, res: Response) => {
       { isTicketCreated: isNewTicketCreated }
     );
 
-    // Emit Socket.io event if ticket is active
     if (activeTicketId) {
       try {
         const io = getIO();
@@ -203,7 +199,6 @@ chatRouter.post('/message', async (req: Request, res: Response) => {
       }
     }
 
-    // Return immediate supportive response
     res.status(200).json({
       success: true,
       ticketId: activeTicketId,
@@ -235,9 +230,7 @@ chatRouter.get('/messages/:ticketId', async (req: Request, res: Response) => {
       .eq('ticket_id', ticketId)
       .order('created_at', { ascending: true });
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
     res.status(200).json({
       success: true,
@@ -257,5 +250,135 @@ chatRouter.post('/claims/:id/messages', ChatController.sendClaimMessage);
 
 // ─── GET /api/v1/chat/claims/:id/messages ────────────────────────
 chatRouter.get('/claims/:id/messages', ChatController.getClaimMessages);
+
+// ─────────────────────────────────────────────────────────────────
+// POST /api/v1/chat/mental-health
+// Gemini-powered mental health counselor chat with live patient data
+// ─────────────────────────────────────────────────────────────────
+const genAIForCounselor = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+
+const MENTAL_HEALTH_SYSTEM_PROMPT = `You are Aria, a compassionate, clinically-informed mental health counselor embedded within the MedAccess Campus Health platform.
+
+Your personality and approach:
+- You are warm, empathetic, non-judgmental, and genuinely caring — like a real therapist who truly listens.
+- Practice active listening: reflect back what the patient says, validate their feelings, and ask thoughtful follow-up questions.
+- Use a conversational, human tone — never robotic, never overly clinical. Speak like a caring friend who also happens to have clinical training.
+- Do NOT give one-liner responses. Every response should feel like a real conversation: 3 to 6 sentences, flowing naturally.
+- Ask one meaningful follow-up question at the end of your response to deepen the conversation — unless it's a crisis or a farewell.
+- If the patient mentions their medications or allergies, reference the data in [PATIENT HEALTH CONTEXT] to give personalised responses.
+- If the patient reports side effects or concerns about a medication they are taking, address it directly and empathetically.
+
+Crisis handling (MANDATORY):
+- If the patient mentions suicidal thoughts, self-harm, wanting to die, or any acute danger: express deep care immediately. Do NOT ask follow-up questions in a crisis. Urge them to call Tele-MANAS (14416) or 988 right now. Say they are not alone and that you care deeply about their safety.
+
+Boundaries:
+- You support, guide, and validate — you do not diagnose or prescribe.
+- Always maintain professional boundaries while being deeply human.
+
+Format: Natural, flowing prose only. No markdown headers. No bullet points. No numbered lists. Just a warm, real conversation.`;
+
+const MentalHealthSchema = z.object({
+  patientId: z.string().min(1),
+  message: z.string().min(1),
+  history: z
+    .array(z.object({ role: z.enum(['user', 'model']), text: z.string() }))
+    .optional()
+    .default([]),
+});
+
+chatRouter.post('/mental-health', async (req: Request, res: Response) => {
+  try {
+    const { patientId, message, history } = MentalHealthSchema.parse(req.body);
+
+    const isCrisis = CRITICAL_SELF_HARM_REGEX.test(message);
+
+    // Fetch real patient data for personalised context
+    let patientContextBlock = '';
+    try {
+      const [allergies, medications] = await Promise.all([
+        PharmacyDbService.getPatientAllergies(patientId),
+        PharmacyDbService.getPatientMedications(patientId),
+      ]);
+
+      const allergyList =
+        allergies.length > 0
+          ? allergies
+              .map(a => `${a.allergenGroup}${a.reactionDescription ? ` (Reaction: ${a.reactionDescription})` : ''}`)
+              .join(', ')
+          : 'No known drug allergies on record';
+
+      const medList =
+        medications.length > 0
+          ? medications
+              .map(m => `${m.medicationName}${m.dosage ? ` — ${m.dosage}` : ''}`)
+              .join('; ')
+          : 'No active medications on record';
+
+      patientContextBlock = `\n\n[PATIENT HEALTH CONTEXT — use this to personalise responses if relevant]\nActive Medications: ${medList}\nKnown Drug Allergies: ${allergyList}\n[END PATIENT HEALTH CONTEXT]`;
+    } catch (_) {
+      // Non-fatal: continue without patient data
+    }
+
+    const systemWithContext = MENTAL_HEALTH_SYSTEM_PROMPT + patientContextBlock;
+
+    let reply = '';
+
+    if (!process.env.GEMINI_API_KEY) {
+      reply = isCrisis
+        ? 'I can hear how much pain you are in right now, and I want you to know that you are not alone. Please reach out to Tele-MANAS right now by calling 14416 — their counselors are available 24 hours a day and they truly care. I am here with you.'
+        : 'I am really glad you reached out today. It takes a lot of courage to share what you are going through, and I want you to know that everything you are feeling makes complete sense. Would you like to tell me a bit more about what has been on your mind lately?';
+    } else {
+      try {
+        const model = genAIForCounselor.getGenerativeModel({
+          model: 'gemini-3.5-flash-lite',
+          systemInstruction: systemWithContext,
+          generationConfig: {
+            maxOutputTokens: 400,
+            temperature: 0.88,
+            topP: 0.94,
+          },
+        });
+
+        const chatHistory = history.map(h => ({
+          role: h.role,
+          parts: [{ text: h.text }],
+        }));
+
+        const chat = model.startChat({ history: chatHistory });
+        const result = await chat.sendMessage(message);
+        reply = result.response.text().trim();
+
+        if (!reply || reply.length < 20) throw new Error('Empty model response');
+      } catch (geminiErr: any) {
+        console.warn('[MentalHealthChat] Gemini error, using empathetic fallback:', geminiErr?.message);
+        reply = isCrisis
+          ? 'I can hear how much pain you are in right now, and I want you to know that you are not alone in this. Please call Tele-MANAS at 14416 or 988 right now — a real counselor is ready to talk with you and they care deeply about your safety.'
+          : 'I really hear you, and I am glad you are here talking to me. What you are feeling is completely valid, and you deserve support. Can you share a bit more about what has been weighing on you the most?';
+      }
+    }
+
+    console.log(`🧠 [MentalHealthChat] Patient ${patientId} | Crisis: ${isCrisis} | Reply: ${reply.length} chars`);
+
+    res.status(200).json({
+      success: true,
+      reply,
+      isCrisis,
+      resources: isCrisis
+        ? [
+            { name: 'Tele-MANAS (Govt of India)', number: '14416', actionUrl: 'tel:14416' },
+            { name: '988 Suicide & Crisis Lifeline', number: '988', actionUrl: 'tel:988' },
+            { name: 'Vandrevala Helpline', number: '+91 9999 666 555', actionUrl: 'tel:+919999666555' },
+          ]
+        : null,
+    });
+  } catch (err: any) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ error: 'Validation failed', details: err.issues });
+      return;
+    }
+    console.error('[MentalHealthChat] Error:', err);
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
 
 export default chatRouter;

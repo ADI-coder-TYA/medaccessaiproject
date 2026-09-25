@@ -235,12 +235,8 @@ export async function assessMultimodalRisk(
     try {
       let rawAudioBuf: Buffer;
       if (typeof audioBuffer === 'string') {
-        if (audioBuffer.startsWith('data:')) {
-          const base64Data = audioBuffer.split(',')[1];
-          rawAudioBuf = Buffer.from(base64Data, 'base64');
-        } else {
-          rawAudioBuf = Buffer.from(audioBuffer, 'utf-8');
-        }
+        const base64Data = audioBuffer.startsWith('data:') ? audioBuffer.split(',')[1] : audioBuffer;
+        rawAudioBuf = Buffer.from(base64Data, 'base64');
       } else if (Buffer.isBuffer(audioBuffer)) {
         rawAudioBuf = audioBuffer;
       } else {
@@ -248,11 +244,13 @@ export async function assessMultimodalRisk(
       }
 
       if (rawAudioBuf.length > 0) {
+        console.log(`🎙️ [assessMultimodalRisk] Extracting 16 acoustic features from raw buffer (${rawAudioBuf.length} bytes)...`);
         const audioResult = await AudioFeatureExtractor.extractFeatures(rawAudioBuf);
         audioFeatures = audioResult.featureVector;
         if (!audioClassification) {
           audioClassification = await CoughClassifier.classify(audioFeatures);
         }
+        console.log(`🩺 [assessMultimodalRisk] Fused acoustic biomarker: "${audioClassification?.predictedCategory}" (${((audioClassification?.confidence || 0) * 100).toFixed(1)}%) | RedFlag: ${audioClassification?.isRedFlagRespiratory}`);
       }
     } catch (audioErr) {
       console.warn(`⚠️ [assessMultimodalRisk] Audio processing fallback to neutral prior: ${audioErr}`);

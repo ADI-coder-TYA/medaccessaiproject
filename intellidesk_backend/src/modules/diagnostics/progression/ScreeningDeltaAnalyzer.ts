@@ -191,8 +191,8 @@ export class ScreeningDeltaAnalyzer {
       return null;
     };
 
-    const p0 = getVal(baseline, ['pain_score', 'painScore', 'painLevel', 'pain']);
-    const p1 = getVal(followup, ['pain_score', 'painScore', 'painLevel', 'pain']);
+    const p0 = getVal(baseline, ['pain_score', 'painScore', 'painScale', 'painLevel', 'pain']);
+    const p1 = getVal(followup, ['pain_score', 'painScore', 'painScale', 'painLevel', 'pain']);
 
     const t0 = getVal(baseline, ['temperature', 'temp', 'bodyTemp']);
     const t1 = getVal(followup, ['temperature', 'temp', 'bodyTemp']);

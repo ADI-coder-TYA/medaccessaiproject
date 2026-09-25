@@ -3,7 +3,7 @@ import { ClinicalImageClassifier } from '../vision/imageClassifier.js';
 import { MultimodalRiskNetwork } from '../fusion/multimodalRiskNetwork.js';
 import { GradCamGenerator } from '../explainability/gradCamGenerator.js';
 import { FeatureImportanceEngine } from '../explainability/featureImportance.js';
-import { HealthScreeningsDbService } from '../db/healthScreeningsDbService.js';
+import { HealthScreeningsDbService, DBHealthScreeningRow } from '../db/healthScreeningsDbService.js';
 import { SymptomInputPayload } from '../fusion/types.js';
 import { AudioFeatureExtractor, CoughClassifier } from '../audio/index.js';
 import { FHIRConverterService } from '../fhir/FHIRConverterService.js';
@@ -82,6 +82,11 @@ router.post('/analyze', async (req: Request, res: Response) => {
     if (audioBase64 && typeof audioBase64 === 'string') {
       const b64Data = audioBase64.startsWith('data:') ? audioBase64.split(',')[1] : audioBase64;
       audioBuffer = Buffer.from(b64Data, 'base64');
+      console.log(`🎙️ [Diagnostics API] Received audio biomarker in multimodal screening payload: ${audioBuffer.length} bytes`);
+    } else if (audioFeatures && Array.isArray(audioFeatures)) {
+      console.log(`🎙️ [Diagnostics API] Received pre-computed 16-D audio features: [${audioFeatures.map((f: number) => f.toFixed(2)).join(', ')}]`);
+    } else {
+      console.log(`ℹ️ [Diagnostics API] No audio provided in multimodal screening (using neutral acoustic prior)`);
     }
 
     // 3. Multimodal Fusion Engine (Vision + Symptoms + Demographics + Audio)
@@ -239,6 +244,59 @@ router.get(['/screenings/:id/referral', '/screenings/:id/referral-letter'], asyn
 });
 
 /**
+ * POST /api/v1/diagnostics/referral-letter
+ * Generates and streams a formal Clinical Referral Letter PDF on demand
+ * from a live client-side assessment payload or unsaved screening.
+ */
+router.post(['/referral-letter', '/screenings/referral-pdf'], async (req: Request, res: Response) => {
+  try {
+    const { screening, assessment, symptomVector, vitals, patientId, institutionId, imageUrl } = req.body;
+    let targetScreening: DBHealthScreeningRow;
+
+    if (screening && screening.id) {
+      targetScreening = screening;
+    } else {
+      const riskScore = Number(assessment?.riskScore ?? 0.5);
+      const riskLevel = String(assessment?.riskLevel ?? 'MODERATE').toUpperCase();
+      const bounds = assessment?.uncertaintyBounds ?? {
+        confidence: 0.88,
+        ciLower: Math.max(0, riskScore - 0.05),
+        ciUpper: Math.min(1, riskScore + 0.05),
+        epistemicVariance: 0.001
+      };
+
+      const findings = Array.isArray(assessment?.clinicalRecommendations) && assessment.clinicalRecommendations.length > 0
+        ? assessment.clinicalRecommendations
+        : [assessment?.primaryDiagnosis || 'Clinical assessment evaluation completed'];
+
+      targetScreening = {
+        id: `scr-live-${Date.now()}`,
+        patient_id: patientId || 'pt-clinical-triage',
+        institution_id: institutionId || 'default-inst',
+        image_url: imageUrl || null,
+        symptom_payload: symptomVector || req.body.symptoms || { primaryDiagnosis: assessment?.primaryDiagnosis },
+        multimodal_risk_score: riskScore,
+        uncertainty_bounds: bounds,
+        xai_heatmap_url: assessment?.xaiHeatmapUrl || null,
+        clinical_findings: findings,
+        risk_level: riskLevel,
+        status: 'completed',
+        rppg_vitals_payload: vitals || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+    }
+
+    await ReferralLetterGenerator.generateReferralPdfStream(targetScreening, res);
+  } catch (err: any) {
+    console.error('❌ [Diagnostics API] Error generating on-demand Referral Letter PDF:', err);
+    if (!res.headersSent) {
+      return res.status(500).json({ success: false, error: err.message || 'Failed to generate referral letter' });
+    }
+  }
+});
+
+/**
  * POST /api/v1/diagnostics/interpret
  * Generates an empathetic Qwen2.5 explanation & next steps for screening results.
  */
@@ -270,6 +328,7 @@ router.post('/interpret', async (req: Request, res: Response) => {
 router.post('/audio/classify', async (req: Request, res: Response) => {
   try {
     const { audioBase64, audioFeatures } = req.body;
+    console.log(`🎙️ [Diagnostics API] Inbound /audio/classify request: ${audioBase64 ? 'audioBase64 payload (' + (typeof audioBase64 === 'string' ? audioBase64.length + ' chars' : 'buffer') + ')' : (audioFeatures ? 'audioFeatures (' + audioFeatures.length + ' dims)' : 'none')}`);
 
     let features = audioFeatures;
     let extractionResult = null;
@@ -283,11 +342,13 @@ router.post('/audio/classify', async (req: Request, res: Response) => {
         rawBuf = Buffer.from(audioBase64, 'base64');
       }
 
+      console.log(`🎙️ [Diagnostics API] Decoding raw audio buffer: ${rawBuf.length} bytes`);
       extractionResult = await AudioFeatureExtractor.extractFeatures(rawBuf);
       features = extractionResult.featureVector;
     }
 
     if (!features) {
+      console.warn('⚠️ [Diagnostics API] /audio/classify missing audio payload');
       return res.status(400).json({
         success: false,
         error: 'Either "audioBase64" or "audioFeatures" (16-d array) is required.'
@@ -295,6 +356,7 @@ router.post('/audio/classify', async (req: Request, res: Response) => {
     }
 
     const classification = await CoughClassifier.classify(features);
+    console.log(`🩺 [Diagnostics API] ✅ Cough classification completed: "${classification.predictedCategory}" (${(classification.confidence * 100).toFixed(1)}%) | RedFlag: ${classification.isRedFlagRespiratory}`);
 
     return res.status(200).json({
       success: true,
@@ -459,12 +521,14 @@ router.get('/facilities/nearby', async (req: Request, res: Response) => {
 router.post('/vitals/process-rppg', async (req: Request, res: Response) => {
   try {
     const { frames, red, green, blue, timestampsMs, samplingRate = 30.0 } = req.body;
+    console.log(`📡 [Diagnostics API] Inbound rPPG request: ${Array.isArray(frames) ? frames.length + ' frames' : 'signal arrays'}, samplingRate=${samplingRate}`);
 
     const processor = new rPPGSignalProcessor(Number(samplingRate) || 30.0);
     let result;
 
     if (Array.isArray(frames) && frames.length > 0) {
       if (frames.length < 60) {
+        console.warn(`⚠️ [Diagnostics API] Insufficient rPPG frames: received ${frames.length}, need >= 60`);
         return res.status(400).json({
           success: false,
           error: `Insufficient optical frames: received ${frames.length} frames, minimum 60 required (>= 2 seconds).`
@@ -473,6 +537,7 @@ router.post('/vitals/process-rppg', async (req: Request, res: Response) => {
       result = processor.processFrames(frames as BioSignalFrame[]);
     } else if (Array.isArray(green) && green.length > 0) {
       if (green.length < 60) {
+        console.warn(`⚠️ [Diagnostics API] Insufficient rPPG samples: received ${green.length}, need >= 60`);
         return res.status(400).json({
           success: false,
           error: `Insufficient optical samples: received ${green.length} samples, minimum 60 required (>= 2 seconds).`
@@ -491,6 +556,8 @@ router.post('/vitals/process-rppg', async (req: Request, res: Response) => {
         error: 'Invalid payload: "frames" array or "green" signal array is required.'
       });
     }
+
+    console.log(`🩺 [Diagnostics API] ✅ rPPG analysis computed: HR=${result.heartRateBpm} bpm | SpO2=${result.oxygenSaturationSpo2}% | RR=${result.respirationRateBpm} br/min | Alerts=${result.alerts?.length || 0}`);
 
     return res.status(200).json({
       success: true,

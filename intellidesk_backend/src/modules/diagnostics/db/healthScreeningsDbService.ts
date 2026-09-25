@@ -15,6 +15,8 @@ export interface DBHealthScreeningRow {
   status: string;
   rppg_vitals_payload?: Record<string, any> | null;
   physiological_alerts?: any[] | null;
+  patient_name?: string | null;
+  patientName?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -220,7 +222,82 @@ export class HealthScreeningsDbService {
   }
 
   /**
-   * Retrieves all health screenings across patients (newest first).
+   * Builds an accurate patient ID/email -> patient name mapping by querying
+   * Supabase profiles and patient_rosters scoped by institution.
+   */
+  public static async _buildPatientNameMap(institutionId?: string): Promise<Map<string, string>> {
+    const nameMap = new Map<string, string>();
+
+    // Canonical default roster mappings
+    const DEFAULT_NAME_MAP: Record<string, string> = {
+      'PAT-2026-001': 'Alex Rivera',
+      'PAT-2026-002': 'Priya Sharma',
+      'PAT-2026-003': 'Marcus Chen',
+      'PAT-2026-004': 'Elena Rostova',
+      'PAT-2026-005': 'Jordan Taylor',
+      'PAT-2026-006': 'Sophia Rodriguez',
+      'PAT-2026-007': 'Rohan Gupta',
+      'PAT-2026-008': 'Maya Lin',
+    };
+
+    for (const [id, name] of Object.entries(DEFAULT_NAME_MAP)) {
+      nameMap.set(id, name);
+      nameMap.set(`usr_pat_${id}`, name);
+      nameMap.set(`pat-${id.toLowerCase()}`, name);
+    }
+    nameMap.set('usr_pat_001', 'Alex Rivera');
+    nameMap.set('001', 'Alex Rivera');
+
+    // 1. Fetch from Supabase profiles
+    try {
+      let pQuery = supabase.from('profiles').select('id, full_name, email, institution_id');
+      if (institutionId) {
+        pQuery = pQuery.eq('institution_id', institutionId);
+      }
+      const { data: profiles } = await pQuery;
+      if (profiles) {
+        for (const prof of profiles) {
+          if (prof.full_name) {
+            nameMap.set(prof.id, prof.full_name);
+            nameMap.set(`usr_pat_${prof.id}`, prof.full_name);
+            if (prof.email) nameMap.set(prof.email, prof.full_name);
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 2. Fetch from Supabase patient_rosters
+    try {
+      let rQuery = supabase.from('patient_rosters').select('patient_id, email, institution_id');
+      if (institutionId) {
+        rQuery = rQuery.eq('institution_id', institutionId);
+      }
+      const { data: rosters } = await rQuery;
+      if (rosters) {
+        for (const r of rosters) {
+          let rName = DEFAULT_NAME_MAP[r.patient_id];
+          if (!rName && r.email) {
+            const localPart = r.email.split('@')[0];
+            rName = localPart
+              .split('.')
+              .map((part: string) => part.charAt(0).toUpperCase() + part.slice(1))
+              .join(' ');
+          }
+          if (rName) {
+            nameMap.set(r.patient_id, rName);
+            nameMap.set(`usr_pat_${r.patient_id}`, rName);
+            if (r.email) nameMap.set(r.email, rName);
+          }
+        }
+      }
+    } catch (_) {}
+
+    return nameMap;
+  }
+
+  /**
+   * Retrieves all health screenings strictly for the requested institution (newest first).
+   * Enriches records with real patient names and normalized clinical findings.
    */
   public static async getAllScreenings(options?: {
     institutionId?: string;
@@ -228,14 +305,17 @@ export class HealthScreeningsDbService {
     search?: string;
     limit?: number;
   }): Promise<DBHealthScreeningRow[]> {
+    const institutionId = options?.institutionId;
+    const patientNameMap = await this._buildPatientNameMap(institutionId);
+
     try {
       let query = supabase
         .from('health_screenings')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (options?.institutionId) {
-        query = query.eq('institution_id', options.institutionId);
+      if (institutionId) {
+        query = query.eq('institution_id', institutionId);
       }
       if (options?.riskLevel && options.riskLevel !== 'ALL') {
         query = query.eq('risk_level', options.riskLevel.toUpperCase());
@@ -245,35 +325,72 @@ export class HealthScreeningsDbService {
       }
 
       const { data, error } = await query;
-      if (!error && data && data.length > 0) {
-        data.forEach((row) => this._localCache.set(row.id, row as DBHealthScreeningRow));
-        return data as DBHealthScreeningRow[];
+      if (!error && data) {
+        const enriched = data.map((row) => {
+          const pid = row.patient_id || '';
+          const resolvedName =
+            row.symptom_payload?.patient_name ||
+            row.symptom_payload?.patientName ||
+            patientNameMap.get(pid) ||
+            patientNameMap.get(pid.replace('usr_pat_', '')) ||
+            (pid ? `Patient ${pid.replace('usr_pat_', '')}` : 'Patient');
+
+          const normalizedFindings = (row.clinical_findings || []).map((f: any) => ({
+            ...f,
+            diagnosis: f.diagnosis || f.condition || 'Clinical Examination',
+            condition: f.condition || f.diagnosis || 'Clinical Examination',
+            icd11Code: f.icd11Code || f.code || 'MG40',
+            code: f.code || f.icd11Code || 'MG40',
+          }));
+
+          const updatedRow = {
+            ...row,
+            patient_name: resolvedName,
+            patientName: resolvedName,
+            clinical_findings: normalizedFindings,
+          };
+          this._localCache.set(row.id, updatedRow);
+          return updatedRow;
+        });
+
+        if (options?.search) {
+          const q = options.search.toLowerCase();
+          return enriched.filter((s: any) => {
+            const pName = (s.patient_name || '').toLowerCase();
+            const pId = (s.patient_id || '').toLowerCase();
+            const findings = JSON.stringify(s.clinical_findings || []).toLowerCase();
+            return pName.includes(q) || pId.includes(q) || findings.includes(q);
+          });
+        }
+
+        return enriched;
+      }
+      if (error) {
+        console.warn(`⚠️ [Diagnostics DB] Failed to fetch screenings for institution ${institutionId}: ${error.message}`);
       }
     } catch (err: any) {
-      console.warn(`⚠️ [Diagnostics DB] Failed to fetch all screenings: ${err.message}`);
+      console.warn(`⚠️ [Diagnostics DB] Failed to fetch screenings: ${err.message}`);
     }
 
-    if (this._localCache.size === 0) {
-      this._seedInitialMockScreenings();
-    }
-
+    // Offline cache fallback strictly filtered by institutionId
     let list = Array.from(this._localCache.values())
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
+    if (institutionId) {
+      list = list.filter((s) => s.institution_id === institutionId);
+    }
     if (options?.riskLevel && options.riskLevel !== 'ALL') {
       list = list.filter((s) => s.risk_level?.toUpperCase() === options.riskLevel!.toUpperCase());
     }
-
     if (options?.search) {
       const q = options.search.toLowerCase();
-      list = list.filter((s) => {
-        const pName = (s.symptom_payload?.patient_name || '').toLowerCase();
+      list = list.filter((s: any) => {
+        const pName = (s.patient_name || s.symptom_payload?.patient_name || '').toLowerCase();
         const pId = (s.patient_id || '').toLowerCase();
         const findings = JSON.stringify(s.clinical_findings || []).toLowerCase();
         return pName.includes(q) || pId.includes(q) || findings.includes(q);
       });
     }
-
     if (options?.limit) {
       list = list.slice(0, options.limit);
     }
@@ -281,10 +398,11 @@ export class HealthScreeningsDbService {
   }
 
   /**
-   * Returns a patient-grouped overview for clinical administrators.
+   * Returns a patient-grouped overview for clinical administrators, strictly filtered by institution.
    */
   public static async getAdminPatientsOverview(institutionId?: string): Promise<any[]> {
     const allScreenings = await this.getAllScreenings({ institutionId });
+    const patientNameMap = await this._buildPatientNameMap(institutionId);
     const patientMap = new Map<string, DBHealthScreeningRow[]>();
 
     for (const sc of allScreenings) {
@@ -301,18 +419,28 @@ export class HealthScreeningsDbService {
       const highestRiskScore = Math.max(...list.map((s) => s.multimodal_risk_score || 0));
 
       let highestRiskLevel = 'LOW';
-      if (list.some((s) => s.risk_level === 'CRITICAL')) highestRiskLevel = 'CRITICAL';
-      else if (list.some((s) => s.risk_level === 'HIGH')) highestRiskLevel = 'HIGH';
-      else if (list.some((s) => s.risk_level === 'MODERATE')) highestRiskLevel = 'MODERATE';
+      if (list.some((s) => s.risk_level?.toUpperCase() === 'CRITICAL')) highestRiskLevel = 'CRITICAL';
+      else if (list.some((s) => s.risk_level?.toUpperCase() === 'HIGH')) highestRiskLevel = 'HIGH';
+      else if (list.some((s) => s.risk_level?.toUpperCase() === 'MODERATE')) highestRiskLevel = 'MODERATE';
 
-      const primaryDiagnosis = latest.clinical_findings?.[0]?.diagnosis || 'Multimodal Clinical Checkup';
-      const primaryICD11 = latest.clinical_findings?.[0]?.icd11Code || 'MG40';
-      const patientName = latest.symptom_payload?.patient_name || (pid === 'pat-demo-01' ? 'Alex Rivera' : (pid === 'pat-demo-02' ? 'Jordan Lee' : (pid === 'pat-demo-03' ? 'Marcus Vance' : (pid === 'pat-demo-04' ? 'Taylor Morgan' : 'Maya Lin'))));
+      const findings = latest.clinical_findings || [];
+      const primaryFinding = findings[0];
+      const primaryDiagnosis = primaryFinding?.diagnosis || primaryFinding?.condition || 'Multimodal Clinical Checkup';
+      const primaryICD11 = primaryFinding?.icd11Code || primaryFinding?.code || 'MG40';
+
+      const patientName =
+        latest.patient_name ||
+        (latest as any).patientName ||
+        latest.symptom_payload?.patient_name ||
+        latest.symptom_payload?.patientName ||
+        patientNameMap.get(pid) ||
+        patientNameMap.get(pid.replace('usr_pat_', '')) ||
+        (pid !== 'unknown-patient' ? `Patient ${pid.replace('usr_pat_', '')}` : 'Anonymous Patient');
 
       return {
         patientId: pid,
         patientName,
-        institutionId: latest.institution_id || 'inst-001',
+        institutionId: latest.institution_id || institutionId || 'nano123',
         totalDiagnoses: list.length,
         highestRiskLevel,
         highestRiskScore,
@@ -322,6 +450,7 @@ export class HealthScreeningsDbService {
         latestVitals: latest.rppg_vitals_payload || latest.symptom_payload?.vitals || null,
         hasPhysiologicalAlert: (latest.physiological_alerts || []).length > 0,
         physiologicalAlerts: latest.physiological_alerts || [],
+        hasDDIConflict: latest.symptom_payload?.has_safety_conflict || false,
         screenings: list,
       };
     });
@@ -341,268 +470,5 @@ export class HealthScreeningsDbService {
    */
   public static clearLocalCache(): void {
     this._localCache.clear();
-  }
-
-  /**
-   * Seeds realistic multimodal clinical diagnostic records across patients for instant demo operation.
-   */
-  private static _seedInitialMockScreenings(): void {
-    const now = Date.now();
-    const oneHour = 3600 * 1000;
-    const oneDay = 24 * oneHour;
-
-    const mockRecords: DBHealthScreeningRow[] = [
-      // 1. Alex Rivera - Recent Contact Dermatitis
-      {
-        id: 'scr-alex-001',
-        patient_id: 'pat-demo-01',
-        institution_id: 'inst-001',
-        created_at: new Date(now - 3 * oneHour).toISOString(),
-        updated_at: new Date(now - 3 * oneHour).toISOString(),
-        multimodal_risk_score: 0.58,
-        risk_level: 'MODERATE',
-        status: 'COMPLETED',
-        image_url: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=600&auto=format&fit=crop',
-        xai_heatmap_url: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=600&auto=format&fit=crop',
-        uncertainty_bounds: { confidence: 0.91, ci_lower: 0.52, ci_upper: 0.64, epistemic_variance: 0.001 },
-        symptom_payload: {
-          patient_name: 'Alex Rivera',
-          body_location: 'Skin / Epidermis',
-          symptoms: ['Erythema / Redness', 'Pruritus / Itching', 'Localized Papules'],
-          vitals: { pain_score: 4, temperature: 37.4, heart_rate: 78, respiration_rate: 16, oxygen_saturation: 98.2, blood_pressure_systolic: 120, duration_days: 3 },
-          acoustic_classification: { predicted_class: 'Normal Breathing', confidence: 0.96, is_concerning: false },
-          prescriptions: ['Lipitor (Atorvastatin) 20mg', 'Glucophage (Metformin) 500mg'],
-          allergies: ['PENICILLINS'],
-          has_safety_conflict: true,
-          safety_conflict_summary: 'Penicillin allergy safeguard triggered against prescribed beta-lactams'
-        },
-        rppg_vitals_payload: { heartRateBpm: 78.4, oxygenSaturationSpo2: 98.2, respirationRateBpm: 16.0, hrvRmssdMs: 44.5, signalConfidence: 0.94 },
-        clinical_findings: [
-          {
-            diagnosis: 'Acute Contact Dermatitis & Erythema',
-            icd11Code: 'EK02',
-            riskLevel: 'MODERATE',
-            probability: 0.88,
-            differentialRank: 1,
-            recommendation: 'Topical hydrocortisone 1% twice daily, cool compress, avoid allergen contact.',
-            evidence: ['Pronounced macular erythema', 'Epidermal pruritus', 'Absence of mucosal involvement']
-          },
-          {
-            diagnosis: 'Atopic Eczema Flaring',
-            icd11Code: 'EA80',
-            riskLevel: 'LOW',
-            probability: 0.09,
-            differentialRank: 2,
-            recommendation: 'Emollient barrier repair therapy.',
-            evidence: ['History of xerosis']
-          }
-        ],
-        physiological_alerts: []
-      },
-      // 1b. Alex Rivera - Baseline Screening
-      {
-        id: 'scr-alex-000',
-        patient_id: 'pat-demo-01',
-        institution_id: 'inst-001',
-        created_at: new Date(now - 14 * oneDay).toISOString(),
-        updated_at: new Date(now - 14 * oneDay).toISOString(),
-        multimodal_risk_score: 0.28,
-        risk_level: 'LOW',
-        status: 'COMPLETED',
-        image_url: null,
-        xai_heatmap_url: null,
-        uncertainty_bounds: { confidence: 0.95, ci_lower: 0.24, ci_upper: 0.32, epistemic_variance: 0.0005 },
-        symptom_payload: {
-          patient_name: 'Alex Rivera',
-          body_location: 'Throat / Oral Cavity',
-          symptoms: ['Mild Upper Respiratory Irritation', 'Slight Dry Cough'],
-          vitals: { pain_score: 2, temperature: 36.9, heart_rate: 72, respiration_rate: 14, oxygen_saturation: 98.8, blood_pressure_systolic: 118, duration_days: 2 },
-          acoustic_classification: { predicted_class: 'Dry Cough', confidence: 0.88, is_concerning: false },
-          allergies: ['PENICILLINS']
-        },
-        rppg_vitals_payload: { heartRateBpm: 72.0, oxygenSaturationSpo2: 98.8, respirationRateBpm: 14.2, hrvRmssdMs: 48.0, signalConfidence: 0.96 },
-        clinical_findings: [
-          {
-            diagnosis: 'Mild Upper Respiratory Irritation',
-            icd11Code: 'CA01',
-            riskLevel: 'LOW',
-            probability: 0.92,
-            differentialRank: 1,
-            recommendation: 'Oral hydration, steam inhalation, rest.',
-            evidence: ['Normal oxygenation', 'Afebrility', 'Clear acoustic airway']
-          }
-        ],
-        physiological_alerts: []
-      },
-      // 2. Jordan Lee - Acute Asthmatic Bronchitis (High Risk)
-      {
-        id: 'scr-jordan-001',
-        patient_id: 'pat-demo-02',
-        institution_id: 'inst-001',
-        created_at: new Date(now - 5 * oneHour).toISOString(),
-        updated_at: new Date(now - 5 * oneHour).toISOString(),
-        multimodal_risk_score: 0.76,
-        risk_level: 'HIGH',
-        status: 'FLAGGED',
-        image_url: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=600&auto=format&fit=crop',
-        xai_heatmap_url: null,
-        uncertainty_bounds: { confidence: 0.89, ci_lower: 0.71, ci_upper: 0.81, epistemic_variance: 0.002 },
-        symptom_payload: {
-          patient_name: 'Jordan Lee',
-          body_location: 'Chest / Respiratory',
-          symptoms: ['Dyspnea on Exertion', 'Expiratory Wheeze', 'Productive Cough'],
-          vitals: { pain_score: 6, temperature: 38.2, heart_rate: 106, respiration_rate: 24, oxygen_saturation: 93.4, blood_pressure_systolic: 134, duration_days: 4 },
-          acoustic_classification: { predicted_class: 'Wheezing (Bronchospasm)', confidence: 0.89, is_concerning: true },
-          allergies: ['NSAIDS', 'ASPIRIN'],
-          has_safety_conflict: true,
-          safety_conflict_summary: 'NSAID-exacerbated respiratory disease (NERD) contraindication'
-        },
-        rppg_vitals_payload: { heartRateBpm: 106.2, oxygenSaturationSpo2: 93.4, respirationRateBpm: 24.0, hrvRmssdMs: 28.1, signalConfidence: 0.91 },
-        clinical_findings: [
-          {
-            diagnosis: 'Acute Asthmatic Bronchitis & Bronchospasm',
-            icd11Code: 'CA23',
-            riskLevel: 'HIGH',
-            probability: 0.84,
-            differentialRank: 1,
-            recommendation: 'Inhaled short-acting beta2-agonist (SABA), urgent clinician evaluation within 4 hours.',
-            evidence: ['SpO2 desaturation (93.4%)', 'Tachypnea RR 24/min', 'Acoustic wheeze confirmed']
-          },
-          {
-            diagnosis: 'Acute Viral Bronchiolitis',
-            icd11Code: 'CA20',
-            riskLevel: 'MODERATE',
-            probability: 0.12,
-            differentialRank: 2,
-            recommendation: 'Differential workup with viral PCR panel.',
-            evidence: ['Low-grade febrility']
-          }
-        ],
-        physiological_alerts: [
-          'High Tachycardia (106 BPM)',
-          'Hypoxemic Warning (SpO2 93.4% < 95%)',
-          'Tachypnea Escalation (24 breaths/min)'
-        ]
-      },
-      // 3. Marcus Vance - Diabetic Ketoacidosis & Hyperglycemic Crisis (Critical Risk)
-      {
-        id: 'scr-marcus-001',
-        patient_id: 'pat-demo-03',
-        institution_id: 'inst-001',
-        created_at: new Date(now - 1 * oneHour).toISOString(),
-        updated_at: new Date(now - 1 * oneHour).toISOString(),
-        multimodal_risk_score: 0.93,
-        risk_level: 'CRITICAL',
-        status: 'FLAGGED',
-        image_url: 'https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?w=600&auto=format&fit=crop',
-        xai_heatmap_url: null,
-        uncertainty_bounds: { confidence: 0.94, ci_lower: 0.89, ci_upper: 0.97, epistemic_variance: 0.001 },
-        symptom_payload: {
-          patient_name: 'Marcus Vance',
-          body_location: 'Abdomen & Systemic',
-          symptoms: ['Acute Abdominal Cramping', 'Extreme Lethargy', 'Fruity Acetone Breath', 'Polydipsia'],
-          vitals: { pain_score: 8, temperature: 38.9, heart_rate: 124, respiration_rate: 28, oxygen_saturation: 94.8, blood_pressure_systolic: 158, duration_days: 1 },
-          acoustic_classification: { predicted_class: 'Deep Kussmaul Respiration', confidence: 0.92, is_concerning: true },
-          prescriptions: ['Humalog (Insulin Lispro)', 'Lantus (Insulin Glargine)'],
-          allergies: ['SULFA DRUGS']
-        },
-        rppg_vitals_payload: { heartRateBpm: 124.0, oxygenSaturationSpo2: 94.8, respirationRateBpm: 28.0, hrvRmssdMs: 19.2, signalConfidence: 0.88 },
-        clinical_findings: [
-          {
-            diagnosis: 'Diabetic Ketoacidosis & Hyperglycemic Crisis',
-            icd11Code: '5A10',
-            riskLevel: 'CRITICAL',
-            probability: 0.94,
-            differentialRank: 1,
-            recommendation: 'IMMEDIATE EMERGENCY ROOM DISPATCH (911). IV isotonic fluid resuscitation & insulin protocol.',
-            evidence: ['Marked tachycardia (124 bpm)', 'Kussmaul breathing (28/min)', 'Hyperpyrexia (38.9°C)']
-          }
-        ],
-        physiological_alerts: [
-          'CRITICAL: Severe Tachycardia (124 BPM)',
-          'CRITICAL: Severe Tachypnea (28 /min)',
-          'CRITICAL: Pyrexia (38.9°C)',
-          'EMERGENCY ADMISSION PROTOCOL TRIGGERED'
-        ]
-      },
-      // 4. Taylor Morgan - Acute Bacterial Pharyngitis (Moderate Risk)
-      {
-        id: 'scr-taylor-001',
-        patient_id: 'pat-demo-04',
-        institution_id: 'inst-001',
-        created_at: new Date(now - 1 * oneDay).toISOString(),
-        updated_at: new Date(now - 1 * oneDay).toISOString(),
-        multimodal_risk_score: 0.61,
-        risk_level: 'MODERATE',
-        status: 'COMPLETED',
-        image_url: 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=600&auto=format&fit=crop',
-        xai_heatmap_url: null,
-        uncertainty_bounds: { confidence: 0.87, ci_lower: 0.55, ci_upper: 0.67, epistemic_variance: 0.002 },
-        symptom_payload: {
-          patient_name: 'Taylor Morgan',
-          body_location: 'Throat / Oral Cavity',
-          symptoms: ['Severe Odynophagia / Painful Swallowing', 'Anterior Cervical Lymphadenopathy'],
-          vitals: { pain_score: 5, temperature: 38.5, heart_rate: 86, respiration_rate: 16, oxygen_saturation: 97.8, blood_pressure_systolic: 118, duration_days: 2 },
-          acoustic_classification: { predicted_class: 'Throat Clearing / Irritation', confidence: 0.84, is_concerning: false },
-          allergies: []
-        },
-        rppg_vitals_payload: { heartRateBpm: 86.0, oxygenSaturationSpo2: 97.8, respirationRateBpm: 16.0, hrvRmssdMs: 38.0, signalConfidence: 0.95 },
-        clinical_findings: [
-          {
-            diagnosis: 'Acute Streptococcal Pharyngotonsillitis',
-            icd11Code: 'CA02',
-            riskLevel: 'MODERATE',
-            probability: 0.79,
-            differentialRank: 1,
-            recommendation: 'Rapid Strep Antigen Test (RADT), warm saline gargles, antipyretics.',
-            evidence: ['Centor criteria score 3/4', 'Tonsillar exudate', 'Pyrexia 38.5°C']
-          }
-        ],
-        physiological_alerts: [
-          'Moderate Pyrexia (38.5°C)'
-        ]
-      },
-      // 5. Maya Lin - Acute Allergic Urticaria (High Risk)
-      {
-        id: 'scr-maya-001',
-        patient_id: 'pat-demo-05',
-        institution_id: 'inst-001',
-        created_at: new Date(now - 2 * oneDay).toISOString(),
-        updated_at: new Date(now - 2 * oneDay).toISOString(),
-        multimodal_risk_score: 0.77,
-        risk_level: 'HIGH',
-        status: 'COMPLETED',
-        image_url: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=600&auto=format&fit=crop',
-        xai_heatmap_url: null,
-        uncertainty_bounds: { confidence: 0.93, ci_lower: 0.72, ci_upper: 0.82, epistemic_variance: 0.001 },
-        symptom_payload: {
-          patient_name: 'Maya Lin',
-          body_location: 'Skin / Epidermis',
-          symptoms: ['Widespread Wheals & Hives', 'Facial Angioedema Sensation', 'Intense Pruritus'],
-          vitals: { pain_score: 6, temperature: 37.6, heart_rate: 98, respiration_rate: 18, oxygen_saturation: 97.2, blood_pressure_systolic: 124, duration_days: 1 },
-          acoustic_classification: { predicted_class: 'Normal Breathing', confidence: 0.95, is_concerning: false },
-          allergies: ['CEPHALOSPORINS', 'SULFAMETHOXAZOLE'],
-          has_safety_conflict: true,
-          safety_conflict_summary: 'Severe IgE-mediated hypersensitivity history'
-        },
-        rppg_vitals_payload: { heartRateBpm: 98.0, oxygenSaturationSpo2: 97.2, respirationRateBpm: 18.0, hrvRmssdMs: 32.0, signalConfidence: 0.92 },
-        clinical_findings: [
-          {
-            diagnosis: 'Acute Systemic Allergic Urticaria & Angioedema',
-            icd11Code: 'EB00',
-            riskLevel: 'HIGH',
-            probability: 0.91,
-            differentialRank: 1,
-            recommendation: 'Second-generation H1-antihistamine (Cetirizine 10mg), monitor airway closely for stridor.',
-            evidence: ['Evanescent wheals', 'Facial swelling complaint', 'High histamine response']
-          }
-        ],
-        physiological_alerts: [
-          'High Risk: Monitor for anaphylactoid progression'
-        ]
-      }
-    ];
-
-    mockRecords.forEach((r) => this._localCache.set(r.id, r));
   }
 }

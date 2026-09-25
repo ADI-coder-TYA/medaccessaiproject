@@ -10,7 +10,14 @@ import '../../modules/diagnostics/ui/LongitudinalHistoryScreen.dart';
 
 class AdminClinicalDiagnosesScreen extends StatefulWidget {
   final bool autoFetch;
-  const AdminClinicalDiagnosesScreen({super.key, this.autoFetch = true});
+  final List<Map<String, dynamic>>? initialPatients;
+  final List<Map<String, dynamic>>? initialScreenings;
+  const AdminClinicalDiagnosesScreen({
+    super.key,
+    this.autoFetch = true,
+    this.initialPatients,
+    this.initialScreenings,
+  });
 
   @override
   State<AdminClinicalDiagnosesScreen> createState() => _AdminClinicalDiagnosesScreenState();
@@ -29,10 +36,14 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
   @override
   void initState() {
     super.initState();
-    if (widget.autoFetch) {
+    if (widget.initialPatients != null) {
+      _patients = List<Map<String, dynamic>>.from(widget.initialPatients!);
+      _allScreenings = List<Map<String, dynamic>>.from(widget.initialScreenings ?? []);
+      _isLoading = false;
+    } else if (widget.autoFetch) {
       _fetchAdminDiagnoses();
     } else {
-      _loadFallbackData();
+      _isLoading = false;
     }
   }
 
@@ -45,355 +56,41 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
   Future<void> _fetchAdminDiagnoses() async {
     setState(() => _isLoading = true);
     try {
-      final patientsUri = Uri.parse('${ApiConfig.baseUrl}/diagnostics/admin/patients');
-      final screeningsUri = Uri.parse('${ApiConfig.baseUrl}/diagnostics/admin/screenings');
+      final institutionId = ApiConfig.activeInstitutionId;
+      final patientsUri = Uri.parse('${ApiConfig.baseUrl}/diagnostics/admin/patients?institutionId=$institutionId');
+      final screeningsUri = Uri.parse('${ApiConfig.baseUrl}/diagnostics/admin/screenings?institutionId=$institutionId');
 
-      final resPatients = await http.get(patientsUri, headers: ApiConfig.adminHeaders).timeout(const Duration(seconds: 4));
-      final resScreenings = await http.get(screeningsUri, headers: ApiConfig.adminHeaders).timeout(const Duration(seconds: 4));
+      final headers = ApiConfig.adminHeaders;
+      final resPatients = await http.get(patientsUri, headers: headers).timeout(const Duration(seconds: 8));
+      final resScreenings = await http.get(screeningsUri, headers: headers).timeout(const Duration(seconds: 8));
 
       if (resPatients.statusCode == 200 && resScreenings.statusCode == 200) {
         final dataPatients = jsonDecode(resPatients.body);
         final dataScreenings = jsonDecode(resScreenings.body);
 
         if (mounted && dataPatients['success'] == true && dataScreenings['success'] == true) {
+          final loadedPatients = List<Map<String, dynamic>>.from(dataPatients['patients'] ?? []);
+          final loadedScreenings = List<Map<String, dynamic>>.from(dataScreenings['screenings'] ?? []);
+
           setState(() {
-            _patients = List<Map<String, dynamic>>.from(dataPatients['patients'] ?? []);
-            _allScreenings = List<Map<String, dynamic>>.from(dataScreenings['screenings'] ?? []);
+            _patients = loadedPatients;
+            _allScreenings = loadedScreenings;
             _isLoading = false;
           });
           return;
         }
       }
-    } catch (_) {
-      // Fallback to local clinical mock roster
+    } catch (e) {
+      debugPrint('⚠️ [AdminClinicalDiagnosesScreen] Live fetch error: $e');
     }
 
     if (mounted) {
-      _loadFallbackData();
+      setState(() {
+        _patients = [];
+        _allScreenings = [];
+        _isLoading = false;
+      });
     }
-  }
-
-  void _loadFallbackData() {
-    final now = DateTime.now();
-    _patients = [
-      {
-        'patientId': 'pat-demo-01',
-        'patientName': 'Alex Rivera',
-        'institutionId': 'inst-columbia',
-        'institutionName': 'Columbia Health Network',
-        'totalDiagnoses': 2,
-        'highestRiskLevel': 'MODERATE',
-        'highestRiskScore': 0.58,
-        'latestDiagnosis': 'Acute Contact Dermatitis & Erythema',
-        'latestICD11': 'EK02',
-        'latestScreeningDate': now.subtract(const Duration(hours: 3)).toIso8601String(),
-        'hasPhysiologicalAlert': false,
-        'hasDDIConflict': true,
-        'latestVitals': {
-          'heartRateBpm': 78,
-          'oxygenSaturationSpo2': 98.2,
-          'respirationRateBpm': 16,
-          'hrvRmssdMs': 44,
-          'temperature': 37.4,
-          'painScore': 4,
-          'bp': '120/80',
-        },
-        'screenings': [
-          {
-            'id': 'scr-alex-001',
-            'patient_id': 'pat-demo-01',
-            'patient_name': 'Alex Rivera',
-            'created_at': now.subtract(const Duration(hours: 3)).toIso8601String(),
-            'risk_level': 'MODERATE',
-            'multimodal_risk_score': 0.58,
-            'image_url': 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=600&auto=format&fit=crop',
-            'symptom_payload': {
-              'body_location': 'Skin / Epidermis',
-              'symptoms': ['Erythema / Redness', 'Pruritus / Itching', 'Localized Papules'],
-              'vitals': {'temperature': 37.4, 'heart_rate': 78, 'oxygen_saturation': 98.2, 'respiration_rate': 16, 'pain_score': 4, 'blood_pressure_systolic': 120},
-              'acoustic_classification': {'predicted_class': 'Normal Breathing', 'confidence': 0.96, 'is_concerning': false},
-              'allergies': ['PENICILLINS'],
-              'has_safety_conflict': true,
-              'safety_conflict_summary': 'Penicillin allergy safeguard triggered against prescribed beta-lactams',
-            },
-            'rppg_vitals_payload': {'heartRateBpm': 78.4, 'oxygenSaturationSpo2': 98.2, 'respirationRateBpm': 16.0, 'hrvRmssdMs': 44.5},
-            'clinical_findings': [
-              {
-                'diagnosis': 'Acute Contact Dermatitis & Erythema',
-                'icd11Code': 'EK02',
-                'riskLevel': 'MODERATE',
-                'probability': 0.88,
-                'recommendation': 'Topical hydrocortisone 1% twice daily, cool compress, avoid allergen contact.',
-                'evidence': ['Pronounced macular erythema', 'Epidermal pruritus', 'Absence of mucosal involvement'],
-              },
-              {
-                'diagnosis': 'Atopic Eczema Flaring',
-                'icd11Code': 'EA80',
-                'riskLevel': 'LOW',
-                'probability': 0.09,
-                'recommendation': 'Emollient barrier repair therapy.',
-                'evidence': ['History of xerosis'],
-              }
-            ],
-            'physiological_alerts': <String>[],
-          },
-          {
-            'id': 'scr-alex-000',
-            'patient_id': 'pat-demo-01',
-            'patient_name': 'Alex Rivera',
-            'created_at': now.subtract(const Duration(days: 14)).toIso8601String(),
-            'risk_level': 'LOW',
-            'multimodal_risk_score': 0.28,
-            'image_url': null,
-            'symptom_payload': {
-              'body_location': 'Throat / Oral Cavity',
-              'symptoms': ['Mild Upper Respiratory Irritation', 'Slight Dry Cough'],
-              'vitals': {'temperature': 36.9, 'heart_rate': 72, 'oxygen_saturation': 98.8, 'respiration_rate': 14, 'pain_score': 2, 'blood_pressure_systolic': 118},
-              'acoustic_classification': {'predicted_class': 'Dry Cough', 'confidence': 0.88, 'is_concerning': false},
-              'allergies': ['PENICILLINS'],
-            },
-            'rppg_vitals_payload': {'heartRateBpm': 72.0, 'oxygenSaturationSpo2': 98.8, 'respirationRateBpm': 14.2, 'hrvRmssdMs': 48.0},
-            'clinical_findings': [
-              {
-                'diagnosis': 'Mild Upper Respiratory Irritation',
-                'icd11Code': 'CA01',
-                'riskLevel': 'LOW',
-                'probability': 0.92,
-                'recommendation': 'Oral hydration, steam inhalation, rest.',
-                'evidence': ['Normal oxygenation', 'Afebrility', 'Clear acoustic airway'],
-              }
-            ],
-            'physiological_alerts': <String>[],
-          }
-        ],
-      },
-      {
-        'patientId': 'pat-demo-02',
-        'patientName': 'Jordan Lee',
-        'institutionId': 'inst-nyu',
-        'institutionName': 'NYU Langone Health',
-        'totalDiagnoses': 1,
-        'highestRiskLevel': 'HIGH',
-        'highestRiskScore': 0.76,
-        'latestDiagnosis': 'Acute Asthmatic Bronchitis & Bronchospasm',
-        'latestICD11': 'CA23',
-        'latestScreeningDate': now.subtract(const Duration(hours: 5)).toIso8601String(),
-        'hasPhysiologicalAlert': true,
-        'hasDDIConflict': true,
-        'latestVitals': {
-          'heartRateBpm': 106,
-          'oxygenSaturationSpo2': 93.4,
-          'respirationRateBpm': 24,
-          'hrvRmssdMs': 28,
-          'temperature': 38.2,
-          'painScore': 6,
-          'bp': '134/85',
-        },
-        'screenings': [
-          {
-            'id': 'scr-jordan-001',
-            'patient_id': 'pat-demo-02',
-            'patient_name': 'Jordan Lee',
-            'created_at': now.subtract(const Duration(hours: 5)).toIso8601String(),
-            'risk_level': 'HIGH',
-            'multimodal_risk_score': 0.76,
-            'image_url': 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=600&auto=format&fit=crop',
-            'symptom_payload': {
-              'body_location': 'Chest / Respiratory',
-              'symptoms': ['Dyspnea on Exertion', 'Expiratory Wheeze', 'Productive Cough'],
-              'vitals': {'temperature': 38.2, 'heart_rate': 106, 'oxygen_saturation': 93.4, 'respiration_rate': 24, 'pain_score': 6, 'blood_pressure_systolic': 134},
-              'acoustic_classification': {'predicted_class': 'Wheezing (Bronchospasm)', 'confidence': 0.89, 'is_concerning': true},
-              'allergies': ['NSAIDS', 'ASPIRIN'],
-              'has_safety_conflict': true,
-              'safety_conflict_summary': 'NSAID-exacerbated respiratory disease contraindication',
-            },
-            'rppg_vitals_payload': {'heartRateBpm': 106.2, 'oxygenSaturationSpo2': 93.4, 'respirationRateBpm': 24.0, 'hrvRmssdMs': 28.1},
-            'clinical_findings': [
-              {
-                'diagnosis': 'Acute Asthmatic Bronchitis & Bronchospasm',
-                'icd11Code': 'CA23',
-                'riskLevel': 'HIGH',
-                'probability': 0.84,
-                'recommendation': 'Inhaled short-acting beta2-agonist (SABA), urgent clinician evaluation within 4 hours.',
-                'evidence': ['SpO2 desaturation (93.4%)', 'Tachypnea RR 24/min', 'Acoustic wheeze confirmed'],
-              }
-            ],
-            'physiological_alerts': ['High Tachycardia (106 BPM)', 'Hypoxemic Warning (SpO2 93.4% < 95%)', 'Tachypnea Escalation (24 breaths/min)'],
-          }
-        ],
-      },
-      {
-        'patientId': 'pat-demo-03',
-        'patientName': 'Marcus Vance',
-        'institutionId': 'inst-stanford',
-        'institutionName': 'Stanford Medicine Health',
-        'totalDiagnoses': 1,
-        'highestRiskLevel': 'CRITICAL',
-        'highestRiskScore': 0.93,
-        'latestDiagnosis': 'Diabetic Ketoacidosis & Hyperglycemic Crisis',
-        'latestICD11': '5A10',
-        'latestScreeningDate': now.subtract(const Duration(minutes: 50)).toIso8601String(),
-        'hasPhysiologicalAlert': true,
-        'hasDDIConflict': false,
-        'latestVitals': {
-          'heartRateBpm': 124,
-          'oxygenSaturationSpo2': 94.8,
-          'respirationRateBpm': 28,
-          'hrvRmssdMs': 19,
-          'temperature': 38.9,
-          'painScore': 8,
-          'bp': '158/98',
-        },
-        'screenings': [
-          {
-            'id': 'scr-marcus-001',
-            'patient_id': 'pat-demo-03',
-            'patient_name': 'Marcus Vance',
-            'created_at': now.subtract(const Duration(minutes: 50)).toIso8601String(),
-            'risk_level': 'CRITICAL',
-            'multimodal_risk_score': 0.93,
-            'image_url': 'https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?w=600&auto=format&fit=crop',
-            'symptom_payload': {
-              'body_location': 'Abdomen & Systemic',
-              'symptoms': ['Acute Abdominal Cramping', 'Extreme Lethargy', 'Fruity Acetone Breath', 'Polydipsia'],
-              'vitals': {'temperature': 38.9, 'heart_rate': 124, 'oxygen_saturation': 94.8, 'respiration_rate': 28, 'pain_score': 8, 'blood_pressure_systolic': 158},
-              'acoustic_classification': {'predicted_class': 'Deep Kussmaul Respiration', 'confidence': 0.92, 'is_concerning': true},
-              'allergies': ['SULFA DRUGS'],
-            },
-            'rppg_vitals_payload': {'heartRateBpm': 124.0, 'oxygenSaturationSpo2': 94.8, 'respirationRateBpm': 28.0, 'hrvRmssdMs': 19.2},
-            'clinical_findings': [
-              {
-                'diagnosis': 'Diabetic Ketoacidosis & Hyperglycemic Crisis',
-                'icd11Code': '5A10',
-                'riskLevel': 'CRITICAL',
-                'probability': 0.94,
-                'recommendation': 'IMMEDIATE EMERGENCY ROOM DISPATCH (911). IV isotonic fluid resuscitation & insulin protocol.',
-                'evidence': ['Marked tachycardia (124 bpm)', 'Kussmaul breathing (28/min)', 'Hyperpyrexia (38.9°C)'],
-              }
-            ],
-            'physiological_alerts': ['CRITICAL: Severe Tachycardia (124 BPM)', 'CRITICAL: Severe Tachypnea (28 /min)', 'CRITICAL: Pyrexia (38.9°C)', 'EMERGENCY ADMISSION PROTOCOL TRIGGERED'],
-          }
-        ],
-      },
-      {
-        'patientId': 'pat-demo-04',
-        'patientName': 'Taylor Morgan',
-        'institutionId': 'inst-boston',
-        'institutionName': 'Boston Campus Health',
-        'totalDiagnoses': 1,
-        'highestRiskLevel': 'MODERATE',
-        'highestRiskScore': 0.61,
-        'latestDiagnosis': 'Acute Streptococcal Pharyngotonsillitis',
-        'latestICD11': 'CA02',
-        'latestScreeningDate': now.subtract(const Duration(days: 1)).toIso8601String(),
-        'hasPhysiologicalAlert': false,
-        'hasDDIConflict': false,
-        'latestVitals': {
-          'heartRateBpm': 86,
-          'oxygenSaturationSpo2': 97.8,
-          'respirationRateBpm': 16,
-          'hrvRmssdMs': 38,
-          'temperature': 38.5,
-          'painScore': 5,
-          'bp': '118/76',
-        },
-        'screenings': [
-          {
-            'id': 'scr-taylor-001',
-            'patient_id': 'pat-demo-04',
-            'patient_name': 'Taylor Morgan',
-            'created_at': now.subtract(const Duration(days: 1)).toIso8601String(),
-            'risk_level': 'MODERATE',
-            'multimodal_risk_score': 0.61,
-            'image_url': 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=600&auto=format&fit=crop',
-            'symptom_payload': {
-              'body_location': 'Throat / Oral Cavity',
-              'symptoms': ['Severe Odynophagia / Painful Swallowing', 'Anterior Cervical Lymphadenopathy'],
-              'vitals': {'temperature': 38.5, 'heart_rate': 86, 'oxygen_saturation': 97.8, 'respiration_rate': 16, 'pain_score': 5, 'blood_pressure_systolic': 118},
-              'acoustic_classification': {'predicted_class': 'Throat Clearing / Irritation', 'confidence': 0.84, 'is_concerning': false},
-              'allergies': <String>[],
-            },
-            'rppg_vitals_payload': {'heartRateBpm': 86.0, 'oxygenSaturationSpo2': 97.8, 'respirationRateBpm': 16.0, 'hrvRmssdMs': 38.0},
-            'clinical_findings': [
-              {
-                'diagnosis': 'Acute Streptococcal Pharyngotonsillitis',
-                'icd11Code': 'CA02',
-                'riskLevel': 'MODERATE',
-                'probability': 0.79,
-                'recommendation': 'Rapid Strep Antigen Test (RADT), warm saline gargles, antipyretics.',
-                'evidence': ['Centor criteria score 3/4', 'Tonsillar exudate', 'Pyrexia 38.5°C'],
-              }
-            ],
-            'physiological_alerts': ['Moderate Pyrexia (38.5°C)'],
-          }
-        ],
-      },
-      {
-        'patientId': 'pat-demo-05',
-        'patientName': 'Maya Lin',
-        'institutionId': 'inst-ucla',
-        'institutionName': 'UCLA Student Health',
-        'totalDiagnoses': 1,
-        'highestRiskLevel': 'HIGH',
-        'highestRiskScore': 0.77,
-        'latestDiagnosis': 'Acute Systemic Allergic Urticaria & Angioedema',
-        'latestICD11': 'EB00',
-        'latestScreeningDate': now.subtract(const Duration(days: 2)).toIso8601String(),
-        'hasPhysiologicalAlert': true,
-        'hasDDIConflict': true,
-        'latestVitals': {
-          'heartRateBpm': 98,
-          'oxygenSaturationSpo2': 97.2,
-          'respirationRateBpm': 18,
-          'hrvRmssdMs': 32,
-          'temperature': 37.6,
-          'painScore': 6,
-          'bp': '124/82',
-        },
-        'screenings': [
-          {
-            'id': 'scr-maya-001',
-            'patient_id': 'pat-demo-05',
-            'patient_name': 'Maya Lin',
-            'created_at': now.subtract(const Duration(days: 2)).toIso8601String(),
-            'risk_level': 'HIGH',
-            'multimodal_risk_score': 0.77,
-            'image_url': 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=600&auto=format&fit=crop',
-            'symptom_payload': {
-              'body_location': 'Skin / Epidermis',
-              'symptoms': ['Widespread Wheals & Hives', 'Facial Angioedema Sensation', 'Intense Pruritus'],
-              'vitals': {'temperature': 37.6, 'heart_rate': 98, 'oxygen_saturation': 97.2, 'respiration_rate': 18, 'pain_score': 6, 'blood_pressure_systolic': 124},
-              'acoustic_classification': {'predicted_class': 'Normal Breathing', 'confidence': 0.95, 'is_concerning': false},
-              'allergies': ['CEPHALOSPORINS', 'SULFAMETHOXAZOLE'],
-              'has_safety_conflict': true,
-              'safety_conflict_summary': 'Severe IgE-mediated hypersensitivity history',
-            },
-            'rppg_vitals_payload': {'heartRateBpm': 98.0, 'oxygenSaturationSpo2': 97.2, 'respirationRateBpm': 18.0, 'hrvRmssdMs': 32.0},
-            'clinical_findings': [
-              {
-                'diagnosis': 'Acute Systemic Allergic Urticaria & Angioedema',
-                'icd11Code': 'EB00',
-                'riskLevel': 'HIGH',
-                'probability': 0.91,
-                'recommendation': 'Second-generation H1-antihistamine (Cetirizine 10mg), monitor airway closely for stridor.',
-                'evidence': ['Evanescent wheals', 'Facial swelling complaint', 'High histamine response'],
-              }
-            ],
-            'physiological_alerts': ['High Risk: Monitor for anaphylactoid progression'],
-          }
-        ],
-      },
-    ];
-
-    final flatList = <Map<String, dynamic>>[];
-    for (final p in _patients) {
-      final scs = p['screenings'] as List? ?? [];
-      for (final s in scs) {
-        flatList.add(Map<String, dynamic>.from(s));
-      }
-    }
-    _allScreenings = flatList;
-    _isLoading = false;
   }
 
   List<Map<String, dynamic>> get _filteredPatients {
@@ -417,8 +114,8 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
       final name = (s['patient_name'] ?? s['symptom_payload']?['patient_name'] ?? '').toString().toLowerCase();
       final pid = (s['patient_id'] ?? '').toString().toLowerCase();
       final findings = (s['clinical_findings'] as List? ?? []);
-      final primaryDiag = findings.isNotEmpty ? (findings[0]['diagnosis'] ?? '').toString().toLowerCase() : '';
-      final icd = findings.isNotEmpty ? (findings[0]['icd11Code'] ?? '').toString().toLowerCase() : '';
+      final primaryDiag = findings.isNotEmpty ? (findings[0]['diagnosis'] ?? findings[0]['condition'] ?? '').toString().toLowerCase() : '';
+      final icd = findings.isNotEmpty ? (findings[0]['icd11Code'] ?? findings[0]['code'] ?? '').toString().toLowerCase() : '';
       final q = _searchQuery.toLowerCase();
 
       final matchesQuery = q.isEmpty || name.contains(q) || pid.contains(q) || primaryDiag.contains(q) || icd.contains(q);
@@ -448,7 +145,7 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
     final primary = findings.isNotEmpty ? findings[0] : null;
     final primaryTitle = primary?['diagnosis']?.toString() ?? 'Acute Clinical Presentation';
     final primaryCode = primary?['icd11Code']?.toString() ?? 'MG40';
-    final pid = screening['patient_id']?.toString() ?? 'pat-demo-01';
+    final pid = screening['patient_id']?.toString() ?? '';
 
     final evaluation = CDSSEvaluationResult(
       id: 'cdss-${screening['id'] ?? DateTime.now().millisecondsSinceEpoch}',
@@ -517,8 +214,8 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
     final rppg = screening['rppg_vitals_payload'] as Map<String, dynamic>? ?? {};
     final acoustic = screening['symptom_payload']?['acoustic_classification'] as Map<String, dynamic>? ?? {};
     final alerts = (screening['physiological_alerts'] as List? ?? []).map((e) => e.toString()).toList();
-    final patientName = screening['patient_name'] ?? screening['symptom_payload']?['patient_name'] ?? 'Alex Rivera';
-    final patientId = screening['patient_id'] ?? 'pat-demo-01';
+    final patientId = screening['patient_id']?.toString() ?? '';
+    final patientName = screening['patient_name'] ?? screening['patientName'] ?? screening['symptom_payload']?['patient_name'] ?? screening['symptom_payload']?['patientName'] ?? (patientId.isNotEmpty ? 'Patient $patientId' : 'Unknown Patient');
 
     showModalBottomSheet(
       context: context,
@@ -1489,8 +1186,8 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
         final icd = primary?['icd11Code']?.toString() ?? 'MG40';
         final risk = (sc['risk_level'] ?? 'LOW').toString().toUpperCase();
         final riskColor = _getRiskColor(risk);
-        final patientName = sc['patient_name'] ?? sc['symptom_payload']?['patient_name'] ?? 'Alex Rivera';
-        final pid = sc['patient_id'] ?? 'pat-demo-01';
+        final pid = sc['patient_id']?.toString() ?? '';
+        final patientName = sc['patient_name'] ?? sc['patientName'] ?? sc['symptom_payload']?['patient_name'] ?? sc['symptom_payload']?['patientName'] ?? (pid.isNotEmpty ? 'Patient $pid' : 'Unknown Patient');
         final dateStr = DateFormat('MMM d, y • h:mm a').format(DateTime.tryParse(sc['created_at'].toString()) ?? DateTime.now());
         final hasImage = sc['image_url'] != null && sc['image_url'].toString().isNotEmpty;
 
@@ -1641,6 +1338,17 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
               message,
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF0D9488),
+                side: const BorderSide(color: Color(0xFF0D9488)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Refresh Data', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              onPressed: _fetchAdminDiagnoses,
             ),
           ],
         ),

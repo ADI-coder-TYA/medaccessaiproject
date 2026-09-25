@@ -46,6 +46,7 @@ class RemoteBackendInferenceEngine implements InferenceEngineInterface {
     final uri = Uri.parse('${ApiConfig.baseUrl}/diagnostics/analyze');
     final Map<String, dynamic> payload = {
       'patientId': ApiConfig.userId ?? 'PATIENT-ANON',
+      'patientName': ApiConfig.userName,
       'institutionId': ApiConfig.activeInstitutionId,
       'imageUrl': imageUrl,
       'symptoms': symptoms.toMap(),
@@ -64,7 +65,7 @@ class RemoteBackendInferenceEngine implements InferenceEngineInterface {
 
     final response = await _client.post(
       uri,
-      headers: {'Content-Type': 'application/json'},
+      headers: ApiConfig.patientHeaders,
       body: body,
     );
 

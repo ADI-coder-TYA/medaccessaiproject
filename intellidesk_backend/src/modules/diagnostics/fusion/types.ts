@@ -26,6 +26,8 @@ export interface SymptomInputPayload {
     preExistingConditions?: string[];
   };
   additionalNotes?: string;
+  patient_name?: string;
+  patientName?: string;
 }
 
 export interface UncertaintyBounds {

@@ -51,8 +51,30 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
 
+      final testPatients = [
+        {
+          'patientId': 'pat-test-01',
+          'patientName': 'Alex Rivera',
+          'institutionId': 'nano123',
+          'totalDiagnoses': 1,
+          'highestRiskLevel': 'LOW',
+          'highestRiskScore': 0.18,
+          'latestDiagnosis': 'Resolved Upper Respiratory Tract Infection',
+          'latestICD11': 'CA01',
+          'latestScreeningDate': DateTime.now().toIso8601String(),
+          'hasPhysiologicalAlert': false,
+          'hasDDIConflict': false,
+          'screenings': [],
+        }
+      ];
+
       await tester.pumpWidget(buildAdminApp(
-        child: const Scaffold(body: AdminClinicalDiagnosesScreen(autoFetch: false)),
+        child: Scaffold(
+          body: AdminClinicalDiagnosesScreen(
+            autoFetch: false,
+            initialPatients: testPatients,
+          ),
+        ),
       ));
       await tester.pump(const Duration(milliseconds: 200));
 

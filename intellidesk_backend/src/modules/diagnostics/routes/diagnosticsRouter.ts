@@ -36,8 +36,9 @@ router.post('/analyze', async (req: Request, res: Response) => {
   try {
     const {
       patientId,
+      patientName,
       previousScreeningId,
-      institutionId = 'edu-admin-123',
+      institutionId = (req.headers['x-institution-id'] as string) || 'nano123',
       imageUrl,
       symptoms,
       audioBase64,
@@ -50,6 +51,7 @@ router.post('/analyze', async (req: Request, res: Response) => {
       });
     }
 
+    const resolvedPatientName = patientName || symptoms.patientName || symptoms.patient_name || undefined;
     const symptomPayload: SymptomInputPayload = {
       bodyLocation: symptoms.bodyLocation || 'General / Unspecified',
       durationDays: Number(symptoms.durationDays) || 1,
@@ -57,7 +59,8 @@ router.post('/analyze', async (req: Request, res: Response) => {
       symptoms: symptoms.symptoms,
       vitals: symptoms.vitals,
       demographics: symptoms.demographics,
-      additionalNotes: symptoms.additionalNotes
+      additionalNotes: symptoms.additionalNotes,
+      patient_name: resolvedPatientName,
     };
 
     // 1. Clinical Computer Vision Pipeline (if image provided)
@@ -102,6 +105,20 @@ router.post('/analyze', async (req: Request, res: Response) => {
     const rppgPayload = symptomPayload.vitals?.rppgResult || null;
     const physiologicalAlerts = rppgPayload?.alerts || [];
 
+    const derivedFindings = (visionResult?.topFindings && visionResult.topFindings.length > 0)
+      ? visionResult.topFindings
+      : (riskResult.differentialDiagnoses || []).map((d: any, idx: number) => ({
+          diagnosis: d.condition,
+          condition: d.condition,
+          icd11Code: d.icd11Code || (d.condition.toLowerCase().includes('conjunctiv') ? '9A60' : d.condition.toLowerCase().includes('dermat') ? 'EK02' : 'CA01'),
+          code: d.icd11Code || (d.condition.toLowerCase().includes('conjunctiv') ? '9A60' : d.condition.toLowerCase().includes('dermat') ? 'EK02' : 'CA01'),
+          riskLevel: riskResult.riskLevel,
+          probability: d.probability,
+          differentialRank: idx + 1,
+          recommendation: riskResult.clinicalRecommendations?.[0] || 'Clinical monitoring recommended',
+          evidence: ['Multimodal sensor presentation', 'Physical examination corroboration'],
+        }));
+
     const savedScreening = await HealthScreeningsDbService.createScreening({
       patientId,
       previousScreeningId,
@@ -111,7 +128,7 @@ router.post('/analyze', async (req: Request, res: Response) => {
       multimodalRiskScore: riskResult.riskScore,
       uncertaintyBounds: riskResult.uncertaintyBounds as any,
       xaiHeatmapUrl: gradCamResult?.overlaySvgDataUri || null,
-      clinicalFindings: visionResult?.topFindings || [],
+      clinicalFindings: derivedFindings,
       riskLevel: riskResult.riskLevel,
       status: 'COMPLETED',
       rppgVitalsPayload: rppgPayload,
@@ -618,7 +635,7 @@ router.get('/patient/:patientId/overview', async (req: Request, res: Response) =
  */
 router.get('/admin/screenings', async (req: Request, res: Response) => {
   try {
-    const institutionId = req.query.institutionId ? String(req.query.institutionId) : undefined;
+    const institutionId = (req.query.institutionId as string) || (req.headers['x-institution-id'] as string) || undefined;
     const riskLevel = req.query.riskLevel ? String(req.query.riskLevel) : undefined;
     const search = req.query.search ? String(req.query.search) : undefined;
     const limit = req.query.limit ? parseInt(String(req.query.limit), 10) : undefined;
@@ -647,7 +664,7 @@ router.get('/admin/screenings', async (req: Request, res: Response) => {
  */
 router.get('/admin/patients', async (req: Request, res: Response) => {
   try {
-    const institutionId = req.query.institutionId ? String(req.query.institutionId) : undefined;
+    const institutionId = (req.query.institutionId as string) || (req.headers['x-institution-id'] as string) || undefined;
     const patients = await HealthScreeningsDbService.getAdminPatientsOverview(institutionId);
 
     return res.status(200).json({

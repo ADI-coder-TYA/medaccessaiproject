@@ -9,7 +9,7 @@ class RxSentinelService {
 
   RxSentinelService({http.Client? client}) : _client = client ?? http.Client();
 
-  String get _baseUrl => ApiConfig.baseUrl;
+  String get _baseUrl => ApiConfig.host;
 
   /**
    * Technical Guardrail 4: Cross-Platform Prescription Upload Handling
@@ -106,9 +106,11 @@ class RxSentinelService {
   Future<PatientAllergy?> addPatientAllergy(PatientAllergy allergy) async {
     try {
       final uri = Uri.parse('$_baseUrl/api/v1/pharmacy/allergies');
+      final headers = Map<String, String>.from(ApiConfig.patientHeaders);
+      headers['Content-Type'] = 'application/json';
       final res = await _client.post(
         uri,
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
         body: jsonEncode(allergy.toJson()),
       ).timeout(const Duration(seconds: 5));
       if (res.statusCode == 200 || res.statusCode == 201) {
@@ -137,7 +139,7 @@ class RxSentinelService {
       final uri = Uri.parse('$_baseUrl/api/v1/pharmacy/medications');
       final res = await _client.post(
         uri,
-        headers: {'Content-Type': 'application/json'},
+        headers: ApiConfig.patientHeaders,
         body: jsonEncode(med.toJson()),
       ).timeout(const Duration(seconds: 5));
       if (res.statusCode == 200 || res.statusCode == 201) {
@@ -146,6 +148,27 @@ class RxSentinelService {
       }
     } catch (_) {}
     return med;
+  }
+
+  Future<bool> deletePatientMedication(String idOrName, {String? patientId}) async {
+    try {
+      final queryParam = patientId != null ? '?patientId=$patientId' : '';
+      final uri = Uri.parse('$_baseUrl/api/v1/pharmacy/medications/$idOrName$queryParam');
+      final res = await _client.delete(uri, headers: ApiConfig.patientHeaders).timeout(const Duration(seconds: 5));
+      return res.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> deletePatientAllergy(String patientId, String allergenGroup) async {
+    try {
+      final uri = Uri.parse('$_baseUrl/api/v1/pharmacy/allergies/$patientId/$allergenGroup');
+      final res = await _client.delete(uri, headers: ApiConfig.patientHeaders).timeout(const Duration(seconds: 5));
+      return res.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
   }
 
   RxScanSummary _generateOfflineScanSummary({

@@ -28,8 +28,12 @@ export class AllergySafetySentinel {
         const reaction = allergy.reactionDescription || 'Known Hypersensitivity';
 
         // Check if rawGroup is one of our mapped AllergenGroups
-        const normalizedGroup = rawGroup.replace(/[^A-Z]/g, '') as AllergenGroup;
-        const crossReactivityList = ALLERGEN_CROSS_REACTIVITY_MAP[normalizedGroup] || [];
+        let cleanGroup = rawGroup.replace(/[^A-Z]/g, '');
+        if (cleanGroup === 'SULFONAMIDE') cleanGroup = 'SULFONAMIDES';
+        if (cleanGroup === 'PENICILLIN') cleanGroup = 'PENICILLINS';
+        const normalizedGroup = cleanGroup as AllergenGroup;
+        const crossReactivityList = ALLERGEN_CROSS_REACTIVITY_MAP[normalizedGroup] ||
+          (cleanGroup === 'SULFONAMIDES' ? ALLERGEN_CROSS_REACTIVITY_MAP['SULFA'] : []);
 
         // 1. Direct cross-reactivity list check
         const isCrossReactive = crossReactivityList.some(child => 

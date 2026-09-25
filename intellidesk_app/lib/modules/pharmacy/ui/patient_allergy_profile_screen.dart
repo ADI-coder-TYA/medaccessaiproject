@@ -47,79 +47,23 @@ class _PatientAllergyProfileScreenState extends State<PatientAllergyProfileScree
       final allergiesFuture = _service.getPatientAllergies(widget.patientId);
       final medsFuture = _service.getPatientMedications(widget.patientId);
 
-      final results = await Future.wait([allergiesFuture, medsFuture]).timeout(
-        const Duration(seconds: 3),
-        onTimeout: () => [
-          <PatientAllergy>[
-            PatientAllergy(
-              patientId: widget.patientId,
-              allergenGroup: 'PENICILLINS',
-              reactionDescription: 'Documented rash and allergic contraindication',
-            ),
-            PatientAllergy(
-              patientId: widget.patientId,
-              allergenGroup: 'NSAIDS',
-              reactionDescription: 'Gastric distress & urticaria',
-            ),
-          ],
-          <PatientMedication>[
-            PatientMedication(
-              patientId: widget.patientId,
-              medicationName: 'Lipitor (Atorvastatin)',
-              activeIngredient: 'Atorvastatin',
-              dosage: '20mg Once Daily',
-            ),
-            PatientMedication(
-              patientId: widget.patientId,
-              medicationName: 'Glucophage (Metformin)',
-              activeIngredient: 'Metformin',
-              dosage: '500mg Twice Daily',
-            ),
-          ],
-        ],
+      final allergies = await allergiesFuture.timeout(
+        const Duration(seconds: 5),
       );
-
-      final allergies = results[0] as List<PatientAllergy>;
-      final meds = results[1] as List<PatientMedication>;
+      final meds = await medsFuture.timeout(
+        const Duration(seconds: 5),
+      );
 
       if (mounted) {
         setState(() {
-          _allergies = allergies.isNotEmpty ? allergies : [
-            PatientAllergy(
-              patientId: widget.patientId,
-              allergenGroup: 'PENICILLINS',
-              reactionDescription: 'Documented rash and allergic contraindication',
-            ),
-          ];
-          _medications = meds.isNotEmpty ? meds : [
-            PatientMedication(
-              patientId: widget.patientId,
-              medicationName: 'Lipitor (Atorvastatin)',
-              activeIngredient: 'Atorvastatin',
-              dosage: '20mg Once Daily',
-            ),
-          ];
+          _allergies = allergies;
+          _medications = meds;
           _isLoading = false;
         });
       }
     } catch (_) {
       if (mounted) {
         setState(() {
-          _allergies = [
-            PatientAllergy(
-              patientId: widget.patientId,
-              allergenGroup: 'PENICILLINS',
-              reactionDescription: 'Documented rash and allergic contraindication',
-            ),
-          ];
-          _medications = [
-            PatientMedication(
-              patientId: widget.patientId,
-              medicationName: 'Lipitor (Atorvastatin)',
-              activeIngredient: 'Atorvastatin',
-              dosage: '20mg Once Daily',
-            ),
-          ];
           _isLoading = false;
         });
       }
@@ -135,6 +79,7 @@ class _PatientAllergyProfileScreenState extends State<PatientAllergyProfileScree
       setState(() {
         _allergies.removeAt(existingIndex);
       });
+      await _service.deletePatientAllergy(widget.patientId, allergenGroup);
     } else {
       final newAllergy = PatientAllergy(
         patientId: widget.patientId,
@@ -234,7 +179,7 @@ class _PatientAllergyProfileScreenState extends State<PatientAllergyProfileScree
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'RxSentinel Safety Shield',
+                              'Medication Safety Shield',
                               style: GoogleFonts.inter(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 14,
@@ -243,7 +188,7 @@ class _PatientAllergyProfileScreenState extends State<PatientAllergyProfileScree
                             ),
                             const SizedBox(height: 2),
                             const Text(
-                              'Select your known drug allergies and active prescriptions. RxSentinel cross-checks every uploaded prescription to safeguard against severe interactions.',
+                              'Select your known drug allergies and active prescriptions. The system cross-checks every uploaded prescription to safeguard against severe interactions.',
                               style: TextStyle(fontSize: 12, height: 1.3),
                             ),
                           ],
@@ -356,10 +301,13 @@ class _PatientAllergyProfileScreenState extends State<PatientAllergyProfileScree
                           ),
                           IconButton(
                             icon: const Icon(Icons.delete_outline, size: 18, color: Colors.grey),
-                            onPressed: () {
+                            onPressed: () async {
+                              final nameToDelete = m.medicationName;
+                              final idToDelete = m.id ?? nameToDelete;
                               setState(() {
-                                _medications.removeWhere((item) => item.medicationName == m.medicationName);
+                                _medications.removeWhere((item) => item.medicationName == nameToDelete);
                               });
+                              await _service.deletePatientMedication(idToDelete, patientId: widget.patientId);
                             },
                           ),
                         ],

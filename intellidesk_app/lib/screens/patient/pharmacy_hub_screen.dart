@@ -62,7 +62,7 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
               'dosage': m['dosage'] ?? '',
               'frequency': m['frequency'] ?? 'As directed by physician',
               'status': (m['isActive'] == true || m['is_active'] == true) ? 'ACTIVE' : 'INACTIVE',
-              'indication': m['indication'] ?? 'Verified by RxSentinel Database',
+              'indication': m['indication'] ?? 'Clinical Database Verified',
             });
           }
         }
@@ -243,7 +243,7 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         title: Text(
-          'RxSentinel Smart Pharmacy',
+          'Clinical Pharmacy Hub',
           style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18, color: const Color(0xFF0F172A)),
         ),
         backgroundColor: Colors.white,
@@ -416,7 +416,7 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'AI Drug Safety Sentinel',
+                    'Medication Safety Check',
                     style: GoogleFonts.outfit(
                       color: Colors.white,
                       fontSize: 17,
@@ -424,7 +424,7 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
                     ),
                   ),
                   Text(
-                    'Real-Time DDI & Allergy Verification (Supabase Connected)',
+                    'Real-Time Drug Interaction & Allergy Verification',
                     style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 12),
                   ),
                 ],
@@ -699,7 +699,7 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
           SizedBox(width: 10),
           Expanded(
             child: Text(
-              'RxSentinel utilizes clinical NLP and RxNorm ontologies to prevent adverse polypharmacy events. Always confirm with your primary care provider before altering medication regimens.',
+              'The medication safety engine utilizes clinical guidelines and pharmacology databases to prevent adverse interactions. Always confirm with your healthcare provider before altering medication regimens.',
               style: TextStyle(color: Color(0xFF64748B), fontSize: 11.5, height: 1.35),
             ),
           ),

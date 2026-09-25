@@ -147,7 +147,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('RxSentinel Safety Review'), findsOneWidget);
+      expect(find.text('Prescription Safety Review'), findsOneWidget);
       expect(find.text('SAFE / CLEAR - NO ADVERSE INTERACTIONS'), findsOneWidget);
       expect(find.text('Amoxicillin 500mg'), findsOneWidget);
       expect(find.text('Paracetamol 500mg'), findsOneWidget);
@@ -186,7 +186,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Medication & Allergy Sentinel'), findsOneWidget);
-      expect(find.text('RxSentinel Safety Shield'), findsOneWidget);
+      expect(find.text('Medication Safety Shield'), findsOneWidget);
       expect(find.text('KNOWN DRUG ALLERGIES'), findsOneWidget);
       expect(find.text('PENICILLINS'), findsOneWidget);
       expect(find.text('NSAIDS'), findsOneWidget);

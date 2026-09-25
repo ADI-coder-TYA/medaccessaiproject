@@ -1,6 +1,6 @@
 export type DDISeverity = 'CONTRAINDICATED_SEVERE' | 'MODERATE_MONITOR' | 'MINOR' | 'SAFE';
 
-export type AllergenGroup = 'PENICILLINS' | 'NSAIDS' | 'SULFA' | 'OPIOIDS' | 'MACROLIDES' | 'CEPHALOSPORINS' | 'STATINS' | 'TETRACYCLINES';
+export type AllergenGroup = 'PENICILLINS' | 'PENICILLIN' | 'NSAIDS' | 'SULFA' | 'SULFONAMIDES' | 'OPIOIDS' | 'MACROLIDES' | 'CEPHALOSPORINS' | 'STATINS' | 'TETRACYCLINES';
 
 export interface ExtractedMedication {
   brandName: string;

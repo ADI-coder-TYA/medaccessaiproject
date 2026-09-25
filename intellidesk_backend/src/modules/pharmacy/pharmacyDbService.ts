@@ -50,29 +50,40 @@ export class PharmacyDbService {
    * Adds or updates a patient allergy record.
    */
   public static async addPatientAllergy(allergy: PatientAllergy): Promise<PatientAllergy> {
+    const isUuid = allergy.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(allergy.id);
+    const insertPayload: any = {
+      patient_id: allergy.patientId,
+      allergen_group: allergy.allergenGroup,
+      reaction_description: allergy.reactionDescription || 'Marked in patient health profile'
+    };
+    if (isUuid) {
+      insertPayload.id = allergy.id;
+    }
+
     const record: PatientAllergy = {
       ...allergy,
-      id: allergy.id || `alg-${Date.now()}-${Math.random().toString(36).substring(7)}`,
       createdAt: allergy.createdAt || new Date().toISOString()
     };
 
     try {
       const { data, error } = await supabase
         .from('patient_allergies')
-        .insert([{
-          id: record.id,
-          patient_id: record.patientId,
-          allergen_group: record.allergenGroup,
-          reaction_description: record.reactionDescription
-        }])
+        .insert([insertPayload])
         .select()
         .single();
 
       if (!error && data) {
         record.id = data.id;
+        record.createdAt = data.created_at;
+      } else if (error) {
+        console.warn('[Pharmacy DB] Supabase allergy insert failed:', error.message);
       }
     } catch (err) {
       console.warn('[Pharmacy DB] Supabase allergy insert failed, caching in memory:', err);
+    }
+
+    if (!record.id) {
+      record.id = `alg-${Date.now()}`;
     }
 
     const current = this._allergiesStore.get(record.patientId) || [];
@@ -126,31 +137,42 @@ export class PharmacyDbService {
    * Adds a medication to patient's active roster.
    */
   public static async addPatientMedication(med: PatientMedication): Promise<PatientMedication> {
+    const isUuid = med.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(med.id);
+    const insertPayload: any = {
+      patient_id: med.patientId,
+      medication_name: med.medicationName,
+      active_ingredient: med.activeIngredient,
+      dosage: med.dosage || 'Standard dose',
+      is_active: med.isActive !== false
+    };
+    if (isUuid) {
+      insertPayload.id = med.id;
+    }
+
     const record: PatientMedication = {
       ...med,
-      id: med.id || `med-${Date.now()}-${Math.random().toString(36).substring(7)}`,
       createdAt: med.createdAt || new Date().toISOString()
     };
 
     try {
       const { data, error } = await supabase
         .from('patient_medications')
-        .insert([{
-          id: record.id,
-          patient_id: record.patientId,
-          medication_name: record.medicationName,
-          active_ingredient: record.activeIngredient,
-          dosage: record.dosage,
-          is_active: record.isActive
-        }])
+        .insert([insertPayload])
         .select()
         .single();
 
       if (!error && data) {
         record.id = data.id;
+        record.createdAt = data.created_at;
+      } else if (error) {
+        console.warn('[Pharmacy DB] Supabase medication insert failed:', error.message);
       }
     } catch (err) {
       console.warn('[Pharmacy DB] Supabase medication insert failed, caching in memory:', err);
+    }
+
+    if (!record.id) {
+      record.id = `med-${Date.now()}`;
     }
 
     const current = this._medicationsStore.get(record.patientId) || [];
@@ -161,35 +183,101 @@ export class PharmacyDbService {
   }
 
   /**
+   * Deletes a medication from patient roster by ID or medication name.
+   */
+  public static async deletePatientMedication(idOrName: string, patientId?: string): Promise<boolean> {
+    try {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrName);
+      let query = supabase.from('patient_medications').delete();
+      if (isUuid) {
+        query = query.eq('id', idOrName);
+      } else {
+        query = query.ilike('medication_name', `%${idOrName}%`);
+      }
+      if (patientId) {
+        query = query.eq('patient_id', patientId);
+      }
+      const { error } = await query;
+      if (error) {
+        console.warn('[Pharmacy DB] Supabase delete medication notice:', error.message);
+      }
+      return true;
+    } catch (e) {
+      console.warn('[Pharmacy DB] Delete medication error:', e);
+      return false;
+    }
+  }
+
+  /**
+   * Deletes an allergy from patient records by allergen group or record ID.
+   */
+  public static async deletePatientAllergy(patientId: string, allergenGroupOrId: string): Promise<boolean> {
+    try {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(allergenGroupOrId);
+      let query = supabase.from('patient_allergies').delete();
+      if (isUuid) {
+        query = query.eq('id', allergenGroupOrId);
+      } else {
+        query = query.eq('patient_id', patientId);
+        const term = allergenGroupOrId.toUpperCase();
+        if (term === 'SULFA' || term === 'SULFONAMIDES' || term === 'SULFONAMIDE') {
+          query = query.or('allergen_group.ilike.%sulfa%,allergen_group.ilike.%sulfonamide%');
+        } else if (term.startsWith('PENICILLIN')) {
+          query = query.or('allergen_group.ilike.%penicillin%');
+        } else {
+          query = query.ilike('allergen_group', allergenGroupOrId);
+        }
+      }
+      const { error } = await query;
+      if (error) {
+        console.warn('[Pharmacy DB] Supabase delete allergy notice:', error.message);
+      }
+      return true;
+    } catch (e) {
+      console.warn('[Pharmacy DB] Delete allergy error:', e);
+      return false;
+    }
+  }
+
+  /**
    * Persists an evaluated prescription scan to Supabase with in-memory fallback.
    */
   public static async savePrescriptionScan(scan: RxScanSummary): Promise<RxScanSummary> {
+    const isUuid = scan.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(scan.id);
+    const insertPayload: any = {
+      patient_id: scan.patientId,
+      image_url: scan.imageUrl,
+      extracted_drugs: scan.extractedDrugs,
+      ddi_warnings: scan.ddiWarnings,
+      allergy_conflicts: scan.allergyConflicts,
+      has_safety_conflict: scan.hasSafetyConflict
+    };
+    if (isUuid) {
+      insertPayload.id = scan.id;
+    }
+
     const record: RxScanSummary = {
       ...scan,
-      id: scan.id || `rxscan-${Date.now()}-${Math.random().toString(36).substring(7)}`,
       createdAt: scan.createdAt || new Date().toISOString()
     };
 
     try {
       const { data, error } = await supabase
         .from('prescription_scans')
-        .insert([{
-          id: record.id,
-          patient_id: record.patientId,
-          image_url: record.imageUrl,
-          extracted_drugs: record.extractedDrugs,
-          ddi_warnings: record.ddiWarnings,
-          allergy_conflicts: record.allergyConflicts,
-          has_safety_conflict: record.hasSafetyConflict
-        }])
+        .insert([insertPayload])
         .select()
         .single();
 
       if (!error && data) {
         record.id = data.id;
+        record.createdAt = data.created_at;
       }
     } catch (err) {
       console.warn('[Pharmacy DB] Supabase prescription_scan insert failed, caching in memory:', err);
+    }
+
+    if (!record.id) {
+      record.id = `rxscan-${Date.now()}`;
     }
 
     this._scansStore.set(record.id!, record);

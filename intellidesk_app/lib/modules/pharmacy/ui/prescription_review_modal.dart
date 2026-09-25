@@ -113,14 +113,14 @@ class PrescriptionReviewModal extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'RxSentinel Safety Review',
+                          'Prescription Safety Review',
                           style: GoogleFonts.inter(
                             fontWeight: FontWeight.bold,
                             fontSize: 17,
                           ),
                         ),
                         Text(
-                          'Prescription OCR & DDI Check',
+                          'Prescription Verification & Safety Check',
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             color: Colors.grey,

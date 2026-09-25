@@ -206,3 +206,44 @@ pharmacyRouter.get('/scans/:id', async (req: Request, res: Response) => {
     });
   }
 });
+
+/**
+ * DELETE /api/v1/pharmacy/medications/:id
+ * Removes a medication from the patient active roster.
+ */
+pharmacyRouter.delete('/medications/:id', async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const patientId = req.query.patientId ? String(req.query.patientId) : undefined;
+    await PharmacyDbService.deletePatientMedication(id, patientId);
+    return res.status(200).json({
+      success: true,
+      message: 'Medication removed successfully'
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      error: 'Failed to remove medication',
+      details: err?.message || String(err)
+    });
+  }
+});
+
+/**
+ * DELETE /api/v1/pharmacy/allergies/:patientId/:allergenGroup
+ * Removes an allergy from the patient profile.
+ */
+pharmacyRouter.delete('/allergies/:patientId/:allergenGroup', async (req: Request, res: Response) => {
+  try {
+    const { patientId, allergenGroup } = req.params;
+    await PharmacyDbService.deletePatientAllergy(String(patientId), String(allergenGroup));
+    return res.status(200).json({
+      success: true,
+      message: 'Allergy removed successfully'
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      error: 'Failed to remove allergy',
+      details: err?.message || String(err)
+    });
+  }
+});

@@ -45,7 +45,36 @@ export const ALLERGEN_CROSS_REACTIVITY_MAP: Record<AllergenGroup, string[]> = {
     'mobic',
     'voltaren'
   ],
+  PENICILLIN: [
+    'amoxicillin',
+    'ampicillin',
+    'piperacillin',
+    'penicillin v',
+    'penicillin g',
+    'amoxicillin-clavulanate',
+    'amoxicillin clavulanate',
+    'augmentin',
+    'unasyn',
+    'zosyn',
+    'ticarcillin',
+    'methicillin',
+    'oxacillin',
+    'cloxacillin',
+    'dicloxacillin'
+  ],
   SULFA: [
+    'sulfamethoxazole',
+    'trimethoprim-sulfamethoxazole',
+    'trimethoprim sulfamethoxazole',
+    'bactrim',
+    'septra',
+    'sulfasalazine',
+    'azulfidine',
+    'sulfadiazine',
+    'sulfisoxazole',
+    'zonisamide'
+  ],
+  SULFONAMIDES: [
     'sulfamethoxazole',
     'trimethoprim-sulfamethoxazole',
     'trimethoprim sulfamethoxazole',

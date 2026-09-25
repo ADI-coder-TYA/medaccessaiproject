@@ -17,6 +17,7 @@ import {
   DiagnosticSummaryContext 
 } from '../../../services/crisisCounselorService.js';
 import { rPPGSignalProcessor } from '../vitals/rPPGSignalProcessor.js';
+import { BioSignalFrame } from '../vitals/types.js';
 import { cdssRouter } from '../../cdss/routes/cdssRouter.js';
 import { PharmacyDbService } from '../../pharmacy/pharmacyDbService.js';
 
@@ -511,7 +512,7 @@ router.post('/vitals/process-rppg', async (req: Request, res: Response) => {
  */
 router.get('/patient/:patientId/overview', async (req: Request, res: Response) => {
   try {
-    const { patientId } = req.params;
+    const patientId = String(req.params.patientId);
     const lat = req.query.lat ? parseFloat(String(req.query.lat)) : 40.7128;
     const lng = req.query.lng ? parseFloat(String(req.query.lng)) : -74.0060;
 
@@ -540,6 +541,76 @@ router.get('/patient/:patientId/overview', async (req: Request, res: Response) =
     });
   } catch (err: any) {
     console.error('❌ [Diagnostics API] Error fetching patient overview:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/v1/diagnostics/admin/screenings
+ * Returns all patient multimodal clinical diagnoses and screenings.
+ */
+router.get('/admin/screenings', async (req: Request, res: Response) => {
+  try {
+    const institutionId = req.query.institutionId ? String(req.query.institutionId) : undefined;
+    const riskLevel = req.query.riskLevel ? String(req.query.riskLevel) : undefined;
+    const search = req.query.search ? String(req.query.search) : undefined;
+    const limit = req.query.limit ? parseInt(String(req.query.limit), 10) : undefined;
+
+    const screenings = await HealthScreeningsDbService.getAllScreenings({
+      institutionId,
+      riskLevel,
+      search,
+      limit,
+    });
+
+    return res.status(200).json({
+      success: true,
+      count: screenings.length,
+      screenings,
+    });
+  } catch (err: any) {
+    console.error('❌ [Diagnostics API] Error fetching admin screenings:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/v1/diagnostics/admin/patients
+ * Returns patient roster with aggregated clinical diagnoses, risk tier, and vital indicators.
+ */
+router.get('/admin/patients', async (req: Request, res: Response) => {
+  try {
+    const institutionId = req.query.institutionId ? String(req.query.institutionId) : undefined;
+    const patients = await HealthScreeningsDbService.getAdminPatientsOverview(institutionId);
+
+    return res.status(200).json({
+      success: true,
+      count: patients.length,
+      patients,
+    });
+  } catch (err: any) {
+    console.error('❌ [Diagnostics API] Error fetching admin patients overview:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/v1/diagnostics/admin/patients/:patientId/diagnoses
+ * Returns complete list of multimodal diagnoses and clinical timeline for a specific patient.
+ */
+router.get('/admin/patients/:patientId/diagnoses', async (req: Request, res: Response) => {
+  try {
+    const patientId = String(req.params.patientId);
+    const screenings = await HealthScreeningsDbService.getScreeningsByPatient(patientId);
+
+    return res.status(200).json({
+      success: true,
+      patientId,
+      count: screenings.length,
+      screenings,
+    });
+  } catch (err: any) {
+    console.error('❌ [Diagnostics API] Error fetching patient diagnoses:', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });

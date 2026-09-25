@@ -8,7 +8,6 @@ import '../../widgets/kanban_board.dart';
 import 'admin_telemetry_dashboard_screen.dart';
 import 'admin_clinical_diagnoses_screen.dart';
 import 'admin_health_funds_screen.dart';
-import 'admin_compliance_audit_screen.dart';
 import 'admin_war_room_screen.dart';
 import 'admin_knowledge_base_screen.dart';
 import '../profile/user_profile_screen.dart';
@@ -130,11 +129,7 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
                                           selectedIcon: Icon(Icons.account_balance_wallet),
                                           label: Text('Health Funds'),
                                         ),
-                                        NavigationRailDestination(
-                                          icon: Icon(Icons.verified_user_outlined),
-                                          selectedIcon: Icon(Icons.verified_user),
-                                          label: Text('HIPAA Audit'),
-                                        ),
+
                                         NavigationRailDestination(
                                           icon: Icon(Icons.monitor_heart_outlined, color: Color(0xFFEF4444)),
                                           selectedIcon: Icon(Icons.monitor_heart, color: Color(0xFFEF4444)),
@@ -180,12 +175,10 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
       case 3:
         return const AdminHealthFundsScreen();
       case 4:
-        return const AdminComplianceAuditScreen();
-      case 5:
         return const AdminWarRoomScreen();
-      case 6:
+      case 5:
         return const AdminKnowledgeBaseScreen();
-      case 7:
+      case 6:
         return const UserProfileScreen();
       default:
         return const KanbanBoard();
@@ -229,11 +222,6 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
             label: 'Funds',
           ),
           NavigationDestination(
-            icon: Icon(Icons.verified_user_outlined),
-            selectedIcon: Icon(Icons.verified_user, color: Color(0xFF0D9488)),
-            label: 'HIPAA Audit',
-          ),
-          NavigationDestination(
             icon: Icon(Icons.monitor_heart_outlined, color: Color(0xFFEF4444)),
             selectedIcon: Icon(Icons.monitor_heart, color: Color(0xFFEF4444)),
             label: 'War Room',
@@ -275,7 +263,6 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
       'Institutional Clinical Telemetry',
       'Patient Clinical Diagnoses & CDSS Oversight',
       'Health Funds & Pool Reserves',
-      'HIPAA Compliance & Tamper Logs',
       'Clinical Crisis War Room',
       'Institutional Clinical Policies',
       'Medical Administrator Profile',
@@ -294,7 +281,7 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
             child: InkWell(
               onTap: () {
                 setState(() {
-                  _selectedIndex = 7; // Switch to Profile tab
+                  _selectedIndex = 6; // Switch to Profile tab
                 });
               },
               borderRadius: BorderRadius.circular(12),

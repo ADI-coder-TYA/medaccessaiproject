@@ -8,11 +8,19 @@ class ApiConfig {
   ApiConfig._(); // Prevent instantiation
 
   /// Local machine LAN IP address for physical device debugging
-  static const String serverIp = '172.22.14.64';
+  static const String serverIp = '172.22.15.219';
   static const String serverPort = '3000';
 
   static String get host {
     if (kIsWeb) return 'http://localhost:$serverPort';
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      return 'http://127.0.0.1:$serverPort';
+    }
+    if (Platform.isAndroid) {
+      // 10.0.2.2 is canonical Android emulator loopback to host PC.
+      // Also supported via adb reverse tcp:3000 tcp:3000 or Wi-Fi IP (172.22.15.219)
+      return 'http://10.0.2.2:$serverPort';
+    }
     return 'http://$serverIp:$serverPort';
   }
 

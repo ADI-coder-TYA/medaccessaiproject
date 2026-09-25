@@ -10,6 +10,7 @@ import 'EmergencyFacilitySheet.dart';
 import '../../cdss/services/cdss_service.dart';
 import '../../cdss/ui/cdss_decision_drawer.dart';
 import 'ClinicalReportShareSheet.dart';
+import '../../../config/api_config.dart';
 
 class DiagnosticResultsScreen extends StatefulWidget {
   final RiskAssessment? assessmentOverride;

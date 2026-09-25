@@ -43,7 +43,7 @@ class RemoteBackendInferenceEngine implements InferenceEngineInterface {
     dynamic audioBytes,
     List<double>? audioFeatures,
   }) async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}/api/v1/diagnostics/analyze');
+    final uri = Uri.parse('${ApiConfig.baseUrl}/diagnostics/analyze');
     final Map<String, dynamic> payload = {
       'imageUrl': imageUrl,
       'symptoms': symptoms.toMap(),

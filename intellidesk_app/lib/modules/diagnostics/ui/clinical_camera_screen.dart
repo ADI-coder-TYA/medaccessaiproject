@@ -157,7 +157,7 @@ class _ClinicalCameraScreenState extends State<ClinicalCameraScreen> {
                         color: const Color(0xFF047857),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: const Text('TFLite', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                      child: const Text('OFFLINE', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -330,7 +330,7 @@ class _ClinicalCameraScreenState extends State<ClinicalCameraScreen> {
                             const Icon(Icons.check_circle, color: Color(0xFF16A34A), size: 16),
                             const SizedBox(width: 6),
                             Text(
-                              'Resolution: ${metadata.resolutionString} • Verified for Clinical AI',
+                              'Resolution: ${metadata.resolutionString} • Diagnostic Quality Verified',
                               style: GoogleFonts.inter(color: const Color(0xFF15803D), fontSize: 12, fontWeight: FontWeight.bold),
                             ),
                           ],
@@ -420,7 +420,7 @@ class _ClinicalCameraScreenState extends State<ClinicalCameraScreen> {
                   icon: const Icon(Icons.biotech),
                   label: Text(
                     metadata != null
-                        ? (metadata.isResolutionValid ? 'Run Multimodal AI Checkup' : 'Resolution Too Low (Retake Photo)')
+                        ? (metadata.isResolutionValid ? 'Run Clinical Health Checkup' : 'Resolution Too Low (Retake Photo)')
                         : 'Run Checkup (Questionnaire Only)',
                     style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 15),
                   ),

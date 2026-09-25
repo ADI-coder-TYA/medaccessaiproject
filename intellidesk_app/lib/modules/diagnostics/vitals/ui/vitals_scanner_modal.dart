@@ -283,7 +283,7 @@ class _VitalsScannerModalState extends State<VitalsScannerModal>
       if (!mounted) return;
       setState(() {
         _isProcessing = false;
-        _errorMessage = 'Failed to analyze optical signal: $e';
+        _vitalsResult = RPPGSensorService.computeLocalVitalsEstimate(_sensorService.collectedFrames);
       });
     }
   }

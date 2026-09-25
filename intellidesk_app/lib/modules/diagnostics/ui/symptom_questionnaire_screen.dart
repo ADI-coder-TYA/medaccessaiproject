@@ -164,7 +164,7 @@ class _SymptomQuestionnaireScreenState extends State<SymptomQuestionnaireScreen>
                         color: const Color(0xFF047857),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: const Text('TFLite', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                      child: const Text('OFFLINE', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),

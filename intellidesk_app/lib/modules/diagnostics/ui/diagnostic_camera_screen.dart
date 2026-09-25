@@ -251,7 +251,7 @@ class _DiagnosticCameraScreenState extends State<DiagnosticCameraScreen> {
                   icon: const Icon(Icons.biotech),
                   label: Text(
                     _capturedFile != null
-                        ? 'Run Multimodal AI Checkup'
+                        ? 'Run Clinical Health Checkup'
                         : 'Run Checkup (Without Photo)',
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                   ),

@@ -87,19 +87,24 @@ class DiagnosticsService {
   /// Classifies audio via backend /api/v1/diagnostics/audio/classify endpoint
   Future<Map<String, dynamic>?> classifyAudio(List<int> audioWavBytes) async {
     try {
-      final uri = Uri.parse('${ApiConfig.baseUrl}/api/v1/diagnostics/audio/classify');
+      final uri = ApiConfig.resolveUri('diagnostics/audio/classify');
       final res = await http.post(
         uri,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'audioBase64': base64Encode(audioWavBytes),
         }),
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 10));
 
       if (res.statusCode == 200) {
-        return jsonDecode(res.body) as Map<String, dynamic>;
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        return data;
+      } else {
+        // Non-200 response
       }
-    } catch (_) {}
+    } catch (e) {
+      // Audio classification failed
+    }
     return null;
   }
 
@@ -131,7 +136,7 @@ class DiagnosticsService {
   Future<List<DiagnosticSession>> fetchPatientScreenings(String patientId) async {
     try {
       final res = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/v1/diagnostics/screenings/patient/$patientId'),
+        Uri.parse('${ApiConfig.baseUrl}/diagnostics/screenings/patient/$patientId'),
       );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);

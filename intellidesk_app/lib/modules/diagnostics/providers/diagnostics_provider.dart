@@ -84,15 +84,45 @@ class DiagnosticsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setCapturedAudio(Uint8List bytes, {String? fileName}) {
+  Map<String, dynamic>? _lastCoughClassification;
+  Map<String, dynamic>? get lastCoughClassification => _lastCoughClassification;
+  bool _isClassifyingCough = false;
+  bool get isClassifyingCough => _isClassifyingCough;
+
+  Future<void> setCapturedAudio(Uint8List bytes, {String? fileName}) async {
     _capturedAudioBytes = bytes;
     _capturedAudioFileName = fileName ?? 'cough_sample_${DateTime.now().millisecondsSinceEpoch}.wav';
     notifyListeners();
+
+    // Trigger instant neural network cough classification on backend
+    await classifyCapturedCough(bytes);
+  }
+
+  Future<Map<String, dynamic>?> classifyCapturedCough([Uint8List? bytes]) async {
+    final targetBytes = bytes ?? _capturedAudioBytes;
+    if (targetBytes == null || targetBytes.isEmpty) return null;
+
+    _isClassifyingCough = true;
+    notifyListeners();
+
+    try {
+      final res = await _service.classifyAudio(targetBytes);
+      _lastCoughClassification = res;
+      _isClassifyingCough = false;
+      notifyListeners();
+      return res;
+    } catch (e) {
+      debugPrint('Error classifying audio: $e');
+      _isClassifyingCough = false;
+      notifyListeners();
+      return null;
+    }
   }
 
   void clearCapturedAudio() {
     _capturedAudioBytes = null;
     _capturedAudioFileName = null;
+    _lastCoughClassification = null;
     notifyListeners();
   }
 

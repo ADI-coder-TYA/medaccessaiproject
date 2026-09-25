@@ -26,6 +26,9 @@ import { DatabaseService } from './services/dbService.js';
 import authRouter from './routes/auth.js';
 import { requireAuth, requireRole } from './middleware/authMiddleware.js';
 import diagnosticsRouter from './modules/diagnostics/routes/diagnosticsRouter.js';
+import { ClinicalImageClassifier } from './modules/diagnostics/vision/imageClassifier.js';
+import { CoughClassifier } from './modules/diagnostics/audio/CoughClassifier.js';
+import { MultimodalRiskNetwork } from './modules/diagnostics/fusion/multimodalRiskNetwork.js';
 import { pharmacyRouter } from './modules/pharmacy/routes/pharmacyRouter.js';
 import { cdssRouter } from './modules/cdss/routes/cdssRouter.js';
 
@@ -79,8 +82,9 @@ async function bootstrapServer() {
     console.warn('⚠️ [MedAccess AI] Database health check warning:', dbErr);
   }
 
-  // 3. Load ML Models
+  // 3. Load Triage & Claims ML Models
   try {
+    console.log('🤖 [MedAccess AI] Bootstrapping Triage & Financial ML Models...');
     await Promise.all([
       loadOrTrainLSTMModel(),
       loadOrTrainGrantOptimizerModel(),
@@ -88,10 +92,23 @@ async function bootstrapServer() {
       loadOrTrainAnomalyModel()
     ]);
   } catch (err) {
-    console.error('Failed to initialize ML models on startup:', err);
+    console.error('Failed to initialize Triage ML models on startup:', err);
   }
 
-  // 4. Start HTTP server and background workers
+  // 4. Load Multimodal Clinical Diagnostics Neural Networks (Vision, Cough, Fusion)
+  try {
+    console.log('🩺 [MedAccess AI] Bootstrapping Multimodal Clinical Diagnostics Neural Networks...');
+    await Promise.all([
+      ClinicalImageClassifier.initialize(),
+      CoughClassifier.loadOrBootstrapModel(),
+      MultimodalRiskNetwork.initialize()
+    ]);
+    console.log('✅ [MedAccess AI] Multimodal Clinical Diagnostics Models (Vision MobileNetV3, Acoustic Cough, Late Fusion) online & ready.');
+  } catch (err) {
+    console.error('Failed to initialize Multimodal Clinical Diagnostics ML models on startup:', err);
+  }
+
+  // 5. Start HTTP server and background workers
   server.listen(PORT as number, '0.0.0.0', () => {
     console.log(`🏥 [MedAccess AI] Clinical Triage & Emergency Copay Engine running on port ${PORT}`);
     console.log(`🏥 [MedAccess War Room] Admin routes, payout rails & PDF report engine initialized successfully.`);

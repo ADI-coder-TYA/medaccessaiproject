@@ -1,3 +1,5 @@
+import { supabase } from '../../../config/supabase.js';
+
 export type FacilityType = 
   | 'Trauma Center'
   | 'Emergency Department'
@@ -152,16 +154,42 @@ export class EmergencyFacilityService {
 
   /**
    * Queries facilities within specified radius (default 20 km), sorted by ascending distance.
+   * Checks Supabase `emergency_facilities` table with fallback to embedded regional facilities.
    */
-  public static getNearbyFacilities(
+  public static async getNearbyFacilities(
     userLat: number,
     userLng: number,
     radiusKm: number = 20.0,
     facilityTypeFilter?: FacilityType
-  ): NearbyFacilitiesResult {
+  ): Promise<NearbyFacilitiesResult> {
+    let sourceFacilities: EmergencyFacility[] = this.REGIONAL_FACILITIES;
+
+    try {
+      const { data, error } = await supabase
+        .from('emergency_facilities')
+        .select('*');
+
+      if (!error && Array.isArray(data) && data.length > 0) {
+        sourceFacilities = data.map((row: any) => ({
+          id: row.id,
+          name: row.name,
+          type: row.type as FacilityType,
+          address: row.address,
+          phone: row.phone,
+          latitude: Number(row.latitude),
+          longitude: Number(row.longitude),
+          openStatus: row.open_status || row.openStatus || 'Open 24/7',
+          isOpen24Hours: Boolean(row.is_open_24_hours ?? row.isOpen24Hours ?? true),
+          capabilities: Array.isArray(row.capabilities) ? row.capabilities : []
+        }));
+      }
+    } catch (_) {
+      // Fallback to regional facilities
+    }
+
     const matched: EmergencyFacility[] = [];
 
-    for (const fac of this.REGIONAL_FACILITIES) {
+    for (const fac of sourceFacilities) {
       if (facilityTypeFilter && fac.type !== facilityTypeFilter) {
         continue;
       }

@@ -27,6 +27,7 @@ class UserProfile {
 
   String get fullName => name;
   String get institutionName => institutionId;
+  String get patientId => (studentId != null && studentId!.isNotEmpty) ? studentId! : id;
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     return UserProfile(

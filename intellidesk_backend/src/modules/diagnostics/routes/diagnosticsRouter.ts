@@ -439,7 +439,7 @@ router.get('/facilities/nearby', async (req: Request, res: Response) => {
       });
     }
 
-    const result = EmergencyFacilityService.getNearbyFacilities(lat, lng, radiusKm, type);
+    const result = await EmergencyFacilityService.getNearbyFacilities(lat, lng, radiusKm, type);
     return res.status(200).json({
       success: true,
       ...result
@@ -523,7 +523,7 @@ router.get('/patient/:patientId/overview', async (req: Request, res: Response) =
     ]);
 
     const latestScreening = screenings.length > 0 ? screenings[0] : null;
-    const facilitiesResult = EmergencyFacilityService.getNearbyFacilities(lat, lng, 20.0);
+    const facilitiesResult = await EmergencyFacilityService.getNearbyFacilities(lat, lng, 20.0);
 
     return res.status(200).json({
       success: true,

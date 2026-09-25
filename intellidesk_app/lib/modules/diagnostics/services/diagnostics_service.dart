@@ -303,8 +303,7 @@ class DiagnosticsService {
       }
     } catch (_) {}
 
-    // Default simulation history points for offline / test stability
-    return _generateMockLongitudinalHistory(patientId);
+    return [];
   }
 
   /// Calculates delta progression between two screenings

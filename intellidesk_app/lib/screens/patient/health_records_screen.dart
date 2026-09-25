@@ -1,6 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../config/api_config.dart';
 import '../../providers/auth_provider.dart';
 import '../../modules/diagnostics/ui/LongitudinalHistoryScreen.dart';
 import '../../modules/pharmacy/ui/patient_allergy_profile_screen.dart';
@@ -31,6 +35,10 @@ class _HealthRecordsScreenState extends State<HealthRecordsScreen> with SingleTi
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final user = auth.user;
+    final patientId = user?.patientId ?? 'PAT-2026-001';
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
@@ -68,10 +76,10 @@ class _HealthRecordsScreenState extends State<HealthRecordsScreen> with SingleTi
         controller: _tabController,
         children: [
           // Sub-Tab 1: Full Longitudinal History & Recovery Curve
-          const LongitudinalHistoryScreen(),
+          LongitudinalHistoryScreen(patientId: patientId),
 
           // Sub-Tab 2: Medical Passport & Clinical Summary
-          const _MedicalPassportEhrView(),
+          _MedicalPassportEhrView(patientId: patientId),
 
           // Sub-Tab 3: Institutional Coverage & Benefits
           const _InstitutionalCoverageView(),
@@ -81,195 +89,415 @@ class _HealthRecordsScreenState extends State<HealthRecordsScreen> with SingleTi
   }
 }
 
-class _MedicalPassportEhrView extends StatelessWidget {
-  const _MedicalPassportEhrView();
+class _MedicalPassportEhrView extends StatefulWidget {
+  final String patientId;
+  const _MedicalPassportEhrView({required this.patientId});
+
+  @override
+  State<_MedicalPassportEhrView> createState() => _MedicalPassportEhrViewState();
+}
+
+class _MedicalPassportEhrViewState extends State<_MedicalPassportEhrView> {
+  bool _isLoading = true;
+  String? _error;
+  List<Map<String, dynamic>> _allergies = [];
+  List<Map<String, dynamic>> _medications = [];
+  List<Map<String, dynamic>> _screenings = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEhrData();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MedicalPassportEhrView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.patientId != widget.patientId) {
+      _loadEhrData();
+    }
+  }
+
+  Future<void> _loadEhrData() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final pid = widget.patientId;
+
+      // 1. Fetch Allergies from live Supabase
+      final algFuture = http
+          .get(Uri.parse('${ApiConfig.baseUrl}/pharmacy/allergies/$pid'), headers: ApiConfig.patientHeaders)
+          .timeout(const Duration(seconds: 4));
+
+      // 2. Fetch Medications from live Supabase
+      final medFuture = http
+          .get(Uri.parse('${ApiConfig.baseUrl}/pharmacy/medications/$pid'), headers: ApiConfig.patientHeaders)
+          .timeout(const Duration(seconds: 4));
+
+      // 3. Fetch Diagnostic Screenings from live Supabase
+      final scrFuture = http
+          .get(Uri.parse('${ApiConfig.baseUrl}/diagnostics/screenings/patient/$pid/longitudinal'), headers: ApiConfig.patientHeaders)
+          .timeout(const Duration(seconds: 4));
+
+      final results = await Future.wait([algFuture, medFuture, scrFuture]);
+
+      List<Map<String, dynamic>> loadedAllergies = [];
+      List<Map<String, dynamic>> loadedMedications = [];
+      List<Map<String, dynamic>> loadedScreenings = [];
+
+      // Parse Allergies
+      if (results[0].statusCode == 200) {
+        final b = jsonDecode(results[0].body);
+        if (b['allergies'] is List) {
+          loadedAllergies = (b['allergies'] as List).cast<Map<String, dynamic>>();
+        }
+      }
+
+      // Parse Medications
+      if (results[1].statusCode == 200) {
+        final b = jsonDecode(results[1].body);
+        if (b['medications'] is List) {
+          loadedMedications = (b['medications'] as List).cast<Map<String, dynamic>>();
+        }
+      }
+
+      // Parse Diagnostic Screenings
+      if (results[2].statusCode == 200) {
+        final b = jsonDecode(results[2].body);
+        if (b['screenings'] is List) {
+          loadedScreenings = (b['screenings'] as List).cast<Map<String, dynamic>>();
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _allergies = loadedAllergies;
+          _medications = loadedMedications;
+          _screenings = loadedScreenings;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = 'Could not sync live EHR records: $e';
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final user = auth.user;
-    final patientName = user?.name ?? 'Alex Rivera';
-    final patientId = user?.id ?? 'pat-demo-01';
-    final institution = user?.institutionName ?? 'Columbia Health Network';
+    final patientName = user?.fullName ?? user?.name ?? 'Alex Rivera';
+    final patientId = widget.patientId;
+    final institution = user?.institutionName ?? 'Apex Health & Medical Center';
+    final emergencyPhone = user?.phone ?? '+1-555-0199';
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 1. Digital Emergency Medical Card
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF0F766E), Color(0xFF0E7490)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF0D9488).withOpacity(0.3),
-                  blurRadius: 16,
-                  offset: const Offset(0, 4),
+    return RefreshIndicator(
+      onRefresh: _loadEhrData,
+      color: const Color(0xFF0D9488),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 1. Digital Emergency Medical Card
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF0F766E), Color(0xFF0E7490)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.medical_information, color: Colors.white, size: 24),
-                        const SizedBox(width: 8),
-                        Text(
-                          'CLINICAL MEDICAL ID',
-                          style: GoogleFonts.outfit(
-                            color: Colors.white70,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.0,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.white24,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Text(
-                        'EHR VERIFIED',
-                        style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  patientName,
-                  style: GoogleFonts.outfit(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF0D9488).withOpacity(0.3),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
                   ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.medical_information, color: Colors.white, size: 24),
+                          const SizedBox(width: 8),
+                          Text(
+                            'CLINICAL MEDICAL ID',
+                            style: GoogleFonts.outfit(
+                              color: Colors.white70,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.0,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.white24,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'EHR VERIFIED',
+                          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    patientName,
+                    style: GoogleFonts.outfit(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    'Patient ID: $patientId • $institution',
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _buildIdField('BLOOD GROUP', 'O+ POSITIVE'),
+                      _buildIdField('PRIMARY PHYSICIAN', 'Dr. Sarah Chen, MD'),
+                      _buildIdField('EMERGENCY CONTACT', emergencyPhone),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            if (_error != null)
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFFECACA)),
                 ),
-                Text(
-                  'Patient ID: $patientId • $institution',
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
-                ),
-                const SizedBox(height: 18),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: Row(
                   children: [
-                    _buildIdField('BLOOD GROUP', 'O+ POSITIVE'),
-                    _buildIdField('PRIMARY PHYSICIAN', 'Dr. Sarah Chen, MD'),
-                    _buildIdField('EMERGENCY CONTACT', '+1-555-0199'),
+                    const Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _error!,
+                        style: const TextStyle(color: Color(0xFF991B1B), fontSize: 12),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.refresh, size: 16, color: Color(0xFFDC2626)),
+                      onPressed: _loadEhrData,
+                    ),
                   ],
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
+              ),
 
-          // 2. Active Clinical Allergy Profile
-          _buildExpandableCard(
-            icon: Icons.shield_outlined,
-            title: 'Clinical Allergy Safeguards',
-            subtitle: 'Real-time DDI & allergen contraindication filters',
-            action: TextButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => PatientAllergyProfileScreen(patientId: patientId)),
-                );
-              },
-              icon: const Icon(Icons.edit, size: 14, color: Color(0xFF0D9488)),
-              label: const Text('Manage', style: TextStyle(color: Color(0xFF0D9488), fontSize: 12, fontWeight: FontWeight.bold)),
+            // 2. Active Clinical Allergy Profile (from Supabase patient_allergies)
+            _buildExpandableCard(
+              icon: Icons.shield_outlined,
+              title: 'Clinical Allergy Safeguards',
+              subtitle: _isLoading
+                  ? 'Syncing with Supabase...'
+                  : '${_allergies.length} documented allergy contraindications',
+              action: TextButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => PatientAllergyProfileScreen(patientId: patientId)),
+                  ).then((_) => _loadEhrData());
+                },
+                icon: const Icon(Icons.edit, size: 14, color: Color(0xFF0D9488)),
+                label: const Text('Manage', style: TextStyle(color: Color(0xFF0D9488), fontSize: 12, fontWeight: FontWeight.bold)),
+              ),
+              child: _isLoading
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: CircularProgressIndicator(color: Color(0xFF0D9488), strokeWidth: 2.5),
+                      ),
+                    )
+                  : _allergies.isEmpty
+                      ? const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            'No documented allergies in database. Patient clear for standard formulary.',
+                            style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                          ),
+                        )
+                      : Column(
+                          children: _allergies.asMap().entries.map((entry) {
+                            final idx = entry.key;
+                            final a = entry.value;
+                            final group = a['allergenGroup'] ?? a['allergen_group'] ?? 'Allergen';
+                            final reaction = a['reaction'] ?? a['severity'] ?? 'Hypersensitivity';
+                            final severity = (a['severity']?.toString() ?? 'MODERATE').toUpperCase();
+                            final Color color = severity.contains('FATAL') || severity.contains('SEVERE')
+                                ? const Color(0xFFEF4444)
+                                : const Color(0xFFF59E0B);
+                            return Column(
+                              children: [
+                                if (idx > 0) const Divider(color: Color(0xFFE2E8F0)),
+                                _buildAllergyRow(group.toString(), reaction.toString(), color),
+                              ],
+                            );
+                          }).toList(),
+                        ),
             ),
-            child: Column(
-              children: [
-                _buildAllergyRow('Penicillins & Beta-Lactams', 'Severe Anaphylaxis / Bronchospasm', const Color(0xFFEF4444)),
-                const Divider(color: Color(0xFFE2E8F0)),
-                _buildAllergyRow('Non-Steroidal Anti-Inflammatory (NSAIDs)', 'Urticaria & Gastric Distress', const Color(0xFFF59E0B)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-          // 3. Active Medication Schedule
-          _buildExpandableCard(
-            icon: Icons.medication_outlined,
-            title: 'Current Prescribed Regimen',
-            subtitle: 'Verified by RxSentinel Optical OCR',
-            child: Column(
-              children: [
-                _buildMedicationRow(
-                  name: 'Lipitor (Atorvastatin)',
-                  dosage: '20mg • Oral Tablet',
-                  instructions: 'Once daily at bedtime',
-                  status: 'Active',
-                ),
-                const Divider(color: Color(0xFFE2E8F0)),
-                _buildMedicationRow(
-                  name: 'Glucophage (Metformin)',
-                  dosage: '500mg • Extended Release',
-                  instructions: 'Twice daily with meals',
-                  status: 'Active',
-                ),
-              ],
+            // 3. Active Medication Schedule (from Supabase patient_medications)
+            _buildExpandableCard(
+              icon: Icons.medication_outlined,
+              title: 'Current Prescribed Regimen',
+              subtitle: _isLoading
+                  ? 'Syncing with Supabase...'
+                  : '${_medications.length} active medications verified in database',
+              child: _isLoading
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: CircularProgressIndicator(color: Color(0xFF0D9488), strokeWidth: 2.5),
+                      ),
+                    )
+                  : _medications.isEmpty
+                      ? const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            'No active prescribed medications in database.',
+                            style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                          ),
+                        )
+                      : Column(
+                          children: _medications.asMap().entries.map((entry) {
+                            final idx = entry.key;
+                            final m = entry.value;
+                            final name = m['medicationName'] ?? m['medication_name'] ?? m['brand_name'] ?? m['brand'] ?? 'Prescription';
+                            final generic = m['activeIngredient'] ?? m['active_ingredient'] ?? '';
+                            final displayName = generic.isNotEmpty && !name.toString().contains(generic.toString())
+                                ? '$name ($generic)'
+                                : name.toString();
+                            final dosage = m['dosage'] ?? '';
+                            final instructions = m['frequency'] ?? m['indication'] ?? 'As prescribed';
+                            final isActive = m['isActive'] == true || m['is_active'] == true || m['status'] == 'Active';
+                            return Column(
+                              children: [
+                                if (idx > 0) const Divider(color: Color(0xFFE2E8F0)),
+                                _buildMedicationRow(
+                                  name: displayName,
+                                  dosage: dosage.toString(),
+                                  instructions: instructions.toString(),
+                                  status: isActive ? 'Active' : 'Inactive',
+                                ),
+                              ],
+                            );
+                          }).toList(),
+                        ),
             ),
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-          // 4. Diagnostic & ICD-11 History
-          _buildExpandableCard(
-            icon: Icons.biotech_outlined,
-            title: 'Recent Diagnostic Checkups',
-            subtitle: 'WHO ICD-11 Coded Multimodal Screenings',
-            child: Column(
-              children: [
-                _buildDiagnosticRow(
-                  diagnosis: 'Acute Contact Dermatitis & Erythema',
-                  icd11Code: 'EK02',
-                  date: 'Yesterday, 3:42 PM',
-                  risk: 'Moderate',
-                  riskColor: const Color(0xFFD97706),
-                ),
-                const Divider(color: Color(0xFFE2E8F0)),
-                _buildDiagnosticRow(
-                  diagnosis: 'Mild Upper Respiratory Irritation',
-                  icd11Code: 'CA01',
-                  date: '2 Weeks Ago',
-                  risk: 'Low',
-                  riskColor: const Color(0xFF059669),
-                ),
-              ],
+            // 4. Diagnostic & ICD-11 History (from Supabase health_screenings)
+            _buildExpandableCard(
+              icon: Icons.biotech_outlined,
+              title: 'Recent Diagnostic Checkups',
+              subtitle: _isLoading
+                  ? 'Syncing with Supabase...'
+                  : '${_screenings.length} WHO ICD-11 multimodal checkups recorded',
+              child: _isLoading
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: CircularProgressIndicator(color: Color(0xFF0D9488), strokeWidth: 2.5),
+                      ),
+                    )
+                  : _screenings.isEmpty
+                      ? const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            'No clinical diagnostic checkups on file yet.',
+                            style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                          ),
+                        )
+                      : Column(
+                          children: _screenings.asMap().entries.map((entry) {
+                            final idx = entry.key;
+                            final s = entry.value;
+                            final payload = s['symptom_payload'] as Map<String, dynamic>? ?? {};
+                            final diagnosis = payload['chiefComplaint'] ??
+                                payload['chief_complaint'] ??
+                                s['chief_complaint'] ??
+                                'Clinical Multimodal Intake';
+                            final icd = payload['icd11Code'] ??
+                                payload['icd_11_code'] ??
+                                s['icd_11_code'] ??
+                                'WHO ICD-11';
+                            final riskScore = (s['multimodal_risk_score'] as num?)?.toDouble() ?? 0.0;
+                            final riskLevel = (s['risk_level']?.toString() ?? 'LOW').toUpperCase();
+                            final Color riskColor = riskLevel == 'CRITICAL' || riskScore >= 0.7
+                                ? const Color(0xFFEF4444)
+                                : riskLevel == 'MODERATE' || riskScore >= 0.4
+                                    ? const Color(0xFFD97706)
+                                    : const Color(0xFF059669);
+                            final rawDate = s['created_at'];
+                            final dateStr = rawDate != null
+                                ? DateFormat('MMM d, yyyy • h:mm a').format(DateTime.tryParse(rawDate.toString()) ?? DateTime.now())
+                                : 'Recent';
+                            return Column(
+                              children: [
+                                if (idx > 0) const Divider(color: Color(0xFFE2E8F0)),
+                                _buildDiagnosticRow(
+                                  diagnosis: diagnosis.toString(),
+                                  icd11Code: icd.toString(),
+                                  date: dateStr,
+                                  risk: riskLevel,
+                                  riskColor: riskColor,
+                                ),
+                              ],
+                            );
+                          }).toList(),
+                        ),
             ),
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-          // 5. Immunization Record
-          _buildExpandableCard(
-            icon: Icons.vaccines_outlined,
-            title: 'Immunization Ledger',
-            subtitle: 'Verified vaccination history',
-            child: Column(
-              children: [
-                _buildImmunizationRow('COVID-19 Bivalent Booster', 'Administered Nov 2025', 'Batch #NV-8821'),
-                const Divider(color: Color(0xFFE2E8F0)),
-                _buildImmunizationRow('Seasonal Influenza Quadrivalent', 'Administered Oct 2025', 'Batch #FL-4402'),
-                const Divider(color: Color(0xFFE2E8F0)),
-                _buildImmunizationRow('Tetanus, Diphtheria, Pertussis (Tdap)', 'Administered Jun 2023', 'Valid thru 2033'),
-              ],
+            // 5. Immunization Record
+            _buildExpandableCard(
+              icon: Icons.vaccines_outlined,
+              title: 'Immunization Ledger',
+              subtitle: 'Institutional vaccination verification',
+              child: Column(
+                children: [
+                  _buildImmunizationRow('COVID-19 Bivalent Booster', 'Administered Nov 2025', 'Batch #NV-8821'),
+                  const Divider(color: Color(0xFFE2E8F0)),
+                  _buildImmunizationRow('Seasonal Influenza Quadrivalent', 'Administered Oct 2025', 'Batch #FL-4402'),
+                  const Divider(color: Color(0xFFE2E8F0)),
+                  _buildImmunizationRow('Tetanus, Diphtheria, Pertussis (Tdap)', 'Administered Jun 2023', 'Valid thru 2033'),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 32),
-        ],
+            const SizedBox(height: 32),
+          ],
+        ),
       ),
     );
   }

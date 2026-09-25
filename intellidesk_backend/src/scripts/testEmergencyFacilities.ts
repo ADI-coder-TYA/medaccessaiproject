@@ -48,7 +48,7 @@ async function runEmergencyFacilityTests() {
   // -------------------------------------------------------------
   console.log('\n--- TEST 2: 20 km Search Radius Filtering ---');
 
-  const nearbyResult = EmergencyFacilityService.getNearbyFacilities(campusLat, campusLng, 20.0);
+  const nearbyResult = await EmergencyFacilityService.getNearbyFacilities(campusLat, campusLng, 20.0);
   assert(nearbyResult.searchRadiusKm === 20.0, 'Search radius is 20.0 km');
   assert(nearbyResult.totalFound >= 4, `At least 4 regional facilities within 20 km (got ${nearbyResult.totalFound})`);
 

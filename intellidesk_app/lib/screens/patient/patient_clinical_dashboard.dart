@@ -640,8 +640,18 @@ class _PatientClinicalDashboardState extends State<PatientClinicalDashboard> wit
   Widget _buildLatestScreeningCard(RiskAssessment? liveAssessment, bool isDark) {
     final rawScreening = _backendOverview?['latestScreening'];
     final riskScore = liveAssessment?.riskScore ?? (rawScreening?['multimodal_risk_score'] as num?)?.toDouble() ?? 0.45;
-    final riskLevel = liveAssessment?.riskLevel.name.toUpperCase() ?? rawScreening?['risk_level'] ?? 'MODERATE';
-    final primaryDx = liveAssessment?.primaryDiagnosis ?? rawScreening?['clinical_findings']?[0]?['condition'] ?? 'Acute Respiratory Condition';
+    final riskLevel = liveAssessment?.riskLevel.name.toUpperCase() ?? rawScreening?['risk_level']?.toString() ?? 'MODERATE';
+
+    final findings = rawScreening?['clinical_findings'];
+    String? backendDx;
+    if (findings is List && findings.isNotEmpty) {
+      final first = findings[0];
+      if (first is Map) {
+        backendDx = first['condition']?.toString() ?? first['diagnosis']?.toString();
+      }
+    }
+    backendDx ??= rawScreening?['primary_diagnosis']?.toString() ?? rawScreening?['primaryDiagnosis']?.toString();
+    final primaryDx = liveAssessment?.primaryDiagnosis ?? backendDx ?? 'Acute Respiratory Condition';
     final color = _getRiskColor(riskLevel);
 
     return Container(

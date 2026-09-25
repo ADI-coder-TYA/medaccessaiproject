@@ -15,6 +15,7 @@ cdssRouter.post('/evaluate', async (req: Request, res: Response) => {
     const {
       screeningId,
       patientId = 'anonymous',
+      institutionId,
       multimodalRiskScore = 0.5,
       symptoms,
       visionFindings,
@@ -25,6 +26,7 @@ cdssRouter.post('/evaluate', async (req: Request, res: Response) => {
     const payload: CDSSInputPayload = {
       screeningId,
       patientId,
+      institutionId: institutionId || (symptoms as any)?.institutionId,
       multimodalRiskScore: Number(multimodalRiskScore) || 0.5,
       symptoms,
       visionFindings,

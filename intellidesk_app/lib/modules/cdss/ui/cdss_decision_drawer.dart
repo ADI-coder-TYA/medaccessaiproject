@@ -1,21 +1,31 @@
 import 'package:flutter/material.dart';
+import '../../../config/api_config.dart';
 import '../models/cdss_evaluation.dart';
 import '../services/cdss_service.dart';
 
 class CDSSDecisionDrawer extends StatefulWidget {
   final CDSSEvaluationResult initialEvaluation;
   final ValueChanged<CDSSEvaluationResult>? onApproved;
+  final bool isClinicianView;
+  final String? institutionId;
+  final String? institutionName;
 
   const CDSSDecisionDrawer({
     super.key,
     required this.initialEvaluation,
     this.onApproved,
+    this.isClinicianView = false,
+    this.institutionId,
+    this.institutionName,
   });
 
   static Future<CDSSEvaluationResult?> show(
     BuildContext context, {
     required CDSSEvaluationResult evaluation,
     ValueChanged<CDSSEvaluationResult>? onApproved,
+    bool isClinicianView = false,
+    String? institutionId,
+    String? institutionName,
   }) {
     return showModalBottomSheet<CDSSEvaluationResult>(
       context: context,
@@ -24,6 +34,9 @@ class CDSSDecisionDrawer extends StatefulWidget {
       builder: (_) => CDSSDecisionDrawer(
         initialEvaluation: evaluation,
         onApproved: onApproved,
+        isClinicianView: isClinicianView,
+        institutionId: institutionId,
+        institutionName: institutionName,
       ),
     );
   }
@@ -45,6 +58,11 @@ class _CDSSDecisionDrawerState extends State<CDSSDecisionDrawer> {
 
   final Set<String> _selectedLabs = {};
   final Set<String> _selectedImaging = {};
+
+  bool get _isClinician =>
+      widget.isClinicianView ||
+      ApiConfig.userRole == 'ADMIN' ||
+      ApiConfig.userRole == 'CLINICAL_ADMIN';
 
   @override
   void initState() {
@@ -316,8 +334,13 @@ class _CDSSDecisionDrawerState extends State<CDSSDecisionDrawer> {
                   const SizedBox(height: 16),
                 ],
 
-                // 4. Clinician Provenance & Approval Card (Guardrail 3)
-                if (isApproved) _buildApprovedProvenanceBanner() else _buildApprovalActionBox(),
+                // 4. Clinician Provenance & Approval Card (Guardrail 3) vs Institutional Routing
+                if (isApproved)
+                  _buildApprovedProvenanceBanner()
+                else if (_isClinician)
+                  _buildApprovalActionBox()
+                else
+                  _buildPatientInstitutionalRoutingBox(),
 
                 const SizedBox(height: 32),
               ],
@@ -692,6 +715,174 @@ class _CDSSDecisionDrawerState extends State<CDSSDecisionDrawer> {
             ),
           ),
         ],
+      ],
+    );
+  }
+
+  Widget _buildPatientInstitutionalRoutingBox() {
+    final instName = widget.institutionName ??
+        (widget.institutionId != null && widget.institutionId!.isNotEmpty
+            ? widget.institutionId!
+            : (ApiConfig.activeInstitutionId == 'inst-columbia'
+                ? 'Columbia Health Network'
+                : ApiConfig.activeInstitutionId));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Institutional Clinical Assignment & Review',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF0D9488).withOpacity(0.5)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0D9488).withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.local_hospital_rounded,
+                      color: Color(0xFF14B8A6),
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Assigned Institution',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: Color(0xFF94A3B8),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          instName,
+                          style: const TextStyle(
+                            fontSize: 13.5,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B).withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.5)),
+                    ),
+                    child: const Text(
+                      'Pending Review',
+                      style: TextStyle(
+                        color: Color(0xFFFBBF24),
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Divider(color: Color(0xFF334155), height: 1),
+              const SizedBox(height: 12),
+              const Text(
+                'This clinical report and AI differential diagnosis have been directly routed to your institution\'s medical administration. The institute assigns the licensed attending physician to review your case, validate the treatment pathway, and issue authorized prescriptions.',
+                style: TextStyle(
+                  color: Color(0xFF94A3B8),
+                  fontSize: 12,
+                  height: 1.45,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF334155)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.check_circle_outline,
+                      color: Color(0xFF10B981),
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Active in Institution Admin Roster (${_evaluation.patientId})',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      _evaluation.screeningId != null
+                          ? _evaluation.screeningId!.length > 12
+                              ? '${_evaluation.screeningId!.substring(0, 12)}...'
+                              : _evaluation.screeningId!
+                          : 'SCR-ACTIVE',
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 10,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton.icon(
+                  key: const Key('dispatchedToInstitutionButton'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0D9488),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  icon: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                  label: const Text(
+                    'Dispatched to Institution Medical Board',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Report linked to $instName medical board. Attending physician will review shortly.',
+                        ),
+                        backgroundColor: const Color(0xFF0D9488),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }

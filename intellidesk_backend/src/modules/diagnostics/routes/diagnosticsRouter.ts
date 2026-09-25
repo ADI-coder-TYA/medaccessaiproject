@@ -674,10 +674,41 @@ router.get('/admin/patients/:patientId/diagnoses', async (req: Request, res: Res
       success: true,
       patientId,
       count: screenings.length,
-      screenings,
+      screenings
     });
   } catch (err: any) {
     console.error('❌ [Diagnostics API] Error fetching patient diagnoses:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/v1/diagnostics/assign-institution
+ * Routes and directly assigns a patient's screening report to an institution admin.
+ */
+router.post('/assign-institution', async (req: Request, res: Response) => {
+  try {
+    const { screeningId, institutionId } = req.body;
+    if (!screeningId || !institutionId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Both "screeningId" and "institutionId" are required to route report.'
+      });
+    }
+
+    const updated = await HealthScreeningsDbService.updateScreeningInstitution(
+      String(screeningId),
+      String(institutionId)
+    );
+
+    return res.status(200).json({
+      success: true,
+      screeningId,
+      institutionId,
+      updated
+    });
+  } catch (err: any) {
+    console.error('❌ [Diagnostics API] Error assigning screening to institution:', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });

@@ -260,6 +260,7 @@ void main() {
                   CDSSDecisionDrawer.show(
                     context,
                     evaluation: mockEvaluation,
+                    isClinicianView: true,
                     onApproved: (updated) {
                       capturedUpdatedEvaluation = updated;
                     },
@@ -330,6 +331,7 @@ void main() {
                   CDSSDecisionDrawer.show(
                     context,
                     evaluation: mockEvaluation,
+                    isClinicianView: true,
                     onApproved: (updated) {
                       capturedUpdatedEvaluation = updated;
                     },
@@ -379,6 +381,61 @@ void main() {
       expect(capturedUpdatedEvaluation!.attendingClinicianApproval?.overriddenCode, 'CA40');
       expect(capturedUpdatedEvaluation!.attendingClinicianApproval?.overrideNotes, contains('consolidation'));
       expect(capturedUpdatedEvaluation!.attendingClinicianApproval?.signatureHash.isNotEmpty, true);
+    });
+
+    testWidgets('CDSS Decision Drawer patient view enforces institutional clinical assignment and hides clinician sign-off', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.dark(),
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                key: const Key('launchDrawerPatientBtn'),
+                onPressed: () {
+                  CDSSDecisionDrawer.show(
+                    context,
+                    evaluation: mockEvaluation,
+                    isClinicianView: false,
+                    institutionId: 'inst-columbia',
+                    institutionName: 'Columbia Health Network',
+                  );
+                },
+                child: const Text('Open CDSS as Patient'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Open drawer as patient
+      await tester.tap(find.byKey(const Key('launchDrawerPatientBtn')));
+      await tester.pumpAndSettle();
+
+      // Verify institutional assignment section is displayed
+      expect(find.text('Institutional Clinical Assignment & Review'), findsOneWidget);
+      expect(find.text('Columbia Health Network'), findsOneWidget);
+      expect(find.text('Pending Review'), findsOneWidget);
+      expect(find.textContaining('directly routed to your institution\'s medical administration'), findsOneWidget);
+
+      // Verify patient CANNOT see clinician approval controls
+      expect(find.byKey(const Key('approveTreatmentPlanButton')), findsNothing);
+      expect(find.text('Override AI Diagnosis (ICD-11)'), findsNothing);
+      expect(find.text('Clinician Name & Credentials'), findsNothing);
+
+      // Verify dispatched to institution button and touch target >= 48px
+      final dispatchBtnFinder = find.byKey(const Key('dispatchedToInstitutionButton'));
+      expect(dispatchBtnFinder, findsOneWidget);
+      final RenderBox dispatchBox = tester.renderObject(dispatchBtnFinder);
+      expect(dispatchBox.size.height, greaterThanOrEqualTo(48.0));
+
+      // Tap dispatched button and verify feedback
+      await tester.tap(dispatchBtnFinder);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('medical board. Attending physician will review shortly.'), findsOneWidget);
     });
   });
 }

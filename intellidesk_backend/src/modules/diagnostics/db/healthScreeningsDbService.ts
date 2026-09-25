@@ -168,6 +168,36 @@ export class HealthScreeningsDbService {
   }
 
   /**
+   * Directly assigns or updates the institution of a patient's health screening.
+   */
+  public static async updateScreeningInstitution(id: string, institutionId: string): Promise<DBHealthScreeningRow | null> {
+    try {
+      const { data, error } = await supabase
+        .from('health_screenings')
+        .update({ institution_id: institutionId, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select('*')
+        .single();
+
+      if (!error && data) {
+        this._localCache.set(id, data as DBHealthScreeningRow);
+        return data as DBHealthScreeningRow;
+      }
+    } catch (err: any) {
+      console.warn(`⚠️ [Diagnostics DB] Failed to update institution for screening ${id}: ${err.message}`);
+    }
+
+    const local = this._localCache.get(id);
+    if (local) {
+      local.institution_id = institutionId;
+      local.updated_at = new Date().toISOString();
+      this._localCache.set(id, local);
+      return local;
+    }
+    return null;
+  }
+
+  /**
    * Retrieves a single health screening by ID.
    */
   public static async getScreeningById(id: string): Promise<DBHealthScreeningRow | null> {

@@ -47,6 +47,7 @@ export class CDSSService {
       id: evaluationId,
       screeningId: payload.screeningId || null,
       patientId: payload.patientId,
+      institutionId: payload.institutionId,
       primaryICD11Code: primaryCandidate.code,
       primaryICD11Title: primaryCandidate.title,
       primaryICD11Uri: primaryCandidate.uri,

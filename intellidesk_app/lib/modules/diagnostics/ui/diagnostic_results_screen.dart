@@ -635,7 +635,18 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
                   audioClassification: diag.lastCoughClassification,
                 );
                 if (context.mounted) {
-                  CDSSDecisionDrawer.show(context, evaluation: eval);
+                  final instId = session?.institutionId ?? ApiConfig.activeInstitutionId;
+                  final instName = (instId == 'inst-columbia' || instId == 'edu-admin-123')
+                      ? 'Columbia Health Network'
+                      : instId;
+
+                  CDSSDecisionDrawer.show(
+                    context,
+                    evaluation: eval,
+                    isClinicianView: false,
+                    institutionId: instId,
+                    institutionName: instName,
+                  );
                 }
               },
             ),

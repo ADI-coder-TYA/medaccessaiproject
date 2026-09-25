@@ -494,7 +494,13 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
       updatedAt: DateTime.now().toIso8601String(),
     );
 
-    CDSSDecisionDrawer.show(context, evaluation: evaluation);
+    CDSSDecisionDrawer.show(
+      context,
+      evaluation: evaluation,
+      isClinicianView: true,
+      institutionId: screening['institutionId']?.toString() ?? screening['institution_id']?.toString() ?? 'inst-columbia',
+      institutionName: screening['institutionName']?.toString() ?? 'Columbia Health Network',
+    );
   }
 
   void _showDiagnosisDetailsModal(BuildContext context, Map<String, dynamic> screening) {

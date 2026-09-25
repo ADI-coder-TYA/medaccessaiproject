@@ -45,6 +45,8 @@ class RemoteBackendInferenceEngine implements InferenceEngineInterface {
   }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/diagnostics/analyze');
     final Map<String, dynamic> payload = {
+      'patientId': ApiConfig.userId ?? 'PATIENT-ANON',
+      'institutionId': ApiConfig.activeInstitutionId,
       'imageUrl': imageUrl,
       'symptoms': symptoms.toMap(),
     };

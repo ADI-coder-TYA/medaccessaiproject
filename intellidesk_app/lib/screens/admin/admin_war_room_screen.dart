@@ -339,7 +339,13 @@ class _AdminWarRoomScreenState extends State<AdminWarRoomScreen> with SingleTick
                       },
                     );
                     if (context.mounted) {
-                      CDSSDecisionDrawer.show(context, evaluation: eval);
+                      CDSSDecisionDrawer.show(
+                        context,
+                        evaluation: eval,
+                        isClinicianView: true,
+                        institutionId: claim['institution_id']?.toString() ?? claim['institutionId']?.toString() ?? ApiConfig.activeInstitutionId,
+                        institutionName: claim['institution_name']?.toString() ?? 'Columbia Health Network',
+                      );
                     }
                   },
                 ),

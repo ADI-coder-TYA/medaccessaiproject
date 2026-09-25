@@ -88,6 +88,7 @@ export interface CDSSEvaluationResult {
   id: string;
   screeningId?: string | null;
   patientId: string;
+  institutionId?: string;
   primaryICD11Code: string;
   primaryICD11Title: string;
   primaryICD11Uri: string;
@@ -103,6 +104,7 @@ export interface CDSSEvaluationResult {
 export interface CDSSInputPayload {
   screeningId?: string | null;
   patientId: string;
+  institutionId?: string;
   multimodalRiskScore: number;
   symptoms?: {
     symptoms?: string[];

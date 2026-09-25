@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_profile.dart';
 import '../models/user_role.dart';
 import '../services/api_service.dart';
+import '../services/institution_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   UserProfile? _user;
@@ -93,6 +94,7 @@ class AuthProvider extends ChangeNotifier {
       ApiConfig.institutionId = 'inst-001';
       ApiConfig.currentInstitutionId = 'inst-001';
     }
+    ApiConfig.currentInstitutionName = _user?.institutionName;
   }
 
   /// Perform authentication login via backend API or fallback to mock profile
@@ -118,6 +120,13 @@ class AuthProvider extends ChangeNotifier {
           userData['token'] = res['token'];
         }
         _user = UserProfile.fromJson(userData);
+
+        // Dynamically resolve and cache authentic institution name from DB
+        final effectiveInstId = _user!.institutionId;
+        final resolvedName = await InstitutionService.getInstitutionName(effectiveInstId);
+        _user = _user!.copyWith(institutionName: resolvedName);
+        ApiConfig.currentInstitutionName = resolvedName;
+
         await _persistSession();
         _syncApiConfig();
         _isLoading = false;

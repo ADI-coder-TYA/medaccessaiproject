@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../config/api_config.dart';
+import '../../../services/institution_service.dart';
 import '../models/cdss_evaluation.dart';
 import '../services/cdss_service.dart';
 
@@ -58,6 +59,7 @@ class _CDSSDecisionDrawerState extends State<CDSSDecisionDrawer> {
 
   final Set<String> _selectedLabs = {};
   final Set<String> _selectedImaging = {};
+  String? _resolvedInstitutionName;
 
   bool get _isClinician =>
       widget.isClinicianView ||
@@ -70,6 +72,18 @@ class _CDSSDecisionDrawerState extends State<CDSSDecisionDrawer> {
     _evaluation = widget.initialEvaluation;
     _selectedLabs.addAll(_evaluation.treatmentPathway.labOrders);
     _selectedImaging.addAll(_evaluation.treatmentPathway.imagingOrders);
+
+    _resolvedInstitutionName = widget.institutionName ?? _evaluation.institutionName;
+    final effectiveInstId = widget.institutionId ?? _evaluation.institutionId ?? ApiConfig.activeInstitutionId;
+    if (_resolvedInstitutionName == null || _resolvedInstitutionName!.isEmpty) {
+      InstitutionService.getInstitutionName(effectiveInstId).then((name) {
+        if (mounted) {
+          setState(() {
+            _resolvedInstitutionName = name;
+          });
+        }
+      });
+    }
   }
 
   @override
@@ -720,12 +734,17 @@ class _CDSSDecisionDrawerState extends State<CDSSDecisionDrawer> {
   }
 
   Widget _buildPatientInstitutionalRoutingBox() {
-    final instName = widget.institutionName ??
-        (widget.institutionId != null && widget.institutionId!.isNotEmpty
-            ? widget.institutionId!
-            : (ApiConfig.activeInstitutionId == 'inst-columbia'
-                ? 'Columbia Health Network'
-                : ApiConfig.activeInstitutionId));
+    final effectiveInstId = widget.institutionId ??
+        (_evaluation.institutionId != null && _evaluation.institutionId!.isNotEmpty
+            ? _evaluation.institutionId!
+            : ApiConfig.activeInstitutionId);
+
+    final instName = _resolvedInstitutionName ??
+        widget.institutionName ??
+        _evaluation.institutionName ??
+        (ApiConfig.currentInstitutionName != null && ApiConfig.currentInstitutionName!.isNotEmpty
+            ? ApiConfig.currentInstitutionName!
+            : effectiveInstId);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

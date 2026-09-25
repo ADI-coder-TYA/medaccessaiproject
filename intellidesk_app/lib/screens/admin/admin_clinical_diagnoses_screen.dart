@@ -498,8 +498,8 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
       context,
       evaluation: evaluation,
       isClinicianView: true,
-      institutionId: screening['institutionId']?.toString() ?? screening['institution_id']?.toString() ?? 'inst-columbia',
-      institutionName: screening['institutionName']?.toString() ?? 'Columbia Health Network',
+      institutionId: screening['institutionId']?.toString() ?? screening['institution_id']?.toString() ?? ApiConfig.activeInstitutionId,
+      institutionName: screening['institutionName']?.toString() ?? ApiConfig.activeInstitutionName,
     );
   }
 

@@ -210,6 +210,8 @@ class CDSSEvaluationResult {
   final String id;
   final String? screeningId;
   final String patientId;
+  final String? institutionId;
+  final String? institutionName;
   final String primaryICD11Code;
   final String primaryICD11Title;
   final String primaryICD11Uri;
@@ -225,6 +227,8 @@ class CDSSEvaluationResult {
     required this.id,
     this.screeningId,
     required this.patientId,
+    this.institutionId,
+    this.institutionName,
     required this.primaryICD11Code,
     required this.primaryICD11Title,
     required this.primaryICD11Uri,
@@ -269,6 +273,8 @@ class CDSSEvaluationResult {
       id: json['id'] as String? ?? 'eval-${DateTime.now().millisecondsSinceEpoch}',
       screeningId: json['screeningId'] as String?,
       patientId: json['patientId'] as String? ?? 'anonymous',
+      institutionId: json['institutionId'] as String?,
+      institutionName: json['institutionName'] as String?,
       primaryICD11Code: json['primaryICD11Code'] as String? ?? '1B10.0',
       primaryICD11Title: json['primaryICD11Title'] as String? ?? 'Acute Respiratory Infection',
       primaryICD11Uri: json['primaryICD11Uri'] as String? ?? 'http://id.who.int/icd/release/11/mms/1B10.0',
@@ -288,6 +294,8 @@ class CDSSEvaluationResult {
       'id': id,
       if (screeningId != null) 'screeningId': screeningId,
       'patientId': patientId,
+      if (institutionId != null) 'institutionId': institutionId,
+      if (institutionName != null) 'institutionName': institutionName,
       'primaryICD11Code': primaryICD11Code,
       'primaryICD11Title': primaryICD11Title,
       'primaryICD11Uri': primaryICD11Uri,

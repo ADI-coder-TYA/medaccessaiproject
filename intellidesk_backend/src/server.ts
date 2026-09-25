@@ -23,7 +23,7 @@ import { startWorkers } from './workers/index.js';
 import { ensureStorageBucketsExist } from './services/storageBootstrap.js';
 import { DatabaseService } from './services/dbService.js';
 
-import authRouter from './routes/auth.js';
+import authRouter, { getInstitutionDetails } from './routes/auth.js';
 import { requireAuth, requireRole } from './middleware/authMiddleware.js';
 import diagnosticsRouter from './modules/diagnostics/routes/diagnosticsRouter.js';
 import { ClinicalImageClassifier } from './modules/diagnostics/vision/imageClassifier.js';
@@ -42,6 +42,14 @@ const server = http.createServer(app);
 initializeSocket(server);
 
 app.use('/api/v1/auth', authRouter);
+app.get('/api/v1/institutions/:id', async (req, res) => {
+  const inst = await getInstitutionDetails(String(req.params.id || ''));
+  res.status(200).json({ success: true, institution: inst });
+});
+app.get('/institutions/:id', async (req, res) => {
+  const inst = await getInstitutionDetails(String(req.params.id || ''));
+  res.status(200).json({ success: true, institution: inst });
+});
 app.use('/api/v1/chat', chatRouter);
 app.use('/chat', chatRouter);
 app.use('/api/v1/intake', asyncIntakeRouter);

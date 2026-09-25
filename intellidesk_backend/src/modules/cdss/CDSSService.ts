@@ -40,6 +40,46 @@ export class CDSSService {
       false
     );
 
+    // Resolve Institution from payload, patient rosters, or profiles
+    let institutionId = payload.institutionId;
+    let institutionName = payload.institutionName;
+
+    if (!institutionId && payload.patientId && payload.patientId !== 'anonymous') {
+      try {
+        const { data: p } = await supabase
+          .from('patient_rosters')
+          .select('institution_id')
+          .or(`patient_id.eq.${payload.patientId},email.eq.${payload.patientId}`)
+          .maybeSingle();
+
+        if (p?.institution_id) {
+          institutionId = p.institution_id;
+        } else {
+          const { data: prof } = await supabase
+            .from('profiles')
+            .select('institution_id')
+            .or(`id.eq.${payload.patientId},email.eq.${payload.patientId}`)
+            .maybeSingle();
+          if (prof?.institution_id) {
+            institutionId = prof.institution_id;
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (institutionId && (!institutionName || institutionName === institutionId)) {
+      try {
+        const { data: inst } = await supabase
+          .from('institutions')
+          .select('name')
+          .eq('id', institutionId)
+          .maybeSingle();
+        if (inst?.name) {
+          institutionName = inst.name;
+        }
+      } catch (_) {}
+    }
+
     const now = new Date().toISOString();
     const evaluationId = `cdss-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
 
@@ -47,7 +87,8 @@ export class CDSSService {
       id: evaluationId,
       screeningId: payload.screeningId || null,
       patientId: payload.patientId,
-      institutionId: payload.institutionId,
+      institutionId,
+      institutionName: institutionName || institutionId,
       primaryICD11Code: primaryCandidate.code,
       primaryICD11Title: primaryCandidate.title,
       primaryICD11Uri: primaryCandidate.uri,

@@ -18,6 +18,48 @@ INSTITUTIONS.set(DEFAULT_INSTITUTION_ID, {
   createdAt: new Date().toISOString(),
 });
 
+/**
+ * Resolves institution record directly from Supabase institutions table with memory fallback
+ */
+export async function getInstitutionDetails(instId?: string | null) {
+  const cleanId = (instId || DEFAULT_INSTITUTION_ID).trim();
+  try {
+    const { data } = await supabase
+      .from('institutions')
+      .select('id, name, domain, default_currency')
+      .eq('id', cleanId)
+      .maybeSingle();
+
+    if (data && data.name) {
+      return {
+        id: data.id,
+        name: data.name,
+        domain: data.domain || 'health.edu',
+        currency: data.default_currency || 'INR',
+      };
+    }
+  } catch (_) {}
+
+  const mem = INSTITUTIONS.get(cleanId);
+  if (mem) return mem;
+
+  return {
+    id: cleanId,
+    name: cleanId,
+    domain: 'health.edu',
+    currency: 'INR',
+  };
+}
+
+router.get('/institution/:id', async (req: Request, res: Response) => {
+  try {
+    const inst = await getInstitutionDetails(String(req.params.id || ''));
+    return res.status(200).json({ success: true, institution: inst });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Seed Whitelisted Patient Roster
 const DEFAULT_ROSTER = [
   { student_id: 'PAT-2026-001', email: 'alex.rivera@campushealth.edu', phone: '+91 98765 43210', name: 'Alex Rivera' },
@@ -453,7 +495,11 @@ router.post('/login', async (req: Request, res: Response) => {
       USER_STORE.set(lookupKey, adminUser);
     }
 
-    console.log(`🔒 [Multi-Tenancy] Authenticated Admin "${adminUser.name}" (${adminUser.email}) for Institution: ${adminUser.institutionId}`);
+    const adminInst = await getInstitutionDetails(adminUser.institutionId);
+    adminUser.institutionName = adminInst.name;
+    adminUser.institutionId = adminInst.id;
+
+    console.log(`🔒 [Multi-Tenancy] Authenticated Admin "${adminUser.name}" (${adminUser.email}) for Institution: ${adminUser.institutionId} (${adminUser.institutionName})`);
     return res.status(200).json({
       success: true,
       message: 'Admin authentication successful',
@@ -576,6 +622,8 @@ router.post('/login', async (req: Request, res: Response) => {
   // Mark as registered
   whitelistedEntry.is_registered = true;
 
+  const patientInst = await getInstitutionDetails(whitelistedEntry.institution_id || DEFAULT_INSTITUTION_ID);
+
   const studentUser = {
     id: `usr_pat_${whitelistedEntry.student_id}`,
     name: whitelistedEntry.name || lookupKey.split('@')[0] || 'Enrolled Patient',
@@ -585,12 +633,13 @@ router.post('/login', async (req: Request, res: Response) => {
     patientId: whitelistedEntry.student_id,
     role: 'PATIENT',
     department: null,
-    institutionId: whitelistedEntry.institution_id,
+    institutionId: patientInst.id,
+    institutionName: patientInst.name,
     passwordChanged: whitelistedEntry.passwordChanged ?? false,
-    token: `jwt_token_patient_${whitelistedEntry.institution_id}_${whitelistedEntry.student_id}`,
+    token: `jwt_token_patient_${patientInst.id}_${whitelistedEntry.student_id}`,
   };
 
-  console.log(`✅ [Patient Whitelist Engine] Authenticated ${studentUser.name} (${studentUser.email}) for Institution: ${studentUser.institutionId}`);
+  console.log(`✅ [Patient Whitelist Engine] Authenticated ${studentUser.name} (${studentUser.email}) for Institution: ${studentUser.institutionId} (${studentUser.institutionName})`);
 
   return res.status(200).json({
     success: true,
@@ -676,6 +725,7 @@ router.get('/me', async (req: Request, res: Response) => {
         if (dbPatients && dbPatients.length > 0) {
           const p = dbPatients[0];
           const pId = p.patient_id || p.id || lookupKey;
+          const instDetail = await getInstitutionDetails(p.institution_id || instHeader || 'inst-001');
           const userObj = {
             id: `usr_pat_${pId}`,
             name: p.email ? p.email.split('@')[0].replace(/[._-]/g, ' ').split(' ').map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)).join(' ') : 'Registered Patient',
@@ -685,8 +735,9 @@ router.get('/me', async (req: Request, res: Response) => {
             patientId: pId,
             role: 'PATIENT',
             department: null,
-            institutionId: p.institution_id || instHeader || 'inst-001',
-            token: `jwt_token_patient_${p.institution_id || 'inst-001'}_${pId}`,
+            institutionId: instDetail.id,
+            institutionName: instDetail.name,
+            token: `jwt_token_patient_${instDetail.id}_${pId}`,
           };
           return res.status(200).json({ success: true, user: userObj });
         }
@@ -703,6 +754,7 @@ router.get('/me', async (req: Request, res: Response) => {
 
       if (dbProfile) {
         const isAdmin = dbProfile.role === 'CLINICAL_ADMIN' || dbProfile.role === 'ADMIN';
+        const instDetail = await getInstitutionDetails(dbProfile.institution_id || instHeader || 'inst-001');
         const userObj = {
           id: dbProfile.id,
           name: dbProfile.full_name || (isAdmin ? 'Clinical Administrator' : 'Registered Patient'),
@@ -712,8 +764,9 @@ router.get('/me', async (req: Request, res: Response) => {
           patientId: isAdmin ? undefined : `PAT-${dbProfile.id.substring(0, 6).toUpperCase()}`,
           role: isAdmin ? 'ADMIN' : 'PATIENT',
           department: isAdmin ? (dbProfile.emergency_contact || 'Clinical Triage Desk') : null,
-          institutionId: dbProfile.institution_id || instHeader || 'inst-001',
-          token: `jwt_token_${isAdmin ? 'admin' : 'patient'}_${dbProfile.institution_id || 'inst-001'}_${dbProfile.id}`,
+          institutionId: instDetail.id,
+          institutionName: instDetail.name,
+          token: `jwt_token_${isAdmin ? 'admin' : 'patient'}_${instDetail.id}_${dbProfile.id}`,
         };
         return res.status(200).json({ success: true, user: userObj });
       }
@@ -721,9 +774,14 @@ router.get('/me', async (req: Request, res: Response) => {
 
     // 3. Fallback
     if (authHeader.includes('admin')) {
-      return res.status(200).json({ success: true, user: DEFAULT_ADMIN });
+      const instDetail = await getInstitutionDetails(DEFAULT_ADMIN.institutionId);
+      return res.status(200).json({
+        success: true,
+        user: { ...DEFAULT_ADMIN, institutionName: instDetail.name },
+      });
     }
 
+    const fallbackInst = await getInstitutionDetails(instHeader || 'nano123');
     return res.status(200).json({
       success: true,
       user: {
@@ -731,7 +789,8 @@ router.get('/me', async (req: Request, res: Response) => {
         name: 'Patient Member',
         email: email || 'patient@campushealth.edu',
         role: 'PATIENT',
-        institutionId: instHeader || 'nano123',
+        institutionId: fallbackInst.id,
+        institutionName: fallbackInst.name,
       },
     });
   } catch (err: any) {

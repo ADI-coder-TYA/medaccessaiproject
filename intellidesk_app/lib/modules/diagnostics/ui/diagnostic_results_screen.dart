@@ -11,6 +11,8 @@ import '../../cdss/services/cdss_service.dart';
 import '../../cdss/ui/cdss_decision_drawer.dart';
 import 'ClinicalReportShareSheet.dart';
 import '../../../config/api_config.dart';
+import '../../../providers/auth_provider.dart';
+import '../../../services/institution_service.dart';
 
 class DiagnosticResultsScreen extends StatefulWidget {
   final RiskAssessment? assessmentOverride;
@@ -611,9 +613,21 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
                   symptomsList = ['Erythema / Redness', 'Pruritus / Itching'];
                 }
 
+                final auth = Provider.of<AuthProvider>(context, listen: false);
+                final user = auth.user;
+                final instId = (session?.institutionId != null && session!.institutionId.isNotEmpty)
+                    ? session.institutionId
+                    : (user?.institutionId != null && user!.institutionId.isNotEmpty)
+                        ? user.institutionId
+                        : ApiConfig.activeInstitutionId;
+
+                final instName = await InstitutionService.getInstitutionName(instId);
+
                 final eval = await CDSSService().evaluateScreening(
                   screeningId: session?.id ?? 'SCR-${DateTime.now().millisecondsSinceEpoch}',
-                  patientId: session?.patientId ?? 'PATIENT-ANON',
+                  patientId: session?.patientId ?? user?.patientId ?? 'PATIENT-ANON',
+                  institutionId: instId,
+                  institutionName: instName,
                   riskScore: assessment.riskScore,
                   symptoms: {
                     'bodyLocation': bodyLocation,
@@ -635,12 +649,8 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
                   ],
                   audioClassification: diag.lastCoughClassification,
                 );
-                if (context.mounted) {
-                  final instId = session?.institutionId ?? ApiConfig.activeInstitutionId;
-                  final instName = (instId == 'inst-columbia' || instId == 'edu-admin-123')
-                      ? 'Columbia Health Network'
-                      : instId;
 
+                if (context.mounted) {
                   CDSSDecisionDrawer.show(
                     context,
                     evaluation: eval,

@@ -16,6 +16,8 @@ class CDSSService {
   Future<CDSSEvaluationResult> evaluateScreening({
     String? screeningId,
     required String patientId,
+    String? institutionId,
+    String? institutionName,
     required double riskScore,
     Map<String, dynamic>? symptoms,
     List<Map<String, dynamic>>? visionFindings,
@@ -23,9 +25,13 @@ class CDSSService {
     double temperature = 1.25,
   }) async {
     final endpoint = Uri.parse('$_baseUrl/api/v1/cdss/evaluate');
+    final effectiveInstId = (institutionId != null && institutionId.isNotEmpty)
+        ? institutionId
+        : ApiConfig.activeInstitutionId;
     final payload = {
       if (screeningId != null) 'screeningId': screeningId,
       'patientId': patientId,
+      'institutionId': effectiveInstId,
       'multimodalRiskScore': riskScore,
       if (symptoms != null) 'symptoms': symptoms,
       if (visionFindings != null) 'visionFindings': visionFindings,
@@ -37,7 +43,7 @@ class CDSSService {
       final response = await http
           .post(
             endpoint,
-            headers: {'Content-Type': 'application/json'},
+            headers: ApiConfig.patientHeaders,
             body: jsonEncode(payload),
           )
           .timeout(const Duration(seconds: 4));
@@ -55,6 +61,8 @@ class CDSSService {
     return _generateOfflineFallback(
       screeningId: screeningId,
       patientId: patientId,
+      institutionId: effectiveInstId,
+      institutionName: institutionName,
       riskScore: riskScore,
       symptoms: symptoms,
     );
@@ -137,6 +145,8 @@ class CDSSService {
   static CDSSEvaluationResult _generateOfflineFallback({
     String? screeningId,
     required String patientId,
+    String? institutionId,
+    String? institutionName,
     required double riskScore,
     Map<String, dynamic>? symptoms,
   }) {
@@ -171,6 +181,8 @@ class CDSSService {
       id: 'cdss-offline-${DateTime.now().millisecondsSinceEpoch}',
       screeningId: screeningId,
       patientId: patientId,
+      institutionId: institutionId,
+      institutionName: institutionName,
       primaryICD11Code: primaryCode,
       primaryICD11Title: primaryTitle,
       primaryICD11Uri: 'http://id.who.int/icd/release/11/mms/$primaryCode',

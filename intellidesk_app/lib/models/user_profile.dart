@@ -8,6 +8,7 @@ class UserProfile {
   final String? studentId;
   final UserRole role;
   final String institutionId;
+  final String? institutionName;
   final String? department;
   final String? avatarUrl;
   final String? token;
@@ -20,13 +21,17 @@ class UserProfile {
     this.studentId,
     required this.role,
     required this.institutionId,
+    this.institutionName,
     this.department,
     this.avatarUrl,
     this.token,
   });
 
   String get fullName => name;
-  String get institutionName => institutionId;
+  String get institutionDisplayName =>
+      (institutionName != null && institutionName!.isNotEmpty)
+          ? institutionName!
+          : institutionId;
   String get patientId => (studentId != null && studentId!.isNotEmpty) ? studentId! : id;
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
@@ -38,6 +43,7 @@ class UserProfile {
       studentId: json['studentId']?.toString() ?? json['student_id']?.toString(),
       role: UserRole.fromString(json['role']?.toString()),
       institutionId: json['institutionId']?.toString() ?? json['institution_id']?.toString() ?? 'edu-admin-123',
+      institutionName: json['institutionName']?.toString() ?? json['institution_name']?.toString(),
       department: json['department']?.toString(),
       avatarUrl: json['avatarUrl']?.toString(),
       token: json['token']?.toString(),
@@ -53,6 +59,7 @@ class UserProfile {
       'studentId': studentId,
       'role': role.code,
       'institutionId': institutionId,
+      if (institutionName != null) 'institutionName': institutionName,
       'department': department,
       'avatarUrl': avatarUrl,
       'token': token,
@@ -67,6 +74,7 @@ class UserProfile {
     String? studentId,
     UserRole? role,
     String? institutionId,
+    String? institutionName,
     String? department,
     String? avatarUrl,
     String? token,
@@ -79,6 +87,7 @@ class UserProfile {
       studentId: studentId ?? this.studentId,
       role: role ?? this.role,
       institutionId: institutionId ?? this.institutionId,
+      institutionName: institutionName ?? this.institutionName,
       department: department ?? this.department,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       token: token ?? this.token,

@@ -344,7 +344,7 @@ class _AdminWarRoomScreenState extends State<AdminWarRoomScreen> with SingleTick
                         evaluation: eval,
                         isClinicianView: true,
                         institutionId: claim['institution_id']?.toString() ?? claim['institutionId']?.toString() ?? ApiConfig.activeInstitutionId,
-                        institutionName: claim['institution_name']?.toString() ?? 'Columbia Health Network',
+                        institutionName: claim['institution_name']?.toString() ?? ApiConfig.activeInstitutionName,
                       );
                     }
                   },

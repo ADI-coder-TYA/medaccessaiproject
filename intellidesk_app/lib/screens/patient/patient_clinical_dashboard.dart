@@ -140,7 +140,7 @@ class _PatientClinicalDashboardState extends State<PatientClinicalDashboard> wit
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final userName = auth.user?.name ?? 'Alex Mercer';
-    final institution = auth.user?.institutionName ?? 'Columbia Health Network';
+    final institution = auth.user?.institutionDisplayName ?? ApiConfig.activeInstitutionName;
 
     return RefreshIndicator(
       onRefresh: _fetchClinicalOverview,

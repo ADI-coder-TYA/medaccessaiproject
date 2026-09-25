@@ -94,11 +94,17 @@ class ApiConfig {
 
   static String institutionId = 'inst-001';
   static String? currentInstitutionId;
+  static String? currentInstitutionName;
 
   static String get activeInstitutionId =>
       (currentInstitutionId != null && currentInstitutionId!.isNotEmpty)
           ? currentInstitutionId!
           : institutionId;
+
+  static String get activeInstitutionName =>
+      (currentInstitutionName != null && currentInstitutionName!.isNotEmpty)
+          ? currentInstitutionName!
+          : activeInstitutionId;
 
   // Demo fallback credentials
   static const String defaultAdminToken = 'jwt_mock_token_admin_sarah_chen';

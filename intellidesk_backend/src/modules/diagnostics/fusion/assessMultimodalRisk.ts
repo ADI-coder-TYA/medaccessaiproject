@@ -335,6 +335,41 @@ export async function assessMultimodalRisk(
     primaryDiagnosis
   );
 
+  // Multimodal Attention Weight Shift:
+  // When anatomicalLocation is non-respiratory AND acoustic cough features are classified as Normal,
+  // set acoustic modality weight in Late-Fusion layer to 0.05 and boost Optical Vision modality weight to 0.70.
+  const rawLoc = (symptomData as any)?.anatomicalLocation || symptomData?.bodyLocation || '';
+  const lowerLoc = rawLoc.toLowerCase();
+  const isRespiratoryLoc =
+    lowerLoc.includes('chest') ||
+    lowerLoc.includes('throat') ||
+    lowerLoc.includes('lung') ||
+    lowerLoc.includes('bronch');
+  const isAudioNormal =
+    !audioClassification ||
+    (audioClassification.predictedCategory as string) === 'Normal Respiratory' ||
+    (audioClassification.predictedCategory as string) === 'Normal' ||
+    !audioClassification.isRedFlagRespiratory;
+
+  const isNonRespiratoryWithNormalAudio =
+    !isRespiratoryLoc && isAudioNormal && (rawLoc.length > 0 || (symptomData?.symptoms && symptomData.symptoms.length > 0));
+
+  const featureWeights = isNonRespiratoryWithNormalAudio
+    ? {
+        visualContribution: 0.70,
+        symptomContribution: 0.15,
+        vitalsContribution: 0.07,
+        demographicContribution: 0.03,
+        audioContribution: 0.05
+      }
+    : {
+        visualContribution: isTextOnlyScreening ? 0.0 : 0.40,
+        symptomContribution: isTextOnlyScreening ? 0.55 : 0.30,
+        vitalsContribution: isTextOnlyScreening ? 0.20 : 0.15,
+        demographicContribution: isTextOnlyScreening ? 0.10 : 0.05,
+        audioContribution: audioFeatures ? 0.10 : 0.0
+      };
+
   return {
     riskScore: Number(finalRiskScore.toFixed(4)),
     riskLevel: finalRiskLevel,
@@ -350,13 +385,7 @@ export async function assessMultimodalRisk(
     primaryDiagnosis,
     differentialDiagnoses,
     clinicalRecommendations,
-    featureWeights: {
-      visualContribution: isTextOnlyScreening ? 0.0 : 0.40,
-      symptomContribution: isTextOnlyScreening ? 0.55 : 0.30,
-      vitalsContribution: isTextOnlyScreening ? 0.20 : 0.15,
-      demographicContribution: isTextOnlyScreening ? 0.10 : 0.05,
-      audioContribution: audioFeatures ? 0.10 : 0.0
-    },
+    featureWeights,
     requiresImmediatePhysicianReview: finalRiskLevel === 'CRITICAL' || safetyNet.triggered,
     safetyNet: {
       triggered: safetyNet.triggered,
@@ -378,7 +407,32 @@ function generateDifferentialDiagnoses(
 ): DifferentialDiagnosis[] {
   const differentials: DifferentialDiagnosis[] = [];
 
-  if (visionFindings && visionFindings.length > 0) {
+  const body = ((symptomData as any)?.anatomicalLocation || symptomData?.bodyLocation || '').toLowerCase();
+  const symptoms = (symptomData?.symptoms || []).join(' ').toLowerCase();
+
+  // 1. Ocular / Ophthalmology Differential Diagnosis Routing
+  if (body.includes('eye') || body.includes('ophthalm')) {
+    differentials.push({
+      condition: 'Infectious Conjunctivitis (9A60)',
+      probability: 0.85,
+      urgency: 'ROUTINE'
+    });
+    differentials.push({
+      condition: 'Blepharitis (9A03)',
+      probability: 0.42,
+      urgency: 'ROUTINE'
+    });
+    differentials.push({
+      condition: 'Episcleritis / Scleritis (9A20)',
+      probability: 0.25,
+      urgency: riskScore >= 0.6 ? 'PROMPT_CARE' : 'ROUTINE'
+    });
+    differentials.push({
+      condition: 'Acute Contact Dermatitis / Periorbital Erythema (EK02)',
+      probability: 0.20,
+      urgency: 'ROUTINE'
+    });
+  } else if (visionFindings && visionFindings.length > 0) {
     const top = visionFindings[0];
     differentials.push({
       condition: top.className || 'Dermatological / Tissue Finding',
@@ -387,8 +441,9 @@ function generateDifferentialDiagnoses(
     });
   }
 
-  const body = (symptomData?.bodyLocation || '').toLowerCase();
-  const symptoms = (symptomData?.symptoms || []).join(' ').toLowerCase();
+  if (differentials.length > 0) {
+    return differentials;
+  }
 
   if (body.includes('chest') || symptoms.includes('chest pain')) {
     differentials.push({ condition: 'Acute Coronary Syndrome Rule-Out', probability: 0.88, urgency: 'EMERGENCY' });

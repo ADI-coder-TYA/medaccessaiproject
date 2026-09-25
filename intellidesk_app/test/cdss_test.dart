@@ -200,6 +200,27 @@ void main() {
       expect(result.regulatoryDisclaimer, contains('AI Clinical Decision Support Tool'));
     });
 
+    test('CDSSService maps Infectious Conjunctivitis primaryDiagnosis to 9A60 offline', () async {
+      final service = CDSSService();
+      final result = await service.evaluateScreening(
+        screeningId: 'SCR-EYE-TEST',
+        patientId: 'PAT-EYE-TEST',
+        riskScore: 0.45,
+        symptoms: {
+          'primaryDiagnosis': 'Infectious Conjunctivitis',
+          'clinicalSummary': 'Infectious Conjunctivitis. Erythema and ocular pruritus.',
+          'recommendations': ['Erythromycin ointment', 'Artificial tears'],
+          'riskLevel': 'MODERATE',
+        },
+      );
+
+      expect(result.primaryICD11Code, '9A60');
+      expect(result.primaryICD11Title, 'Infectious Conjunctivitis');
+      expect(result.differentialDiagnoses.first.code, '9A60');
+      expect(result.treatmentPathway.primaryCode, '9A60');
+      expect(result.treatmentPathway.recommendedRx.any((rx) => rx.genericName.contains('Erythromycin')), true);
+    });
+
     test('CDSSService approves and records signature offline', () async {
       final service = CDSSService();
       final updated = await service.approveEvaluation(

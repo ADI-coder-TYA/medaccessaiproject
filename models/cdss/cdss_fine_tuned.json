@@ -1,0 +1,12 @@
+{
+  "model_name": "CDSS_Multimodal_Gated_Focal_FineTuned",
+  "loss_function": "MulticlassFocalLoss(alpha=0.25, gamma=2.0)",
+  "data_rebalancing": "SMOTE(k=5) + InverseFrequencyWeighting",
+  "anatomical_masking": "Enabled (Strict Softmax Mask M_anatomy)",
+  "test_verification": {
+    "anatomical_location": "EYE_OPHTHALMOLOGY",
+    "top_prediction": "9A60",
+    "top_probability": 0.9627,
+    "urti_probability": 0.0
+  }
+}

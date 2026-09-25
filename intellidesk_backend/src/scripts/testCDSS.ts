@@ -14,6 +14,7 @@ import { DifferentialDiagnosisEngine } from '../modules/cdss/DifferentialDiagnos
 import { TreatmentPathwayAdvisor } from '../modules/cdss/TreatmentPathwayAdvisor.js';
 import { CDSSService } from '../modules/cdss/CDSSService.js';
 import { FHIRConverterService } from '../modules/diagnostics/fhir/FHIRConverterService.js';
+import { assessMultimodalRisk } from '../modules/diagnostics/fusion/assessMultimodalRisk.js';
 import {
   CDSSInputPayload,
   MANDATORY_CDSS_DISCLAIMER,
@@ -220,6 +221,155 @@ async function runCDSSSuite() {
     assert(icdCoding !== undefined, 'Attached conclusionCode contains WHO ICD-11 system URI (Guardrail 1)');
     assert(icdCoding?.code === 'CA00', 'ICD-11 code matches CA00');
     assert(icdCoding?.display === 'Acute Bronchitis', 'ICD-11 display matches Acute Bronchitis');
+  }
+
+  // 6. Test Group 6: Anatomical Location Masking & Ocular Intake Verification
+  console.log('\n--- Test Group 6: Anatomical Masking & Ocular Intake Verification ---');
+  {
+    // Test Intake Specification:
+    // Location: Eye / Ophthalmology
+    // Symptoms: Erythema / Redness, Pruritus / Itching
+    // Vitals: Normal
+    // Audio: Normal
+    const ocularPayload: CDSSInputPayload = {
+      patientId: 'patient-ocular-test-1',
+      multimodalRiskScore: 0.25,
+      symptoms: {
+        bodyLocation: 'Eye / Ophthalmology',
+        symptoms: ['Erythema / Redness', 'Pruritus / Itching'],
+        vitals: {
+          temperatureCelsius: 36.8,
+          heartRate: 72,
+          oxygenSaturation: 99,
+          respirationRate: 16
+        }
+      },
+      audioClassification: {
+        predictedCategory: 'Normal Respiratory',
+        confidence: 0.95
+      }
+    };
+
+    const ddxCandidates = DifferentialDiagnosisEngine.evaluateCandidates(ocularPayload, 1.25);
+    console.log(`    Evaluated DDx Candidates count: ${ddxCandidates.length}`);
+    for (let i = 0; i < Math.min(5, ddxCandidates.length); i++) {
+      console.log(`    #${i + 1}: ${ddxCandidates[i].code} (${ddxCandidates[i].title}) - P = ${(ddxCandidates[i].probability * 100).toFixed(2)}% | Logit: ${ddxCandidates[i].logitScore}`);
+    }
+
+    const topCandidate = ddxCandidates[0];
+    const urtiCandidate = ddxCandidates.find((c) => c.code === '1B10.0');
+    const bronchitisCandidate = ddxCandidates.find((c) => c.code === 'CA00' || c.code === 'CA01');
+    const asthmaCandidate = ddxCandidates.find((c) => c.code === 'CA0B');
+
+    // Assertion 1: Top candidate is an ocular diagnosis (9A60 Infectious Conjunctivitis)
+    assert(
+      topCandidate.code === '9A60',
+      'Top predicted ICD-11 candidate is 9A60 (Infectious Conjunctivitis)',
+      `Got top: ${topCandidate.code} (${topCandidate.title}) with P=${(topCandidate.probability * 100).toFixed(1)}%`
+    );
+
+    // Assertion 2: Purely respiratory codes receive 0% probability
+    assert(
+      urtiCandidate !== undefined && urtiCandidate.probability === 0.0,
+      'Acute URTI (1B10.0) receives strict 0.0% probability when anatomy is Eye / Ophthalmology',
+      `Got URTI P=${urtiCandidate ? urtiCandidate.probability : 'undefined'}`
+    );
+
+    if (bronchitisCandidate) {
+      assert(
+        bronchitisCandidate.probability === 0.0,
+        'Bronchitis (CA00/CA01) receives strict 0.0% probability',
+        `Got Bronchitis P=${bronchitisCandidate.probability}`
+      );
+    }
+
+    if (asthmaCandidate) {
+      assert(
+        asthmaCandidate.probability === 0.0,
+        'Asthma (CA0B) receives strict 0.0% probability',
+        `Got Asthma P=${asthmaCandidate.probability}`
+      );
+    }
+
+    // Assertion 3: CDSSService full evaluation returns 9A60 and evidence-based ophthalmic pathway
+    const serviceEvaluation = await CDSSService.evaluateScreening(ocularPayload);
+    assert(
+      serviceEvaluation.primaryICD11Code === '9A60',
+      'CDSSService assigns primaryICD11Code 9A60 for ocular intake'
+    );
+    assert(
+      serviceEvaluation.treatmentPathway.primaryCode === '9A60',
+      'Treatment pathway generated for 9A60 (Infectious Conjunctivitis)'
+    );
+    assert(
+      serviceEvaluation.treatmentPathway.recommendedRx.some((rx) => rx.genericName.toLowerCase().includes('erythromycin')),
+      'Prescribes first-line topical ophthalmic antibiotic (Erythromycin)'
+    );
+
+    // Assertion 3b: Clinical Assessment Result Screen click verification
+    // When invoked with primaryDiagnosis: 'Infectious Conjunctivitis' (even if anatomicalLocation is absent in symptoms map)
+    const resultsScreenPayload: CDSSInputPayload = {
+      patientId: 'patient-eye-002',
+      multimodalRiskScore: 0.45,
+      symptoms: {
+        primaryDiagnosis: 'Infectious Conjunctivitis',
+        clinicalSummary: 'Infectious Conjunctivitis. Rest and artificial tears recommended.',
+        recommendations: ['Topical ocular antibiotic', 'Warm compress'],
+        riskLevel: 'MODERATE'
+      } as any
+    };
+    const resultsDdx = DifferentialDiagnosisEngine.evaluateCandidates(resultsScreenPayload, 1.25);
+    const resultsTop = resultsDdx[0];
+    const resultsUrti = resultsDdx.find((c) => c.code === '1B10.0');
+
+    assert(
+      resultsTop.code === '9A60',
+      'Clinical Assessment Screen: defaults to 9A60 (Infectious Conjunctivitis)',
+      `Got top: ${resultsTop.code} (${resultsTop.title})`
+    );
+    assert(
+      resultsUrti !== undefined && resultsUrti.probability === 0.0,
+      'Clinical Assessment Screen: Acute URTI (1B10.0) masked to strict 0.0%',
+      `Got URTI P=${resultsUrti?.probability}`
+    );
+
+    // Assertion 4: Multimodal Attention Weight Shift in Late-Fusion Layer
+    // Non-respiratory anatomy + Normal audio -> audio modality weight = 0.05, visual modality weight = 0.70
+    const multimodalRisk = await assessMultimodalRisk({
+      symptomData: {
+        bodyLocation: 'Eye / Ophthalmology',
+        symptoms: ['Erythema / Redness', 'Pruritus / Itching']
+      },
+      audioClassification: {
+        predictedCategory: 'Normal Respiratory',
+        confidence: 0.95,
+        probabilities: {
+          normalRespiratory: 0.95,
+          dryIrritativeCough: 0.02,
+          wetProductiveCough: 0.02,
+          wheezeStridor: 0.01
+        },
+        isRedFlagRespiratory: false,
+        featureVector: new Array(16).fill(0.25)
+      }
+    });
+
+    console.log('    Multimodal Late-Fusion Feature Weights:', JSON.stringify(multimodalRisk.featureWeights));
+    assert(
+      multimodalRisk.featureWeights.visualContribution === 0.70,
+      'Optical Vision modality weight boosted to 0.70 when anatomy is non-respiratory and audio is normal',
+      `Got visual: ${multimodalRisk.featureWeights.visualContribution}`
+    );
+    assert(
+      multimodalRisk.featureWeights.audioContribution === 0.05,
+      'Acoustic modality weight set to 0.05 in Late-Fusion layer',
+      `Got audio: ${multimodalRisk.featureWeights.audioContribution}`
+    );
+    assert(
+      multimodalRisk.primaryDiagnosis.includes('Conjunctivitis') || multimodalRisk.primaryDiagnosis.includes('9A60'),
+      'Multimodal primary diagnosis is ocular (Infectious Conjunctivitis) not Non-Specific Acute Malaise',
+      `Got primaryDiagnosis: ${multimodalRisk.primaryDiagnosis}`
+    );
   }
 
   console.log('\n======================================================');

@@ -140,14 +140,32 @@ class CDSSService {
     required double riskScore,
     Map<String, dynamic>? symptoms,
   }) {
-    final bodyLoc = (symptoms?['bodyLocation'] as String? ?? '').toLowerCase();
-    final isRespiratory = bodyLoc.contains('chest') || bodyLoc.contains('throat');
-    final isSkin = bodyLoc.contains('skin') || bodyLoc.contains('arm') || bodyLoc.contains('leg');
+    final bodyLoc = ((symptoms?['anatomicalLocation'] ?? symptoms?['bodyLocation']) as String? ?? '').toLowerCase();
+    final primaryDiag = ((symptoms?['primaryDiagnosis'] ?? symptoms?['clinicalSummary']) as String? ?? '').toLowerCase();
 
-    final primaryCode = isRespiratory ? (riskScore >= 0.70 ? 'CA40' : '1B10.0') : (isSkin ? 'FB80' : 'QC10');
-    final primaryTitle = isRespiratory
-        ? (riskScore >= 0.70 ? 'Community-Acquired Pneumonia' : 'Acute Upper Respiratory Tract Infection')
-        : (isSkin ? 'Allergic Contact Dermatitis' : 'Acute Pain & Symptom Distress');
+    final isEye = bodyLoc.contains('eye') ||
+        bodyLoc.contains('ophthalm') ||
+        primaryDiag.contains('conjunctivit') ||
+        primaryDiag.contains('blepharit') ||
+        primaryDiag.contains('sclerit') ||
+        primaryDiag.contains('infective conjunctivitis') ||
+        primaryDiag.contains('infectious conjunctivitis') ||
+        primaryDiag.contains('eye');
+
+    final isSkin = !isEye && (bodyLoc.contains('skin') || bodyLoc.contains('arm') || bodyLoc.contains('leg') || primaryDiag.contains('dermatit') || primaryDiag.contains('rash'));
+    final isRespiratory = !isEye && !isSkin && (bodyLoc.contains('chest') || bodyLoc.contains('throat') || primaryDiag.contains('cough') || primaryDiag.contains('respirat') || primaryDiag.contains('bronch'));
+
+    final primaryCode = isEye
+        ? '9A60'
+        : isRespiratory
+            ? (riskScore >= 0.70 ? 'CA40' : '1B10.0')
+            : (isSkin ? 'FB80' : 'QC10');
+
+    final primaryTitle = isEye
+        ? 'Infectious Conjunctivitis'
+        : isRespiratory
+            ? (riskScore >= 0.70 ? 'Community-Acquired Pneumonia' : 'Acute Upper Respiratory Tract Infection')
+            : (isSkin ? 'Allergic Contact Dermatitis' : 'Acute Pain & Symptom Distress');
 
     return CDSSEvaluationResult(
       id: 'cdss-offline-${DateTime.now().millisecondsSinceEpoch}',
@@ -156,59 +174,113 @@ class CDSSService {
       primaryICD11Code: primaryCode,
       primaryICD11Title: primaryTitle,
       primaryICD11Uri: 'http://id.who.int/icd/release/11/mms/$primaryCode',
-      differentialDiagnoses: [
-        DifferentialDiagnosisCandidate(
-          code: primaryCode,
-          title: primaryTitle,
-          category: isRespiratory ? 'Respiratory Diseases' : 'General Symptoms',
-          uri: 'http://id.who.int/icd/release/11/mms/$primaryCode',
-          probability: 0.68,
-          logitScore: 6.2,
-          matchedCriteria: ['Symptom match', 'Body location alignment', 'Vitals trigger'],
-          clinicalRationale: 'Primary candidate with highest multimodal symptom correlation',
-        ),
-        DifferentialDiagnosisCandidate(
-          code: isRespiratory ? 'CA00' : 'QC10',
-          title: isRespiratory ? 'Acute Bronchitis' : 'Acute Unspecified Pain',
-          category: isRespiratory ? 'Respiratory Diseases' : 'Clinical Findings',
-          uri: 'http://id.who.int/icd/release/11/mms/${isRespiratory ? "CA00" : "QC10"}',
-          probability: 0.22,
-          logitScore: 4.8,
-          matchedCriteria: ['Acoustic cough pattern', 'Mild tachypnea'],
-          clinicalRationale: 'Secondary differential with matching auscultation markers',
-        ),
-        DifferentialDiagnosisCandidate(
-          code: '1B10.0',
-          title: 'Acute Upper Respiratory Tract Infection',
-          category: 'Respiratory Diseases',
-          uri: 'http://id.who.int/icd/release/11/mms/1B10.0',
-          probability: 0.10,
-          logitScore: 3.5,
-          matchedCriteria: ['Baseline demographic prior'],
-          clinicalRationale: 'Tertiary diagnostic differential candidate',
-        ),
-      ],
+      differentialDiagnoses: isEye
+          ? [
+              DifferentialDiagnosisCandidate(
+                code: '9A60',
+                title: 'Infectious Conjunctivitis',
+                category: 'Ophthalmic Diseases',
+                uri: 'http://id.who.int/icd/release/11/mms/9A60',
+                probability: 0.76,
+                logitScore: 8.5,
+                matchedCriteria: ['Anatomical correlation: Eye', 'Erythema / Redness', 'Pruritus / Itching'],
+                clinicalRationale: 'Primary ocular differential with highest clinical correlation',
+              ),
+              DifferentialDiagnosisCandidate(
+                code: '9A03',
+                title: 'Blepharitis',
+                category: 'Ophthalmic Diseases',
+                uri: 'http://id.who.int/icd/release/11/mms/9A03',
+                probability: 0.16,
+                logitScore: 5.2,
+                matchedCriteria: ['Anatomical correlation: Eye', 'Eyelid irritation'],
+                clinicalRationale: 'Secondary ophthalmic differential',
+              ),
+              DifferentialDiagnosisCandidate(
+                code: 'EK02',
+                title: 'Acute Contact Dermatitis & Periorbital Erythema',
+                category: 'Dermatological Diseases',
+                uri: 'http://id.who.int/icd/release/11/mms/EK02',
+                probability: 0.08,
+                logitScore: 3.8,
+                matchedCriteria: ['Periorbital erythema'],
+                clinicalRationale: 'Tertiary periorbital dermal differential',
+              ),
+            ]
+          : [
+              DifferentialDiagnosisCandidate(
+                code: primaryCode,
+                title: primaryTitle,
+                category: isRespiratory ? 'Respiratory Diseases' : 'General Symptoms',
+                uri: 'http://id.who.int/icd/release/11/mms/$primaryCode',
+                probability: 0.68,
+                logitScore: 6.2,
+                matchedCriteria: ['Symptom match', 'Body location alignment', 'Vitals trigger'],
+                clinicalRationale: 'Primary candidate with highest multimodal symptom correlation',
+              ),
+              DifferentialDiagnosisCandidate(
+                code: isRespiratory ? 'CA00' : 'QC10',
+                title: isRespiratory ? 'Acute Bronchitis' : 'Acute Unspecified Pain',
+                category: isRespiratory ? 'Respiratory Diseases' : 'Clinical Findings',
+                uri: 'http://id.who.int/icd/release/11/mms/${isRespiratory ? "CA00" : "QC10"}',
+                probability: 0.22,
+                logitScore: 4.8,
+                matchedCriteria: ['Acoustic cough pattern', 'Mild tachypnea'],
+                clinicalRationale: 'Secondary differential with matching auscultation markers',
+              ),
+              DifferentialDiagnosisCandidate(
+                code: '1B10.0',
+                title: 'Acute Upper Respiratory Tract Infection',
+                category: 'Respiratory Diseases',
+                uri: 'http://id.who.int/icd/release/11/mms/1B10.0',
+                probability: 0.10,
+                logitScore: 3.5,
+                matchedCriteria: ['Baseline demographic prior'],
+                clinicalRationale: 'Tertiary diagnostic differential candidate',
+              ),
+            ],
       treatmentPathway: TreatmentPathway(
         primaryCode: primaryCode,
         primaryTitle: primaryTitle,
-        recommendedRx: [
-          RecommendedMedication(
-            genericName: isRespiratory ? 'Amoxicillin / Clavulanate' : 'Hydrocortisone 1% Cream',
-            dosage: isRespiratory ? '875mg / 125mg' : 'Topical',
-            frequency: isRespiratory ? 'BID' : 'BID',
-            duration: '7 days',
-            clinicalNotes: 'First-line evidence-based pharmacotherapy',
-          ),
-          RecommendedMedication(
-            genericName: 'Acetaminophen',
-            dosage: '500 mg',
-            frequency: 'Q6H PRN',
-            duration: '3 days',
-            clinicalNotes: 'Analgesic and antipyretic for discomfort',
-          ),
-        ],
-        labOrders: ['Complete Blood Count (CBC)', 'C-Reactive Protein (CRP)'],
-        imagingOrders: [isRespiratory ? 'Chest Radiography (PA / Lateral View)' : 'High-Resolution Clinical Photo'],
+        recommendedRx: isEye
+            ? [
+                RecommendedMedication(
+                  genericName: 'Erythromycin Ophthalmic Ointment',
+                  dosage: '0.5% (apply 1 cm ribbon)',
+                  frequency: 'QID',
+                  duration: '7 days',
+                  clinicalNotes: 'First-line topical ophthalmic antibiotic',
+                ),
+                RecommendedMedication(
+                  genericName: 'Artificial Tears',
+                  dosage: '1-2 drops',
+                  frequency: 'Q4H PRN',
+                  duration: '7 days',
+                  clinicalNotes: 'Preservative-free soothing ocular lubricant',
+                ),
+              ]
+            : [
+                RecommendedMedication(
+                  genericName: isRespiratory ? 'Amoxicillin / Clavulanate' : 'Hydrocortisone 1% Cream',
+                  dosage: isRespiratory ? '875mg / 125mg' : 'Topical',
+                  frequency: isRespiratory ? 'BID' : 'BID',
+                  duration: '7 days',
+                  clinicalNotes: 'First-line evidence-based pharmacotherapy',
+                ),
+                RecommendedMedication(
+                  genericName: 'Acetaminophen',
+                  dosage: '500 mg',
+                  frequency: 'Q6H PRN',
+                  duration: '3 days',
+                  clinicalNotes: 'Analgesic and antipyretic for discomfort',
+                ),
+              ],
+        labOrders: isEye
+            ? ['Fluorescein staining with cobalt blue light (rule out ulcer)', 'Conjunctival swab culture']
+            : ['Complete Blood Count (CBC)', 'C-Reactive Protein (CRP)'],
+        imagingOrders: isEye
+            ? ['Slit-lamp anterior segment optical biomicroscopy']
+            : [isRespiratory ? 'Chest Radiography (PA / Lateral View)' : 'High-Resolution Clinical Photo'],
         monitoringFrequency: 'Daily symptom self-assessment and vital signs check',
         followUpDays: riskScore >= 0.70 ? 2 : 5,
         urgentRedFlags: [

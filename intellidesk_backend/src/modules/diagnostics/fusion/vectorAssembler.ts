@@ -100,9 +100,10 @@ export class VectorAssembler {
     vector[7] = Math.min(1.0, Math.max(0.0, (rr - 10.0) / 30.0));
 
     // Indices 8..31: 24 Clinical Symptom Keywords (presence/frequency normalized [0.0, 1.0])
+    const rawAnatomical = ((symptomData as any).anatomicalLocation || symptomData.bodyLocation || '').toLowerCase();
     const symptomsText = [
       ...(symptomData.symptoms || []),
-      symptomData.bodyLocation || '',
+      rawAnatomical,
       symptomData.additionalNotes || ''
     ].join(' ').toLowerCase();
 
@@ -110,6 +111,18 @@ export class VectorAssembler {
       const keyword = SYMPTOM_VOCABULARY[i];
       if (symptomsText.includes(keyword)) {
         vector[8 + i] = 1.0;
+      }
+    }
+
+    // Recalibrate 184-d vector attention: if ocular anatomy is specified,
+    // ensure optical/ocular indices carry strong representation
+    if (rawAnatomical.includes('eye') || rawAnatomical.includes('ophthalm')) {
+      if (symptomsText.includes('itch') || symptomsText.includes('pruritus')) {
+        vector[8 + 5] = 1.0; // pruritus
+      }
+      if (symptomsText.includes('red') || symptomsText.includes('erythema')) {
+        vector[8 + 2] = 1.0; // redness
+        vector[8 + 23] = 1.0; // erythema
       }
     }
 

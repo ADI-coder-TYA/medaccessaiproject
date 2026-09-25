@@ -244,47 +244,318 @@ export class ICD11ConceptStore {
         }
       },
 
-      // 5. ENT / Oral: EK02 Acute Pharyngitis / Tonsillitis
+      // 5. Dermatology / Ophthalmic: EK02 Acute Contact Dermatitis / Periorbital Erythema
       {
         code: 'EK02',
-        title: 'Acute Pharyngitis & Tonsillitis',
-        category: 'Ear, Nose & Throat',
+        title: 'Acute Contact Dermatitis & Periorbital Erythema',
+        category: 'Dermatological Diseases',
         uri: this.buildUri('EK02'),
         clinicalCriteria: {
-          requiredKeywords: ['throat irritation', 'difficulty swallowing', 'sore throat', 'tonsillar', 'exudate'],
-          anatomicalLocations: ['Throat / Oral Cavity'],
-          vitalsTriggers: {
-            feverMinCelsius: 38.0,
-            tachycardiaMinBpm: 95
-          },
-          minRiskScore: 0.25
+          requiredKeywords: [
+            'periorbital erythema',
+            'contact dermatitis',
+            'eyelid erythema',
+            'eyelid pruritus',
+            'pruritus / itching',
+            'erythema / redness',
+            'flaking',
+            'swelling / edema',
+            'eyelid dermatitis',
+            'rash',
+            'redness',
+            'itching'
+          ],
+          anatomicalLocations: [
+            'Eye / Ophthalmology',
+            'EYE_OPHTHALMOLOGY',
+            'Skin / Epidermis',
+            'SKIN_EPIDERMIS',
+            'Face / Head'
+          ],
+          visionPatterns: ['Periorbital Erythema', 'Erythema', 'Dermatological Rash'],
+          minRiskScore: 0.15
         },
         firstLinePathway: {
           recommendedRx: [
             {
-              genericName: 'Amoxicillin',
-              dosage: '500 mg',
-              frequency: 'TID',
-              duration: '10 days',
-              clinicalNotes: 'Penicillin-class antimicrobial for confirmed Group A Strep pharyngitis.'
+              genericName: 'Hydrocortisone 1% Low-Potency Ophthalmic/Skin Cream',
+              dosage: 'Thin layer to periorbital skin',
+              frequency: 'BID',
+              duration: '5 days',
+              clinicalNotes: 'Low-potency topical steroid for periorbital dermatitis. Discontinue upon rash resolution.'
             },
             {
-              genericName: 'Benzocaine / Menthol Lozenges',
-              dosage: '15 mg',
-              frequency: 'Q2H PRN',
-              duration: '3 days',
-              clinicalNotes: 'Topical anesthetic lozenges for acute odynophagia.'
+              genericName: 'Cetirizine',
+              dosage: '10 mg PO',
+              frequency: 'QD',
+              duration: '7 days',
+              clinicalNotes: 'Oral second-generation antihistamine for pruritus.'
             }
           ],
-          labOrders: ['Rapid Strep Antigen Test (RADT)', 'Throat Swab Bacterial Culture'],
-          imagingOrders: ['Soft Tissue Neck X-Ray / CT if peritonsillar abscess suspected (hot potato voice)'],
-          monitoringFrequency: 'Daily temperature and oral intake check',
-          followUpDays: 4,
+          labOrders: ['Patch testing for topical cosmetics and fragrance allergens'],
+          imagingOrders: ['High-resolution dermoscopy'],
+          monitoringFrequency: 'Daily periorbital skin evaluation',
+          followUpDays: 5,
           urgentRedFlags: [
-            'Trismus (inability to open mouth)',
-            'Uvular deviation indicating peritonsillar phlegmon',
-            'Stridor or drooling'
+            'Spreading periorbital cellulitis with systemic fever',
+            'Proptosis, chemosis, or painful extraocular eye movements',
+            'Skin necrosis or bullae formation'
           ]
+        }
+      },
+
+      // 5b. Ophthalmic: 9A60 Infectious Conjunctivitis
+      {
+        code: '9A60',
+        title: 'Infectious Conjunctivitis',
+        category: 'Ophthalmic Diseases',
+        uri: this.buildUri('9A60'),
+        clinicalCriteria: {
+          requiredKeywords: [
+            'erythema / redness',
+            'pruritus / itching',
+            'conjunctivitis',
+            'eye redness',
+            'eye itching',
+            'eye discharge',
+            'watery eyes',
+            'pink eye',
+            'redness',
+            'itching',
+            'erythema',
+            'pruritus',
+            'eye infection'
+          ],
+          anatomicalLocations: [
+            'Eye / Ophthalmology',
+            'EYE_OPHTHALMOLOGY',
+            'Face / Head',
+            'Eye',
+            'Ophthalmology'
+          ],
+          vitalsTriggers: {
+            feverMinCelsius: 37.8
+          },
+          coughCategories: ['Normal Respiratory'],
+          visionPatterns: ['Conjunctival Injection', 'Periorbital Erythema', 'Ophthalmic Infection', 'Erythema'],
+          minRiskScore: 0.15
+        },
+        firstLinePathway: {
+          recommendedRx: [
+            {
+              genericName: 'Erythromycin Ophthalmic Ointment',
+              dosage: '0.5% (apply 1 cm ribbon)',
+              frequency: 'QID',
+              duration: '7 days',
+              clinicalNotes: 'First-line topical broad-spectrum antibiotic for bacterial conjunctivitis.'
+            },
+            {
+              genericName: 'Preservative-Free Artificial Tears',
+              dosage: '1-2 drops',
+              frequency: 'Q2H - Q4H PRN',
+              duration: '7 days',
+              clinicalNotes: 'Symptomatic comfort for hyperemic conjunctival surface.'
+            }
+          ],
+          labOrders: [
+            'Fluorescein staining with cobalt blue light (rule out corneal ulceration)',
+            'Conjunctival swab culture if purulent discharge'
+          ],
+          imagingOrders: ['Slit-lamp anterior segment optical biomicroscopy'],
+          monitoringFrequency: 'Daily visual acuity self-monitoring',
+          followUpDays: 3,
+          urgentRedFlags: [
+            'Severe eye pain, deep ciliary ache, or significant photophobia',
+            'Reduced visual acuity or blurred vision not clearing with blinking',
+            'Corneal clouding, white opacity, or pupillary asymmetry'
+          ]
+        }
+      },
+
+      // 5c. Ophthalmic: 9A03 Blepharitis
+      {
+        code: '9A03',
+        title: 'Blepharitis',
+        category: 'Ophthalmic Diseases',
+        uri: this.buildUri('9A03'),
+        clinicalCriteria: {
+          requiredKeywords: [
+            'blepharitis',
+            'eyelid crusting',
+            'eyelid swelling',
+            'pruritus / itching',
+            'grittiness',
+            'swelling',
+            'crusting',
+            'eyelid redness',
+            'eyelid'
+          ],
+          anatomicalLocations: [
+            'Eye / Ophthalmology',
+            'EYE_OPHTHALMOLOGY',
+            'Face / Head',
+            'Eye',
+            'Ophthalmology'
+          ],
+          visionPatterns: ['Eyelid Margin Erythema', 'Ciliary Crusting'],
+          minRiskScore: 0.10
+        },
+        firstLinePathway: {
+          recommendedRx: [
+            {
+              genericName: 'Eyelid Cleansing Foam / Warm Compresses',
+              dosage: 'Warm moist compress',
+              frequency: 'BID',
+              duration: '14 days',
+              clinicalNotes: 'Mechanical removal of collarettes and lid margin crusting.'
+            },
+            {
+              genericName: 'Bacitracin Ophthalmic Ointment',
+              dosage: 'Thin layer to lid margin',
+              frequency: 'QHS',
+              duration: '7 days',
+              clinicalNotes: 'Antimicrobial coverage for staphylococcal anterior blepharitis.'
+            }
+          ],
+          labOrders: ['Meibomian gland evaluation', 'Tear breakup time (TBUT)'],
+          imagingOrders: ['Slit-lamp anterior segment photography'],
+          monitoringFrequency: 'Bi-daily eyelid inspection',
+          followUpDays: 7,
+          urgentRedFlags: [
+            'Pre-septal cellulitis extension with spreading periorbital edema',
+            'Trichiasis (misdirected eyelashes abrading cornea)',
+            'Acute painful nodule unresponsive to warm compresses'
+          ]
+        }
+      },
+
+      // 5d. Ophthalmic: 9A20 Episcleritis & Scleritis
+      {
+        code: '9A20',
+        title: 'Episcleritis & Scleritis',
+        category: 'Ophthalmic Diseases',
+        uri: this.buildUri('9A20'),
+        clinicalCriteria: {
+          requiredKeywords: [
+            'episcleritis',
+            'scleritis',
+            'deep eye pain',
+            'sectoral redness',
+            'photophobia',
+            'scleral inflammation',
+            'red eye'
+          ],
+          anatomicalLocations: [
+            'Eye / Ophthalmology',
+            'EYE_OPHTHALMOLOGY',
+            'Face / Head',
+            'Eye',
+            'Ophthalmology'
+          ],
+          visionPatterns: ['Scleral Injection', 'Episcleral Vascular Engorgement'],
+          minRiskScore: 0.35
+        },
+        firstLinePathway: {
+          recommendedRx: [
+            {
+              genericName: 'Fluorometholone Ophthalmic Suspension',
+              dosage: '0.1% drops (1 drop)',
+              frequency: 'QID',
+              duration: '7 days',
+              clinicalNotes: 'Mild topical ocular steroid for benign episcleral inflammation under ophthalmic guidance.'
+            },
+            {
+              genericName: 'Naproxen',
+              dosage: '500 mg',
+              frequency: 'BID PO with food',
+              duration: '5 days',
+              clinicalNotes: 'Systemic non-steroidal anti-inflammatory for deep episcleral pain.'
+            }
+          ],
+          labOrders: ['Rheumatoid factor (RF)', 'Antinuclear antibody (ANA)', 'Erythrocyte Sedimentation Rate (ESR)'],
+          imagingOrders: ['2.5% Topical Phenylephrine blanching examination'],
+          monitoringFrequency: 'Every 48 hours clinical review',
+          followUpDays: 2,
+          urgentRedFlags: [
+            'Deep, boring, nocturnal ocular pain radiating to forehead or temple',
+            'Bluish discoloration or scleral thinning (necrotizing scleritis)',
+            'Acute visual acuity deterioration'
+          ]
+        }
+      },
+
+      // 5e. Respiratory: CA01 Bronchitis, Not Specified as Acute or Chronic
+      {
+        code: 'CA01',
+        title: 'Bronchitis, Not Specified',
+        category: 'Respiratory Diseases',
+        uri: this.buildUri('CA01'),
+        clinicalCriteria: {
+          requiredKeywords: ['bronchitis', 'wheezing', 'chest tightness', 'productive cough', 'sputum'],
+          anatomicalLocations: ['Chest / Thorax', 'RESPIRATORY_CHEST'],
+          vitalsTriggers: {
+            feverMinCelsius: 37.8,
+            tachypneaMinBreathsPerMin: 20
+          },
+          coughCategories: ['Wheeze/Stridor', 'Wet/Productive Cough'],
+          minRiskScore: 0.35
+        },
+        firstLinePathway: {
+          recommendedRx: [
+            {
+              genericName: 'Albuterol Inhaler (HFA)',
+              dosage: '90 mcg/actuation (2 puffs)',
+              frequency: 'Q4H - Q6H PRN',
+              duration: '7 days',
+              clinicalNotes: 'Short-acting beta-2 agonist for acute bronchospasm.'
+            }
+          ],
+          labOrders: ['Complete Blood Count (CBC)'],
+          imagingOrders: ['Chest Radiography (PA & Lateral)'],
+          monitoringFrequency: 'Pulse oximetry check every 8 hours',
+          followUpDays: 3,
+          urgentRedFlags: ['SpO2 < 92%', 'Stridor or severe respiratory distress']
+        }
+      },
+
+      // 5f. Respiratory: CA0B Asthma with Acute Bronchospasm
+      {
+        code: 'CA0B',
+        title: 'Asthma with Acute Bronchospasm',
+        category: 'Respiratory Diseases',
+        uri: this.buildUri('CA0B'),
+        clinicalCriteria: {
+          requiredKeywords: ['asthma', 'wheezing', 'shortness of breath', 'chest tightness', 'bronchospasm'],
+          anatomicalLocations: ['Chest / Thorax', 'RESPIRATORY_CHEST'],
+          vitalsTriggers: {
+            tachypneaMinBreathsPerMin: 22,
+            hypoxiaMaxSpo2: 93.0
+          },
+          coughCategories: ['Wheeze/Stridor'],
+          minRiskScore: 0.50
+        },
+        firstLinePathway: {
+          recommendedRx: [
+            {
+              genericName: 'Albuterol / Ipratropium Inhalation Solution',
+              dosage: '2.5mg / 0.5mg nebulized',
+              frequency: 'Q4H PRN',
+              duration: '5 days',
+              clinicalNotes: 'Bronchodilator therapy for acute asthmatic exacerbation.'
+            },
+            {
+              genericName: 'Prednisone',
+              dosage: '40 mg PO',
+              frequency: 'QD',
+              duration: '5 days',
+              clinicalNotes: 'Systemic oral corticosteroid burst.'
+            }
+          ],
+          labOrders: ['Peak Expiratory Flow (PEF) Rate', 'Arterial Blood Gas if severe'],
+          imagingOrders: ['Chest Radiography'],
+          monitoringFrequency: 'Continuous pulse oximetry',
+          followUpDays: 2,
+          urgentRedFlags: ['Silent chest (absent breath sounds)', 'PEF < 50% predicted', 'Cyanosis']
         }
       },
 

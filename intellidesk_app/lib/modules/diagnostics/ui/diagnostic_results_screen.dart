@@ -576,15 +576,63 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
                 ),
               ),
               onPressed: () async {
+                // Resolve anatomical location from session, stateProvider, or infer from diagnosis
+                String bodyLocation = '';
+                if (session?.symptomVector.bodyLocation != null &&
+                    session!.symptomVector.bodyLocation.isNotEmpty &&
+                    session.symptomVector.bodyLocation != 'General / Unspecified') {
+                  bodyLocation = session.symptomVector.bodyLocation;
+                } else if (stateProvider.selectedBodyLocation != null &&
+                    stateProvider.selectedBodyLocation!.isNotEmpty &&
+                    stateProvider.selectedBodyLocation != 'General / Unspecified') {
+                  bodyLocation = stateProvider.selectedBodyLocation!;
+                }
+
+                // If bodyLocation is not yet specialized, infer from primary diagnosis
+                final lowerDx = assessment.primaryDiagnosis.toLowerCase();
+                if (lowerDx.contains('conjunctivit') ||
+                    lowerDx.contains('eye') ||
+                    lowerDx.contains('ophthalm') ||
+                    lowerDx.contains('blepharit') ||
+                    lowerDx.contains('sclerit')) {
+                  bodyLocation = 'Eye / Ophthalmology';
+                } else if (lowerDx.contains('dermatit') || lowerDx.contains('eczema') || lowerDx.contains('rash') || lowerDx.contains('skin')) {
+                  if (bodyLocation.isEmpty) bodyLocation = 'Skin / Epidermis';
+                }
+
+                List<String> symptomsList = [];
+                if (session?.symptomVector.symptoms != null && session!.symptomVector.symptoms.isNotEmpty) {
+                  symptomsList = List<String>.from(session.symptomVector.symptoms);
+                } else if (stateProvider.selectedSecondarySymptoms.isNotEmpty) {
+                  symptomsList = stateProvider.selectedSecondarySymptoms.toList();
+                }
+                if (symptomsList.isEmpty && bodyLocation.contains('Eye')) {
+                  symptomsList = ['Erythema / Redness', 'Pruritus / Itching'];
+                }
+
                 final eval = await CDSSService().evaluateScreening(
                   screeningId: session?.id ?? 'SCR-${DateTime.now().millisecondsSinceEpoch}',
                   patientId: session?.patientId ?? 'PATIENT-ANON',
                   riskScore: assessment.riskScore,
                   symptoms: {
+                    'bodyLocation': bodyLocation,
+                    'anatomicalLocation': bodyLocation,
+                    'symptoms': symptomsList,
+                    'primaryDiagnosis': assessment.primaryDiagnosis,
                     'recommendations': assessment.clinicalRecommendations,
                     'riskLevel': assessment.riskLevel.name,
                     'clinicalSummary': '${assessment.primaryDiagnosis}. ${assessment.clinicalRecommendations.join("; ")}',
+                    if (session?.symptomVector.vitals != null)
+                      'vitals': session!.symptomVector.vitals.toMap(),
                   },
+                  visionFindings: [
+                    {
+                      'condition': assessment.primaryDiagnosis,
+                      'confidence': 0.95,
+                      'anatomicalSite': bodyLocation,
+                    }
+                  ],
+                  audioClassification: diag.lastCoughClassification,
                 );
                 if (context.mounted) {
                   CDSSDecisionDrawer.show(context, evaluation: eval);

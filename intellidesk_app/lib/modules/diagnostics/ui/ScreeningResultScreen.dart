@@ -10,6 +10,7 @@ import '../services/diagnostics_service.dart';
 import '../services/inference_engine_interface.dart';
 import 'LongitudinalHistoryScreen.dart';
 import 'EmergencyFacilitySheet.dart';
+import 'ClinicalReportShareSheet.dart';
 
 class ScreeningResultScreen extends StatefulWidget {
   final RiskAssessment? assessmentOverride;
@@ -114,8 +115,18 @@ class _ScreeningResultScreenState extends State<ScreeningResultScreen> {
             },
           ),
           IconButton(
+            icon: const Icon(Icons.share_outlined),
+            tooltip: 'Share Report',
+            onPressed: () => ClinicalReportShareSheet.show(
+              context,
+              assessment: assessment,
+              stateProvider: stateProvider,
+              session: session,
+            ),
+          ),
+          IconButton(
             icon: const Icon(Icons.forum_outlined),
-            tooltip: 'Discuss Results with Health AI',
+            tooltip: 'Discuss Results with Clinical Assistant',
             onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
           ),
         ],
@@ -172,7 +183,7 @@ class _ScreeningResultScreenState extends State<ScreeningResultScreen> {
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            'Zero network transmission • TFLite Quantized Neural Pipeline • 100% HIPAA Private',
+                            'Zero network transmission • Secure On-Device Processing • 100% HIPAA Private',
                             style: TextStyle(
                               color: Colors.white.withOpacity(0.85),
                               fontSize: 11,
@@ -260,7 +271,7 @@ class _ScreeningResultScreenState extends State<ScreeningResultScreen> {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          'Confidence: $confPercent% (95% CI: ${(bounds.ciLower * 100).round()}% - ${(bounds.ciUpper * 100).round()}%) • Monte Carlo N=10',
+                          'Confidence: $confPercent% (95% CI: ${(bounds.ciLower * 100).round()}% - ${(bounds.ciUpper * 100).round()}%)',
                           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                         ),
                       ),
@@ -306,7 +317,7 @@ class _ScreeningResultScreenState extends State<ScreeningResultScreen> {
                     ),
                     const SizedBox(height: 4),
                     const Text(
-                      'Original symptom photo compared with Grad-CAM neural attention heatmap.',
+                      'Original symptom photo compared with clinical visual focus map.',
                       style: TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                     const SizedBox(height: 14),
@@ -398,7 +409,7 @@ class _ScreeningResultScreenState extends State<ScreeningResultScreen> {
                                 ),
                                 const SizedBox(height: 6),
                                 const Text(
-                                  'Grad-CAM Heatmap',
+                                  'Visual Focus Map',
                                   style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.redAccent),
                                 ),
                               ],
@@ -447,7 +458,7 @@ class _ScreeningResultScreenState extends State<ScreeningResultScreen> {
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: const Text(
-                                    'Composite Grad-CAM Hotspot Overlay',
+                                    'Clinical Region Highlight',
                                     style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                                   ),
                                 ),
@@ -532,7 +543,7 @@ class _ScreeningResultScreenState extends State<ScreeningResultScreen> {
           ),
           icon: const Icon(Icons.chat_bubble_outline),
           label: const Text(
-            'Discuss Results with Health AI (Qwen2.5 PFA)',
+            'Discuss Results with Clinical Assistant',
             style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
           ),
           onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
@@ -721,11 +732,11 @@ class _HealthAIChatDrawerState extends State<HealthAIChatDrawer> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Qwen2.5 Health Assistant',
+                          'Clinical Health Assistant',
                           style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                         ),
                         Text(
-                          'Local ONNX & Psychological First Aid',
+                          'Clinical Guidance & First Aid Support',
                           style: TextStyle(color: Colors.white70, fontSize: 11),
                         ),
                       ],
@@ -810,7 +821,7 @@ class _HealthAIChatDrawerState extends State<HealthAIChatDrawer> {
                   children: [
                     SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0D9488))),
                     SizedBox(width: 8),
-                    Text('Qwen2.5 is thinking...', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    Text('Analyzing clinical notes...', style: TextStyle(fontSize: 12, color: Colors.grey)),
                   ],
                 ),
               ),
@@ -846,7 +857,7 @@ class _HealthAIChatDrawerState extends State<HealthAIChatDrawer> {
                     child: TextField(
                       controller: _inputController,
                       decoration: InputDecoration(
-                        hintText: 'Ask Qwen2.5 about next steps...',
+                        hintText: 'Ask about next steps or symptoms...',
                         hintStyle: const TextStyle(fontSize: 12.5),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),

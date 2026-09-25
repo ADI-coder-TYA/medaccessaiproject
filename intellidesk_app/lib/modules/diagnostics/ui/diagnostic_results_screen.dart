@@ -9,6 +9,7 @@ import 'diagnostic_chat_screen.dart';
 import 'EmergencyFacilitySheet.dart';
 import '../../cdss/services/cdss_service.dart';
 import '../../cdss/ui/cdss_decision_drawer.dart';
+import 'ClinicalReportShareSheet.dart';
 
 class DiagnosticResultsScreen extends StatefulWidget {
   final RiskAssessment? assessmentOverride;
@@ -46,7 +47,6 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
     final stateProvider = context.watch<DiagnosticStateProvider>();
     final session = diag.currentSession;
     final assessment = widget.assessmentOverride ?? session?.riskAssessment ?? stateProvider.assessmentResult;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     if (assessment == null) {
       return Scaffold(
@@ -89,11 +89,12 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
           IconButton(
             icon: const Icon(Icons.share_outlined),
             tooltip: 'Share Report',
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Screening report exported to clipboard')),
-              );
-            },
+            onPressed: () => ClinicalReportShareSheet.show(
+              context,
+              assessment: assessment,
+              stateProvider: stateProvider,
+              session: session,
+            ),
           ),
         ],
       ),
@@ -144,7 +145,7 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            'Zero network transmission • TFLite Quantized Neural Pipeline • 100% HIPAA Private',
+                            'Zero network transmission • Secure On-Device Processing • 100% HIPAA Private',
                             style: TextStyle(
                               color: Colors.white.withOpacity(0.85),
                               fontSize: 11,
@@ -223,7 +224,7 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Confidence: $confPercent% (±$marginPercent% via Monte Carlo Dropout)',
+                          'Confidence: $confPercent% (±$marginPercent% Margin of Error)',
                           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                         ),
                       ),
@@ -349,7 +350,10 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('• ${diff.condition}', style: const TextStyle(fontSize: 13)),
+                              Expanded(
+                                child: Text('• ${diff.condition}', style: const TextStyle(fontSize: 13)),
+                              ),
+                              const SizedBox(width: 8),
                               Text(
                                 '${(diff.probability * 100).round()}%',
                                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0D9488)),
@@ -382,12 +386,12 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
                         children: [
                           Icon(Icons.remove_red_eye_outlined, color: Color(0xFF0D9488), size: 20),
                           SizedBox(width: 8),
-                          Text('Grad-CAM Visual Attention Heatmap', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                          Text('Clinical Visual Focus Map', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                         ],
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'Highlights spatial regions in your photo that triggered clinical model attention.',
+                        'Highlights spatial regions in your photo that contributed to the diagnostic evaluation.',
                         style: TextStyle(fontSize: 12, color: Colors.grey),
                       ),
                       const SizedBox(height: 12),
@@ -460,7 +464,7 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
                         children: [
                           Icon(Icons.bar_chart, color: Color(0xFF0D9488), size: 20),
                           SizedBox(width: 8),
-                          Text('Feature Importance (SHAP Breakdown)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                          Text('Clinical Contributing Factors', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -544,7 +548,7 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
               ),
               icon: const Icon(Icons.chat_outlined),
               label: const Text(
-                'Discuss with Qwen2.5 PFA Health Assistant',
+                'Discuss with Clinical Assistant',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
               ),
               onPressed: () {
@@ -564,9 +568,12 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
               icon: const Icon(Icons.psychology_outlined),
-              label: const Text(
-                'Clinical Decision Support (ICD-11 & DDx)',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              label: const FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  'Clinical Decision Support (ICD-11 & DDx)',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                ),
               ),
               onPressed: () async {
                 final eval = await CDSSService().evaluateScreening(

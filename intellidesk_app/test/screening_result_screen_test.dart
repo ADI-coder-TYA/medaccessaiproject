@@ -92,7 +92,7 @@ void main() {
       // 4. Verify Visual Saliency Section: Original Photo alongside Grad-CAM Heatmap
       expect(find.text('Visual Diagnosis Saliency'), findsOneWidget);
       expect(find.text('Original Symptom Photo'), findsOneWidget);
-      expect(find.text('Grad-CAM Heatmap'), findsOneWidget);
+      expect(find.text('Visual Focus Map'), findsOneWidget);
       expect(find.text('Active Hotspot'), findsOneWidget);
 
       // 5. Verify Primary Finding & Recommendations
@@ -100,10 +100,10 @@ void main() {
       expect(find.textContaining('Visual Analysis: 55%'), findsOneWidget);
 
       // 6. Verify "Discuss Results with Health AI" button exists
-      expect(find.text('Discuss Results with Health AI (Qwen2.5 PFA)'), findsOneWidget);
+      expect(find.text('Discuss Results with Clinical Assistant'), findsOneWidget);
     });
 
-    testWidgets('Opens Qwen2.5 Health AI Chat Drawer with Mandatory Disclaimer and Next Steps', (tester) async {
+    testWidgets('Opens Clinical Health Assistant Chat Drawer with Mandatory Disclaimer and Next Steps', (tester) async {
       tester.view.physicalSize = const Size(1000, 1800);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -127,16 +127,16 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Tap "Discuss Results with Health AI (Qwen2.5 PFA)" button
-      final chatBtn = find.text('Discuss Results with Health AI (Qwen2.5 PFA)');
+      // Tap "Discuss Results with Clinical Assistant" button
+      final chatBtn = find.text('Discuss Results with Clinical Assistant');
       await tester.tap(chatBtn);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
 
       // Verify the Chat Drawer is open
       expect(find.byType(HealthAIChatDrawer), findsOneWidget);
-      expect(find.text('Qwen2.5 Health Assistant'), findsOneWidget);
-      expect(find.text('Local ONNX & Psychological First Aid'), findsOneWidget);
+      expect(find.text('Clinical Health Assistant'), findsOneWidget);
+      expect(find.text('Clinical Guidance & First Aid Support'), findsOneWidget);
 
       // Verify Mandatory Disclaimer is displayed
       expect(find.text('This is an AI-assisted screening tool, not a final medical diagnosis.'), findsOneWidget);

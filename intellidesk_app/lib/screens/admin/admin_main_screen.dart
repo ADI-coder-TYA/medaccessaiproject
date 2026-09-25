@@ -6,6 +6,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/ticket_provider.dart';
 import '../../widgets/kanban_board.dart';
 import 'admin_telemetry_dashboard_screen.dart';
+import 'admin_clinical_diagnoses_screen.dart';
 import 'admin_health_funds_screen.dart';
 import 'admin_compliance_audit_screen.dart';
 import 'admin_war_room_screen.dart';
@@ -120,6 +121,11 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
                                           label: Text('Clinical Telemetry'),
                                         ),
                                         NavigationRailDestination(
+                                          icon: Icon(Icons.biotech_outlined),
+                                          selectedIcon: Icon(Icons.biotech),
+                                          label: Text('Patient Diagnoses'),
+                                        ),
+                                        NavigationRailDestination(
                                           icon: Icon(Icons.account_balance_wallet_outlined),
                                           selectedIcon: Icon(Icons.account_balance_wallet),
                                           label: Text('Health Funds'),
@@ -170,14 +176,16 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
       case 1:
         return const AdminTelemetryDashboardScreen();
       case 2:
-        return const AdminHealthFundsScreen();
+        return const AdminClinicalDiagnosesScreen();
       case 3:
-        return const AdminComplianceAuditScreen();
+        return const AdminHealthFundsScreen();
       case 4:
-        return const AdminWarRoomScreen();
+        return const AdminComplianceAuditScreen();
       case 5:
-        return const AdminKnowledgeBaseScreen();
+        return const AdminWarRoomScreen();
       case 6:
+        return const AdminKnowledgeBaseScreen();
+      case 7:
         return const UserProfileScreen();
       default:
         return const KanbanBoard();
@@ -209,6 +217,11 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
             icon: Icon(Icons.analytics_outlined),
             selectedIcon: Icon(Icons.analytics, color: Color(0xFF0D9488)),
             label: 'Telemetry',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.biotech_outlined),
+            selectedIcon: Icon(Icons.biotech, color: Color(0xFF0D9488)),
+            label: 'Diagnoses',
           ),
           NavigationDestination(
             icon: Icon(Icons.account_balance_wallet_outlined),
@@ -260,6 +273,7 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
     final titles = [
       'Clinical Claims & Emergency Copays',
       'Institutional Clinical Telemetry',
+      'Patient Clinical Diagnoses & CDSS Oversight',
       'Health Funds & Pool Reserves',
       'HIPAA Compliance & Tamper Logs',
       'Clinical Crisis War Room',
@@ -280,7 +294,7 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
             child: InkWell(
               onTap: () {
                 setState(() {
-                  _selectedIndex = 6; // Switch to Profile tab
+                  _selectedIndex = 7; // Switch to Profile tab
                 });
               },
               borderRadius: BorderRadius.circular(12),

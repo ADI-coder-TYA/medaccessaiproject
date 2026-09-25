@@ -19,6 +19,17 @@ export const HOP_SIZE = 256;
 export const WHEEZE_RED_FLAG_CONFIDENCE_THRESHOLD = 0.70;
 export const RESPIRATORY_RED_FLAG_FLOOR = 0.75;
 
+// Acoustic feature baseline statistics for Z-score standardization (12 MFCCs + Centroid, Rolloff, Flux, ZCR)
+export const ACOUSTIC_MEANS: number[] = [
+  20.0, 10.0, 2.0, -4.0, -8.0, -11.0, -12.0, -10.0, -8.0, -5.0, -2.0, 0.0,
+  0.20, 0.30, 0.045, 0.080
+];
+
+export const ACOUSTIC_STDS: number[] = [
+  15.0, 12.0, 10.0, 8.0, 8.0, 7.0, 7.0, 7.0, 6.0, 6.0, 5.0, 5.0,
+  0.12, 0.16, 0.035, 0.060
+];
+
 export interface SpectralMetrics {
   centroid: number; // Normalized [0.0, 1.0]
   rolloff: number;  // Normalized [0.0, 1.0]

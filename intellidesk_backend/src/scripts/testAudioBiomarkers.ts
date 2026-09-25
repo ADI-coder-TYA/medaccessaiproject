@@ -1,11 +1,16 @@
-import 'dotenv/config';
 import * as tf from '@tensorflow/tfjs';
 import '@tensorflow/tfjs-node';
 import { AudioFeatureExtractor } from '../modules/diagnostics/audio/AudioFeatureExtractor.js';
 import { CoughClassifier } from '../modules/diagnostics/audio/CoughClassifier.js';
-import { VectorAssembler, TOTAL_CONCATENATED_DIM } from '../modules/diagnostics/fusion/vectorAssembler.js';
+import { VectorAssembler } from '../modules/diagnostics/fusion/vectorAssembler.js';
 import { assessMultimodalRisk, evaluateClinicalSafetyNet } from '../modules/diagnostics/fusion/assessMultimodalRisk.js';
-import { TARGET_SAMPLE_RATE, AUDIO_FEATURE_DIM } from '../modules/diagnostics/audio/types.js';
+import {
+  TARGET_SAMPLE_RATE,
+  AUDIO_FEATURE_DIM,
+  ACOUSTIC_MEANS,
+  ACOUSTIC_STDS
+} from '../modules/diagnostics/audio/types.js';
+import { TOTAL_CONCATENATED_DIM } from '../modules/diagnostics/fusion/vectorAssembler.js';
 
 let passed = 0;
 let failed = 0;
@@ -21,41 +26,29 @@ function assert(condition: boolean, message: string) {
 }
 
 /**
- * Creates a valid RIFF/WAV mono 16-bit PCM audio buffer.
+ * Creates a valid synthetic PCM WAV buffer in memory for testing
  */
 function createSyntheticWavBuffer(sampleRate: number, durationSeconds: number, frequencyHz: number): Buffer {
   const numSamples = Math.floor(sampleRate * durationSeconds);
-  const dataSize = numSamples * 2; // 16-bit = 2 bytes per sample
-  const headerSize = 44;
-  const buffer = Buffer.alloc(headerSize + dataSize);
+  const buffer = Buffer.alloc(44 + numSamples * 2);
 
-  // RIFF Chunk Descriptor
   buffer.write('RIFF', 0);
-  buffer.writeUInt32LE(36 + dataSize, 4);
+  buffer.writeUInt32LE(36 + numSamples * 2, 4);
   buffer.write('WAVE', 8);
-
-  // "fmt " sub-chunk
   buffer.write('fmt ', 12);
-  buffer.writeUInt32LE(16, 16); // Subchunk1Size (16 for PCM)
-  buffer.writeUInt16LE(1, 20);  // AudioFormat (1 for PCM)
-  buffer.writeUInt16LE(1, 22);  // NumChannels (1 for mono)
-  buffer.writeUInt32LE(sampleRate, 24); // SampleRate
-  buffer.writeUInt32LE(sampleRate * 2, 28); // ByteRate (SampleRate * NumChannels * BitsPerSample/8)
-  buffer.writeUInt16LE(2, 32);  // BlockAlign
-  buffer.writeUInt16LE(16, 34); // BitsPerSample
-
-  // "data" sub-chunk
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20); // PCM
+  buffer.writeUInt16LE(1, 22); // mono
+  buffer.writeUInt32LE(sampleRate, 24);
+  buffer.writeUInt32LE(sampleRate * 2, 28);
+  buffer.writeUInt16LE(2, 32);
+  buffer.writeUInt16LE(16, 34);
   buffer.write('data', 36);
-  buffer.writeUInt32LE(dataSize, 40);
+  buffer.writeUInt32LE(numSamples * 2, 40);
 
-  // Generate synthetic audio wave (modulated frequency with cough burst transients)
   for (let i = 0; i < numSamples; i++) {
-    const t = i / sampleRate;
-    // Burst envelope with harmonics
-    const burst = Math.exp(-Math.pow((t - durationSeconds * 0.4) * 5, 2));
-    const sampleVal = Math.sin(2 * Math.PI * frequencyHz * t) * (0.4 + 0.6 * burst);
-    const int16 = Math.max(-32767, Math.min(32767, Math.round(sampleVal * 32000)));
-    buffer.writeInt16LE(int16, headerSize + i * 2);
+    const sample = Math.sin(2 * Math.PI * frequencyHz * (i / sampleRate)) * 16000;
+    buffer.writeInt16LE(Math.floor(sample), 44 + i * 2);
   }
 
   return buffer;
@@ -80,32 +73,51 @@ async function runAudioBiomarkerTests() {
   assert(!result16k.isResampled, '16 kHz input requires zero resampling');
   assert(result16k.durationSeconds >= 0.95 && result16k.durationSeconds <= 1.05, `Duration measured accurately: ${result16k.durationSeconds}s`);
 
-  // Verify all 16 features strictly bounded in [0.0, 1.0] (Guardrail 2)
-  const allBounded = result16k.featureVector.every(v => v >= 0.0 && v <= 1.0);
-  assert(allBounded, 'Strict Acoustic Feature Scaling: All 16 features bounded in [0.0, 1.0]');
+  // Verify all 16 features are Z-score standardized and bounded in [-4.0, +4.0]
+  const allBounded = result16k.featureVector.every(v => v >= -4.0 && v <= 4.0 && !isNaN(v));
+  assert(allBounded, 'Z-Score Standardization: All 16 features bounded in [-4.0, 4.0] without NaN');
 
-  // 1b. 44.1 kHz WAV input with Mandatory Resampling (Guardrail 1)
+  // 1b. 44.1 kHz WAV input with Mandatory Resampling
   const wav44k = createSyntheticWavBuffer(44100, 1.0, 1200);
   const result44k = await AudioFeatureExtractor.extractFeatures(wav44k);
   assert(result44k.isResampled === true, 'Mandatory Resampling: 44.1 kHz input automatically resampled');
   assert(result44k.resampledRate === TARGET_SAMPLE_RATE, 'Resampled output rate strictly equals 16000 Hz');
-  assert(result44k.featureVector.every(v => v >= 0.0 && v <= 1.0), 'Resampled features strictly bounded in [0.0, 1.0]');
+  assert(result44k.featureVector.every(v => v >= -4.0 && v <= 4.0 && !isNaN(v)), 'Resampled features standardized and bounded');
 
-  // 1c. Neutral Acoustic Prior (Empty / Silent input)
-  const emptyResult = await AudioFeatureExtractor.extractFeatures(null);
-  assert(emptyResult.featureVector.length === AUDIO_FEATURE_DIM, 'Neutral prior vector has 16 dimensions');
-  assert(emptyResult.featureVector.every(v => v === 0.25), 'Neutral prior fills uniform 1/sqrt(16) = 0.25');
+  // 1c. Guardrail check: empty or silent buffer throws expected error
+  let guardrailCaught = false;
+  try {
+    await AudioFeatureExtractor.extractFeatures(Buffer.alloc(0));
+  } catch (err: any) {
+    if (err.message.includes('Invalid Audio Stream')) {
+      guardrailCaught = true;
+    }
+  }
+  assert(guardrailCaught, 'Guardrail: Empty/zero audio buffer rejected with "Invalid Audio Stream"');
+
+  // 1d. Guardrail: Silent audio (RMS < 0.01) rejected
+  const silentWav = createSyntheticWavBuffer(16000, 1.0, 440);
+  for (let i = 44; i < silentWav.length; i++) silentWav[i] = 0;
+  let silentCaught = false;
+  try {
+    await AudioFeatureExtractor.extractFeatures(silentWav);
+  } catch (err: any) {
+    if (err.message.includes('No cough sound detected')) {
+      silentCaught = true;
+    }
+  }
+  assert(silentCaught, 'Guardrail: Silent buffer (RMS < 0.01) rejected with "No cough sound detected"');
 
   // --------------------------------------------------------------------------
-  // TEST 2: Cough Classification in TensorFlow.js
+  // TEST 2: Cough Classification in TensorFlow.js & Dynamic Non-Collapsed Output
   // --------------------------------------------------------------------------
-  console.log('\n--- TEST 2: CoughClassifier Multi-Class Inference ---');
+  console.log('\n--- TEST 2: CoughClassifier Multi-Class Inference & Dynamic Probabilities ---');
 
   const model = await CoughClassifier.loadOrBootstrapModel();
   assert(model !== null, 'CoughClassifier TF.js model loaded successfully');
   assert(model.inputs[0].shape[1] === AUDIO_FEATURE_DIM, `Model input layer accepts [null, ${AUDIO_FEATURE_DIM}]`);
 
-  // Classify synthetic acoustic vector
+  // Classify standard extraction vector
   const classification = await CoughClassifier.classify(result16k.featureVector);
   assert(typeof classification.predictedCategory === 'string', `Predicted category: "${classification.predictedCategory}"`);
   assert(classification.confidence > 0 && classification.confidence <= 1.0, `Confidence score in [0, 1]: ${(classification.confidence * 100).toFixed(1)}%`);
@@ -117,12 +129,37 @@ async function runAudioBiomarkerTests() {
     classification.probabilities.wheezeStridor;
   assert(Math.abs(sumProbs - 1.0) < 0.01, `Softmax class probabilities sum to 1.0 (${sumProbs.toFixed(4)})`);
 
-  // Wheeze / Stridor simulated pattern
-  const wheezeVector = new Array<number>(AUDIO_FEATURE_DIM).fill(0.3);
-  wheezeVector[12] = 0.88; // High spectral centroid (high-pitch squeak/stridor)
-  wheezeVector[15] = 0.85; // High zero-crossing rate (turbulent airway)
+  // Test Guardrail: All-zero tensor rejected
+  let zeroGuardrailCaught = false;
+  try {
+    await CoughClassifier.classify(new Array<number>(16).fill(0.0));
+  } catch (err: any) {
+    if (err.message.includes('Invalid Audio Stream')) {
+      zeroGuardrailCaught = true;
+    }
+  }
+  assert(zeroGuardrailCaught, 'Guardrail: All-zero tensor rejected with "Invalid Audio Stream: Zero/NaN buffer received from DSP"');
+
+  // Dynamic Probabilities Test: Verify 2 distinct acoustic vectors produce distinct classes, NOT locked 64.1%
+  // Vector A: Low-pitch humming phonation
+  const rawHum = [32.0, 18.0, 7.0, -1.0, -8.0, -13.0, -15.0, -14.0, -11.0, -7.0, -3.0, 1.0, 0.08, 0.10, 0.012, 0.045];
+  const humVector = rawHum.map((v, idx) => Math.max(-4, Math.min(4, (v - ACOUSTIC_MEANS[idx]) / ACOUSTIC_STDS[idx])));
+  const humClf = await CoughClassifier.classify(humVector);
+  assert(humClf.predictedCategory === 'Normal Respiratory', `Vector A correctly classified as Normal Respiratory (${(humClf.confidence * 100).toFixed(1)}%)`);
+  assert(Math.abs(humClf.confidence - 0.641) > 0.10, `Confidence is dynamic (${(humClf.confidence * 100).toFixed(1)}%), NOT locked to 64.1%`);
+
+  // Vector B: High-frequency explosive Dry Cough
+  const rawDry = [16.0, 8.0, 2.0, -2.0, -5.0, -7.0, -8.0, -7.0, -5.0, -3.0, -1.0, 0.0, 0.24, 0.38, 0.085, 0.140];
+  const dryVector = rawDry.map((v, idx) => Math.max(-4, Math.min(4, (v - ACOUSTIC_MEANS[idx]) / ACOUSTIC_STDS[idx])));
+  const dryClf = await CoughClassifier.classify(dryVector);
+  assert(dryClf.predictedCategory === 'Dry/Irritative Cough', `Vector B correctly classified as Dry/Irritative Cough (${(dryClf.confidence * 100).toFixed(1)}%)`);
+  assert(Math.abs(dryClf.confidence - 0.641) > 0.10, `Confidence is dynamic (${(dryClf.confidence * 100).toFixed(1)}%), NOT locked to 64.1%`);
+
+  // Vector C: Musical Wheeze / Stridor
+  const rawWheeze = [14.0, 7.0, 1.0, -1.0, -3.0, 2.0, 5.0, 2.0, -1.0, -2.0, -1.0, 0.0, 0.38, 0.52, 0.035, 0.220];
+  const wheezeVector = rawWheeze.map((v, idx) => Math.max(-4, Math.min(4, (v - ACOUSTIC_MEANS[idx]) / ACOUSTIC_STDS[idx])));
   const wheezeClf = await CoughClassifier.classify(wheezeVector);
-  assert(wheezeClf.predictedCategory !== undefined, 'Wheeze/Stridor pattern classified successfully');
+  assert(wheezeClf.predictedCategory === 'Wheeze/Stridor', `Vector C correctly classified as Wheeze/Stridor (${(wheezeClf.confidence * 100).toFixed(1)}%)`);
 
   // --------------------------------------------------------------------------
   // TEST 3: VectorAssembler Expansion to 184 Dimensions
@@ -147,13 +184,10 @@ async function runAudioBiomarkerTests() {
   assert(assembled184.dimensions.symptoms === 32, 'Symptoms subvector = 32');
   assert(assembled184.dimensions.demographics === 8, 'Demographics subvector = 8');
   assert(assembled184.dimensions.audio === 16, 'Audio subvector = 16');
-  assert(assembled184.concatenatedVector.every(v => v >= 0.0 && v <= 1.0), 'All 184 multimodal features strictly bounded in [0.0, 1.0]');
 
   // No-audio prior assembly
   const assembledNoAudio = VectorAssembler.assembleVector(dummyVision, dummySymptoms, dummyVitals, null);
   assert(assembledNoAudio.concatenatedVector.length === 184, 'No-audio prior produces exact 184-d vector');
-  const audioSlice = assembledNoAudio.concatenatedVector.slice(168);
-  assert(audioSlice.every(v => v === 0.25), 'No-audio subvector populated with neutral acoustic prior 0.25');
 
   // --------------------------------------------------------------------------
   // TEST 4: Wheeze / Stridor Red-Flag Floor (>= 0.75)

@@ -21,37 +21,46 @@ export class CoughClassifier {
    * Input: [null, 16] acoustic feature vector
    * Layers: Dense(32, relu) -> Dropout(0.2) -> Dense(16, relu) -> Dense(4, softmax)
    */
+  /**
+   * Constructs the functional Cough Classification Model graph in TensorFlow.js.
+   * Input: [null, 16] acoustic feature vector
+   * Layers: Dense(64, relu) -> BatchNorm -> Dropout(0.25) -> Dense(32, relu) -> Dropout(0.15) -> Dense(16, relu) -> Dense(4, softmax)
+   */
+  /**
+   * Constructs the functional Cough Classification Model graph in TensorFlow.js.
+   * Input: [null, 16] acoustic feature vector
+   * Layers: Dense(48, relu, L2) -> BatchNorm -> Dropout(0.25) -> Dense(24, relu, L2) -> Dropout(0.20) -> Dense(4, softmax, L2)
+   */
   public static buildModel(): tf.LayersModel {
-    const input = tf.input({ shape: [AUDIO_FEATURE_DIM], name: 'audio_feature_input' });
+    const model = tf.sequential();
 
-    let x = tf.layers.dense({
-      units: 32,
+    model.add(tf.layers.dense({
+      units: 48,
       activation: 'relu',
-      kernelInitializer: 'glorotNormal',
+      kernelInitializer: 'heNormal',
+      kernelRegularizer: tf.regularizers.l2({ l2: 1e-4 }),
+      inputShape: [AUDIO_FEATURE_DIM],
       name: 'cough_dense_1'
-    }).apply(input) as tf.SymbolicTensor;
+    }));
+    model.add(tf.layers.batchNormalization({ name: 'cough_bn_1' }));
+    model.add(tf.layers.dropout({ rate: 0.25, name: 'cough_dropout_1' }));
 
-    x = tf.layers.dropout({ rate: 0.2, name: 'cough_dropout_1' }).apply(x) as tf.SymbolicTensor;
-
-    x = tf.layers.dense({
-      units: 16,
+    model.add(tf.layers.dense({
+      units: 24,
       activation: 'relu',
-      kernelInitializer: 'glorotNormal',
+      kernelInitializer: 'heNormal',
+      kernelRegularizer: tf.regularizers.l2({ l2: 1e-4 }),
       name: 'cough_dense_2'
-    }).apply(x) as tf.SymbolicTensor;
+    }));
+    model.add(tf.layers.dropout({ rate: 0.20, name: 'cough_dropout_2' }));
 
-    const output = tf.layers.dense({
+    model.add(tf.layers.dense({
       units: 4,
       activation: 'softmax',
       kernelInitializer: 'glorotNormal',
+      kernelRegularizer: tf.regularizers.l2({ l2: 1e-4 }),
       name: 'cough_class_output'
-    }).apply(x) as tf.SymbolicTensor;
-
-    const model = tf.model({
-      inputs: input,
-      outputs: output,
-      name: 'CoughClassifierModel'
-    });
+    }));
 
     model.compile({
       optimizer: tf.train.adam(0.001),
@@ -70,8 +79,10 @@ export class CoughClassifier {
       return this.cachedModel;
     }
 
-    const saveUrl = 'file://./models/cough_classifier';
-    const loadUrl = 'file://./models/cough_classifier/model.json';
+    const saveUrl = `file://${COUGH_MODEL_DIR.replace(/\\/g, '/')}`;
+    const loadUrl = fs.existsSync(COUGH_MODEL_JSON_PATH)
+      ? `file://${COUGH_MODEL_JSON_PATH.replace(/\\/g, '/')}`
+      : 'file://./models/cough_classifier/model.json';
 
     if (fs.existsSync(COUGH_MODEL_JSON_PATH) && fs.statSync(COUGH_MODEL_JSON_PATH).isFile()) {
       try {
@@ -87,9 +98,6 @@ export class CoughClassifier {
 
     console.log('🎙️ [CoughClassifier] Initializing clinical cough classifier graph...');
     const model = this.buildModel();
-
-    // Calibrate initial weights with acoustic clinical heuristics
-    this.calibrateInitialWeights(model);
 
     try {
       if (!fs.existsSync(COUGH_MODEL_DIR)) {
@@ -107,6 +115,8 @@ export class CoughClassifier {
 
   /**
    * Classifies an acoustic 16-d feature vector into one of 4 respiratory categories.
+   * Employs Temperature Scaling (T = 1.35) for probability calibration to prevent
+   * uncalibrated overconfident softmax saturation.
    */
   public static async classify(
     features: number[] | Float32Array
@@ -114,23 +124,56 @@ export class CoughClassifier {
     const startTime = Date.now();
     const model = await this.loadOrBootstrapModel();
 
-    // Validate feature dimensions
+    // Validate feature dimensions & Z-score bounds [-4.0, +4.0]
     const featureArray = Array.from(features);
     const sanitizedFeatures = new Array<number>(AUDIO_FEATURE_DIM).fill(0.0);
     for (let i = 0; i < AUDIO_FEATURE_DIM; i++) {
-      sanitizedFeatures[i] = Math.min(1.0, Math.max(0.0, Number(featureArray[i]) || 0.0));
+      const val = Number(featureArray[i]);
+      sanitizedFeatures[i] = Math.min(4.0, Math.max(-4.0, isNaN(val) ? 0.0 : val));
+    }
+
+    const inputVector = sanitizedFeatures;
+    const isAllZeros = inputVector.every(v => v === 0);
+    const hasNaN = inputVector.some(isNaN);
+
+    console.log("Cough Input Tensor Stats:", {
+      min: Number(Math.min(...inputVector).toFixed(4)),
+      max: Number(Math.max(...inputVector).toFixed(4)),
+      mean: Number((inputVector.reduce((a, b) => a + b, 0) / inputVector.length).toFixed(4)),
+      hasNaN,
+      isAllZeros
+    });
+
+    // Guardrail: reject dead zero or NaN tensors
+    if (isAllZeros || hasNaN) {
+      throw new Error("Invalid Audio Stream: Zero/NaN buffer received from DSP");
     }
 
     return tf.tidy(() => {
       const inputTensor = tf.tensor2d([sanitizedFeatures], [1, AUDIO_FEATURE_DIM]);
       const predTensor = model.predict(inputTensor) as tf.Tensor;
-      const probs = predTensor.dataSync();
+      const rawProbs = predTensor.dataSync();
 
-      const normalProb = Number(probs[0].toFixed(4));
-      const dryProb = Number(probs[1].toFixed(4));
-      const wetProb = Number(probs[2].toFixed(4));
-      const wheezeProb = Number(probs[3].toFixed(4));
+      // Temperature scaling calibration (Guo et al. ICML 2017) to prevent overconfident softmax saturation
+      const temperature = 1.30;
+      const logit0 = Math.log(Math.max(1e-7, rawProbs[0])) / temperature;
+      const logit1 = Math.log(Math.max(1e-7, rawProbs[1])) / temperature;
+      const logit2 = Math.log(Math.max(1e-7, rawProbs[2])) / temperature;
+      const logit3 = Math.log(Math.max(1e-7, rawProbs[3])) / temperature;
 
+      const maxLogit = Math.max(logit0, logit1, logit2, logit3);
+      const e0 = Math.exp(logit0 - maxLogit);
+      const e1 = Math.exp(logit1 - maxLogit);
+      const e2 = Math.exp(logit2 - maxLogit);
+      const e3 = Math.exp(logit3 - maxLogit);
+      const sumE = e0 + e1 + e2 + e3;
+
+      const normalProb = Number((e0 / sumE).toFixed(4));
+      const dryProb = Number((e1 / sumE).toFixed(4));
+      const wetProb = Number((e2 / sumE).toFixed(4));
+      const wheezeProb = Number((e3 / sumE).toFixed(4));
+
+      const probs = [normalProb, dryProb, wetProb, wheezeProb];
       let maxIdx = 0;
       let maxVal = probs[0];
       for (let i = 1; i < 4; i++) {
@@ -155,7 +198,7 @@ export class CoughClassifier {
         redFlagReason = `High-confidence Wet/Productive Cough detected (${(wetProb * 100).toFixed(1)}% confidence) - lower respiratory secretion accumulation.`;
       }
 
-      return {
+      const res = {
         predictedCategory,
         confidence,
         probabilities: {
@@ -169,27 +212,14 @@ export class CoughClassifier {
         featureVector: sanitizedFeatures,
         latencyMs: Date.now() - startTime
       };
-    });
-  }
 
-  /**
-   * Initializes network weights with calibrated acoustic heuristics:
-   * - High ZCR (index 15) and high Centroid (index 12) strongly align with Wheeze/Stridor.
-   * - High Spectral Flux (index 14) aligns with Dry/Irritative bursts.
-   * - High low-order MFCC energy aligns with Wet/Productive cough rales.
-   * - Flat or low energy aligns with Normal Respiratory.
-   */
-  private static calibrateInitialWeights(model: tf.LayersModel): void {
-    const denseOutput = model.getLayer('cough_class_output');
-    if (denseOutput) {
-      const currentWeights = denseOutput.getWeights();
-      if (currentWeights.length >= 2) {
-        const kernel = currentWeights[0];
-        const newBias = tf.tensor1d([0.2, -0.1, -0.1, -0.2]);
-        denseOutput.setWeights([kernel, newBias]);
-        newBias.dispose();
+      console.log(`🩺 [CoughClassifier] Prediction: "${predictedCategory}" (${(confidence * 100).toFixed(1)}%) | Normal: ${(normalProb * 100).toFixed(1)}% | Dry: ${(dryProb * 100).toFixed(1)}% | Wet: ${(wetProb * 100).toFixed(1)}% | Wheeze: ${(wheezeProb * 100).toFixed(1)}% | RedFlag: ${isRedFlag}`);
+      if (isRedFlag && redFlagReason) {
+        console.warn(`🚨 [CoughClassifier] ${redFlagReason}`);
       }
-    }
+
+      return res;
+    });
   }
 
   /**

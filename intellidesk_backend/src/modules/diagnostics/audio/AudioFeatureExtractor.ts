@@ -6,7 +6,9 @@ import {
   FRAME_SIZE,
   HOP_SIZE,
   AudioFeatureExtractionResult,
-  SpectralMetrics
+  SpectralMetrics,
+  ACOUSTIC_MEANS,
+  ACOUSTIC_STDS
 } from './types.js';
 
 export class AudioFeatureExtractor {
@@ -14,14 +16,14 @@ export class AudioFeatureExtractor {
    * Universal audio buffer processor:
    * 1. Decodes WAV / PCM buffers
    * 2. Resamples to 16,000 Hz Mono 16-bit PCM
-   * 3. Computes 12 MFCCs + Spectral Centroid + Rolloff + Flux + ZCR
-   * 4. Min-max scales all 16 acoustic features strictly into [0.0, 1.0]
+   * 3. Computes 12 MFCCs + Spectral Centroid + Rolloff + Flux + ZCR with Energy Weighting
+   * 4. Z-score standardizes all 16 acoustic features to zero-mean unit-variance
    */
   public static async extractFeatures(
     audioBuffer?: Buffer | Uint8Array | null
   ): Promise<AudioFeatureExtractionResult> {
     if (!audioBuffer || audioBuffer.length === 0) {
-      return this.buildNeutralAcousticPrior(TARGET_SAMPLE_RATE, 0);
+      throw new Error("Invalid Audio Stream: Zero/NaN buffer received from DSP");
     }
 
     // Step 1: Decode Audio Buffer to Mono Float32Array
@@ -60,7 +62,17 @@ export class AudioFeatureExtractor {
     }
 
     if (!rawPcm || rawPcm.length < 128) {
-      return this.buildNeutralAcousticPrior(sampleRate, rawPcm ? rawPcm.length : 0);
+      throw new Error("Invalid Audio Stream: Audio buffer too short or empty");
+    }
+
+    // Guardrail: Calculate Root Mean Square (RMS) volume on the raw PCM buffer
+    let energySum = 0;
+    for (let i = 0; i < rawPcm.length; i++) {
+      energySum += rawPcm[i] * rawPcm[i];
+    }
+    const rms = Math.sqrt(energySum / rawPcm.length);
+    if (rms < 0.01) {
+      throw new Error("No cough sound detected. Please speak or cough directly into the microphone.");
     }
 
     // Step 2: Mandatory 16 kHz Mono Resampling
@@ -81,8 +93,11 @@ export class AudioFeatureExtractor {
     // Step 3: Frame-by-Frame STFT & Feature Extraction
     const { mfccAverages, spectralMetrics } = this.computeAcousticMetrics(resampledPcm, TARGET_SAMPLE_RATE);
 
-    // Step 4: Strict Acoustic Feature Scaling [0.0, 1.0]
+    // Step 4: Z-score standardization across all 16 features
     const featureVector = this.assembleAndScaleFeatureVector(mfccAverages, spectralMetrics);
+
+    console.log(`🎙️ [AudioFeatureExtractor] Decoded acoustic sample: ${durationSeconds.toFixed(2)}s | SampleRate: ${sampleRate}Hz -> ${TARGET_SAMPLE_RATE}Hz (Resampled: ${isResampled})`);
+    console.log(`📊 [AudioFeatureExtractor] Computed 16-D Acoustic Vector: Centroid=${spectralMetrics.centroid.toFixed(4)} | Rolloff=${spectralMetrics.rolloff.toFixed(4)} | Flux=${spectralMetrics.flux.toFixed(4)} | ZCR=${spectralMetrics.zcr.toFixed(4)}`);
 
     return {
       featureVector,
@@ -126,7 +141,7 @@ export class AudioFeatureExtractor {
 
   /**
    * Computes 12 MFCC coefficients + Spectral Metrics (Centroid, Rolloff, Flux, ZCR)
-   * across overlapping Hamming-windowed frames.
+   * with energy-weighted frame pooling.
    */
   private static computeAcousticMetrics(
     pcm: Float32Array,
@@ -139,15 +154,20 @@ export class AudioFeatureExtractor {
     const hamming = this.createHammingWindow(frameSize);
     const melFilters = this.createMelFilterbanks(16, frameSize, sampleRate, 100, sampleRate / 2);
 
-    const mfccAccumulator = new Array<number>(MFCC_COUNT).fill(0);
-    let centroidAccum = 0;
-    let rolloffAccum = 0;
-    let fluxAccum = 0;
-    let zcrAccum = 0;
-
-    let previousSpectrum: Float32Array | null = null;
     const halfSize = Math.floor(frameSize / 2);
     const nyquist = sampleRate / 2;
+
+    interface FrameData {
+      energy: number;
+      centroid: number;
+      rolloff: number;
+      flux: number;
+      zcr: number;
+      mfccs: number[];
+    }
+    const frames: FrameData[] = [];
+    let previousSpectrum: Float32Array | null = null;
+    let maxEnergy = 0;
 
     for (let f = 0; f < numFrames; f++) {
       const start = f * hopSize;
@@ -162,12 +182,12 @@ export class AudioFeatureExtractor {
           frameZcr++;
         }
       }
-      zcrAccum += frameZcr / frameSize;
+      const zcr = frameZcr / frameSize;
 
       // Power Spectrum via Real DFT
       const powerSpectrum = this.computePowerSpectrum(frame);
 
-      // Spectral Centroid & Rolloff
+      // Spectral Centroid & Energy
       let totalEnergy = 0;
       let weightedFreqSum = 0;
       for (let k = 0; k < halfSize; k++) {
@@ -176,9 +196,9 @@ export class AudioFeatureExtractor {
         totalEnergy += mag;
         weightedFreqSum += freq * mag;
       }
+      if (totalEnergy > maxEnergy) maxEnergy = totalEnergy;
 
       const centroid = totalEnergy > 0 ? (weightedFreqSum / totalEnergy) / nyquist : 0;
-      centroidAccum += Math.min(1.0, Math.max(0.0, centroid));
 
       // 85% Spectral Rolloff
       const rolloffThreshold = totalEnergy * 0.85;
@@ -191,16 +211,17 @@ export class AudioFeatureExtractor {
           break;
         }
       }
-      rolloffAccum += Math.min(1.0, Math.max(0.0, rolloffFreq / nyquist));
+      const rolloff = rolloffFreq / nyquist;
 
       // Spectral Flux
+      let flux = 0;
       if (previousSpectrum) {
-        let frameFlux = 0;
+        let diffSum = 0;
         for (let k = 0; k < halfSize; k++) {
           const diff = Math.sqrt(powerSpectrum[k]) - Math.sqrt(previousSpectrum[k]);
-          frameFlux += diff * diff;
+          diffSum += diff * diff;
         }
-        fluxAccum += Math.min(1.0, Math.sqrt(frameFlux) / (totalEnergy || 1.0));
+        flux = Math.sqrt(diffSum) / (totalEnergy || 1.0);
       }
       previousSpectrum = powerSpectrum;
 
@@ -212,84 +233,104 @@ export class AudioFeatureExtractor {
         for (let k = 0; k < halfSize; k++) {
           bandEnergy += powerSpectrum[k] * filter[k];
         }
-        // Log energy with floor
         melEnergies[m] = Math.log(Math.max(1e-6, bandEnergy));
       }
 
       // DCT-II for MFCCs (12 coefficients, excluding c0 energy)
+      const mfccs = new Array<number>(MFCC_COUNT).fill(0);
       for (let n = 1; n <= MFCC_COUNT; n++) {
         let sum = 0;
         const M = melEnergies.length;
         for (let m = 0; m < M; m++) {
           sum += melEnergies[m] * Math.cos((Math.PI * n * (m + 0.5)) / M);
         }
-        mfccAccumulator[n - 1] += sum;
+        mfccs[n - 1] = sum;
+      }
+
+      frames.push({
+        energy: totalEnergy,
+        centroid: Math.min(1.0, Math.max(0.0, centroid)),
+        rolloff: Math.min(1.0, Math.max(0.0, rolloff)),
+        flux: Math.min(1.0, Math.max(0.0, flux)),
+        zcr: Math.min(1.0, Math.max(0.0, zcr)),
+        mfccs
+      });
+    }
+
+    // Energy-Weighted Acoustic Frame Accumulation (VAD Weighting)
+    // Prevents ambient silence frames from diluting brief cough / wheeze bursts
+    let weightSum = 0;
+    let centroidW = 0;
+    let rolloffW = 0;
+    let fluxW = 0;
+    let zcrW = 0;
+    const mfccW = new Array<number>(MFCC_COUNT).fill(0);
+
+    for (const fr of frames) {
+      const w = Math.pow(fr.energy / (maxEnergy || 1.0), 1.5) + 0.05;
+      weightSum += w;
+      centroidW += fr.centroid * w;
+      rolloffW += fr.rolloff * w;
+      fluxW += fr.flux * w;
+      zcrW += fr.zcr * w;
+      for (let m = 0; m < MFCC_COUNT; m++) {
+        mfccW[m] += fr.mfccs[m] * w;
       }
     }
 
-    const mfccAverages = mfccAccumulator.map(val => Number((val / numFrames).toFixed(6)));
+    const mfccAverages = mfccW.map(val => Number((val / weightSum).toFixed(6)));
 
     const spectralMetrics: SpectralMetrics = {
-      centroid: Number((centroidAccum / numFrames).toFixed(6)),
-      rolloff: Number((rolloffAccum / numFrames).toFixed(6)),
-      flux: Number((fluxAccum / Math.max(1, numFrames - 1)).toFixed(6)),
-      zcr: Number((zcrAccum / numFrames).toFixed(6))
+      centroid: Number((centroidW / weightSum).toFixed(6)),
+      rolloff: Number((rolloffW / weightSum).toFixed(6)),
+      flux: Number((fluxW / weightSum).toFixed(6)),
+      zcr: Number((zcrW / weightSum).toFixed(6))
     };
 
     return { mfccAverages, spectralMetrics };
   }
 
   /**
-   * Min-max scales all 16 acoustic features strictly into [0.0, 1.0].
-   * - Indices 0..11: 12 MFCC coefficients (scaled from clinical dynamic range [-30, +30] -> [0.0, 1.0])
-   * - Index 12: Spectral Centroid [0.0, 1.0]
-   * - Index 13: Spectral Rolloff [0.0, 1.0]
-   * - Index 14: Spectral Flux [0.0, 1.0]
-   * - Index 15: Zero Crossing Rate [0.0, 1.0]
+   * Z-Score Standardizes all 16 acoustic features to zero-mean, unit-variance Gaussian.
+   * - Indices 0..11: 12 MFCC coefficients (standardized via baseline mean/std)
+   * - Index 12: Spectral Centroid
+   * - Index 13: Spectral Rolloff
+   * - Index 14: Spectral Flux
+   * - Index 15: Zero Crossing Rate
+   * All values clamped to [-4.0, +4.0] to eliminate extreme outlier saturation.
    */
   public static assembleAndScaleFeatureVector(
     mfccs: number[],
     spectral: SpectralMetrics
   ): number[] {
-    const vector = new Array<number>(AUDIO_FEATURE_DIM).fill(0.0);
-
-    // Dynamic range for MFCCs: [-30.0, +30.0] -> [0.0, 1.0]
-    const mfccMin = -30.0;
-    const mfccMax = 30.0;
-    const mfccSpan = mfccMax - mfccMin;
+    const rawVector = new Array<number>(AUDIO_FEATURE_DIM).fill(0.0);
 
     for (let i = 0; i < MFCC_COUNT; i++) {
-      const val = mfccs[i] !== undefined ? mfccs[i] : 0.0;
-      const scaled = (val - mfccMin) / mfccSpan;
-      vector[i] = Number(Math.min(1.0, Math.max(0.0, scaled)).toFixed(6));
+      rawVector[i] = mfccs[i] !== undefined ? mfccs[i] : 0.0;
+    }
+    rawVector[12] = spectral.centroid;
+    rawVector[13] = spectral.rolloff;
+    rawVector[14] = spectral.flux;
+    rawVector[15] = spectral.zcr;
+
+    const standardizedVector = new Array<number>(AUDIO_FEATURE_DIM).fill(0.0);
+    for (let i = 0; i < AUDIO_FEATURE_DIM; i++) {
+      const z = (rawVector[i] - ACOUSTIC_MEANS[i]) / (ACOUSTIC_STDS[i] || 1.0);
+      standardizedVector[i] = Number(Math.max(-4.0, Math.min(4.0, z)).toFixed(6));
     }
 
-    // Index 12: Spectral Centroid [0.0, 1.0]
-    vector[12] = Number(Math.min(1.0, Math.max(0.0, spectral.centroid)).toFixed(6));
-
-    // Index 13: Spectral Rolloff [0.0, 1.0]
-    vector[13] = Number(Math.min(1.0, Math.max(0.0, spectral.rolloff)).toFixed(6));
-
-    // Index 14: Spectral Flux [0.0, 1.0]
-    vector[14] = Number(Math.min(1.0, Math.max(0.0, spectral.flux)).toFixed(6));
-
-    // Index 15: Zero Crossing Rate [0.0, 1.0]
-    vector[15] = Number(Math.min(1.0, Math.max(0.0, spectral.zcr)).toFixed(6));
-
-    return vector;
+    return standardizedVector;
   }
 
   /**
    * Neutral Acoustic Prior (used when no audio is submitted or audio is silent).
-   * Returns a 16-d vector with uniform values (0.25) on unit sphere, or neutral baseline.
+   * Returns a 16-d vector with uniform values (0.0) on standard normal distribution.
    */
   public static buildNeutralAcousticPrior(
     sampleRate: number = TARGET_SAMPLE_RATE,
     sampleCount: number = 0
   ): AudioFeatureExtractionResult {
-    // 1 / sqrt(16) = 0.25 (unit L2-norm constant vector)
-    const uniformVal = 0.25;
-    const featureVector = new Array<number>(AUDIO_FEATURE_DIM).fill(uniformVal);
+    const featureVector = new Array<number>(AUDIO_FEATURE_DIM).fill(0.0);
 
     return {
       featureVector,
@@ -299,10 +340,10 @@ export class AudioFeatureExtractor {
       pcmSampleCount: sampleCount,
       isResampled: false,
       spectralMetrics: {
-        centroid: 0.25,
-        rolloff: 0.25,
-        flux: 0.0,
-        zcr: 0.05
+        centroid: 0.18,
+        rolloff: 0.28,
+        flux: 0.045,
+        zcr: 0.080
       },
       mfccCoefficients: new Array<number>(MFCC_COUNT).fill(0.0)
     };

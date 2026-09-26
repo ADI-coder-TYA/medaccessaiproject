@@ -20,6 +20,7 @@ class PrescriptionReviewModal extends StatelessWidget {
     VoidCallback? onConfirm,
     VoidCallback? onDiscard,
   }) async {
+    debugPrint('[PrescriptionReviewModal] Opening modal. Drugs: ${summary.extractedDrugs.length}, DDIs: ${summary.ddiWarnings.length}, Conflicts: ${summary.allergyConflicts.length}, SafetyConflict: ${summary.hasSafetyConflict}');
     await showModalBottomSheet(
       context: context,
       isDismissible: true,
@@ -92,43 +93,49 @@ class PrescriptionReviewModal extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        summary.hasSafetyConflict
-                            ? Icons.warning_amber_rounded
-                            : Icons.verified_user_outlined,
-                        color: statusColor,
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Prescription Safety Review',
-                          style: GoogleFonts.inter(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 17,
-                          ),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.12),
+                          shape: BoxShape.circle,
                         ),
-                        Text(
-                          'Prescription Verification & Safety Check',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: Colors.grey,
-                          ),
+                        child: Icon(
+                          summary.hasSafetyConflict
+                              ? Icons.warning_amber_rounded
+                              : Icons.verified_user_outlined,
+                          color: statusColor,
+                          size: 22,
                         ),
-                      ],
-                    ),
-                  ],
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Prescription Safety Review',
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 17,
+                              ),
+                            ),
+                            Text(
+                              'Prescription Verification & Safety Check',
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close),
@@ -378,8 +385,10 @@ class PrescriptionReviewModal extends StatelessWidget {
                                 child: Text(
                                   med.brandName,
                                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
+                              const SizedBox(width: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                                 decoration: BoxDecoration(
@@ -396,6 +405,7 @@ class PrescriptionReviewModal extends StatelessWidget {
                           const SizedBox(height: 3),
                           Text(
                             'Active Ingredient: ${med.activeIngredient}',
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 12,
                               color: Theme.of(context).primaryColor,
@@ -449,6 +459,7 @@ class PrescriptionReviewModal extends StatelessWidget {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     onPressed: () {
+                      debugPrint('[PrescriptionReviewModal] Discard button clicked');
                       Navigator.of(context).pop();
                       if (onDiscard != null) onDiscard!();
                     },
@@ -465,6 +476,7 @@ class PrescriptionReviewModal extends StatelessWidget {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     onPressed: () {
+                      debugPrint('[PrescriptionReviewModal] Confirm button clicked');
                       Navigator.of(context).pop();
                       if (onConfirm != null) onConfirm!();
                     },

@@ -11,7 +11,16 @@ import '../../modules/pharmacy/ui/prescription_review_modal.dart';
 import '../../modules/pharmacy/ui/patient_allergy_profile_screen.dart';
 
 class PharmacyHubScreen extends StatefulWidget {
-  const PharmacyHubScreen({super.key});
+  final List<Map<String, dynamic>>? initialMeds;
+  final List<String>? initialAllergies;
+  final bool autoFetch;
+
+  const PharmacyHubScreen({
+    super.key,
+    this.initialMeds,
+    this.initialAllergies,
+    this.autoFetch = true,
+  });
 
   @override
   State<PharmacyHubScreen> createState() => _PharmacyHubScreenState();
@@ -20,7 +29,7 @@ class PharmacyHubScreen extends StatefulWidget {
 class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
   final RxSentinelService _sentinelService = RxSentinelService();
   bool _isScanning = false;
-  bool _isLoadingMeds = true;
+  late bool _isLoadingMeds;
   PlatformFile? _pickedFile;
 
   List<Map<String, dynamic>> _activeMeds = [];
@@ -29,7 +38,12 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchPatientMedicationsAndAllergies();
+    _activeMeds = widget.initialMeds != null ? List.from(widget.initialMeds!) : [];
+    _patientAllergies = widget.initialAllergies != null ? List.from(widget.initialAllergies!) : [];
+    _isLoadingMeds = widget.autoFetch;
+    if (widget.autoFetch) {
+      _fetchPatientMedicationsAndAllergies();
+    }
   }
 
   String _getPatientId(BuildContext context) {
@@ -44,6 +58,7 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
   Future<void> _fetchPatientMedicationsAndAllergies() async {
     setState(() => _isLoadingMeds = true);
     final patientId = _getPatientId(context);
+    debugPrint('[PharmacyHubScreen] Fetching medications and allergies for patient: $patientId');
 
     try {
       // 1. Fetch Medications from backend Supabase table
@@ -83,6 +98,7 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
         }
       }
 
+      debugPrint('[PharmacyHubScreen] Successfully loaded ${parsedMeds.length} active meds and ${parsedAllergies.length} allergies for patient: $patientId');
       if (mounted) {
         setState(() {
           _activeMeds = parsedMeds;
@@ -90,7 +106,8 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
           _isLoadingMeds = false;
         });
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[PharmacyHubScreen] Failed to fetch medications or allergies: $e');
       if (mounted) setState(() => _isLoadingMeds = false);
     }
   }
@@ -153,9 +170,10 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
               if (brand.isEmpty || generic.isEmpty) return;
 
               final patientId = _getPatientId(context);
+              debugPrint('[PharmacyHubScreen] Adding prescribed medication: $brand ($generic) | Dosage: $dosage | Patient: $patientId');
               try {
                 final uri = Uri.parse('${ApiConfig.baseUrl}/pharmacy/medications');
-                await http.post(
+                final res = await http.post(
                   uri,
                   headers: ApiConfig.patientHeaders,
                   body: jsonEncode({
@@ -166,10 +184,17 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
                     'isActive': true,
                   }),
                 );
+                debugPrint('[PharmacyHubScreen] Add medication response code: ${res.statusCode}');
                 if (ctx.mounted) Navigator.pop(ctx);
                 _fetchPatientMedicationsAndAllergies();
-              } catch (_) {
+              } catch (e) {
+                debugPrint('[PharmacyHubScreen] Error adding medication: $e');
                 if (ctx.mounted) Navigator.pop(ctx);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to save medication: $e')),
+                  );
+                }
               }
             },
             child: const Text('Save to Record'),
@@ -182,6 +207,7 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
   Future<void> _pickAndScanPrescription() async {
     final patientId = _getPatientId(context);
     try {
+      debugPrint('[PharmacyHubScreen] Opening file picker for prescription document...');
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg'],
@@ -195,6 +221,7 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
           _isScanning = true;
         });
 
+        debugPrint('[PharmacyHubScreen] Processing file: ${_pickedFile!.name} (${_pickedFile!.size} bytes)...');
         final activeGenerics = _activeMeds.map((m) => m['generic']?.toString() ?? '').where((g) => g.isNotEmpty).toList();
 
         final summary = await _sentinelService.parsePrescription(
@@ -205,12 +232,24 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
           allergies: _patientAllergies.isNotEmpty ? _patientAllergies : ['PENICILLINS'],
         );
 
+        debugPrint('[PharmacyHubScreen] Prescription parsed successfully: ${summary.extractedDrugs.length} drugs, ${summary.ddiWarnings.length} DDIs, ${summary.allergyConflicts.length} allergy alerts | Conflict: ${summary.hasSafetyConflict}');
+
         if (mounted) {
           setState(() => _isScanning = false);
-          PrescriptionReviewModal.show(context, summary: summary);
+          PrescriptionReviewModal.show(
+            context,
+            summary: summary,
+            onConfirm: () {
+              debugPrint('[PharmacyHubScreen] Prescription review confirmed, refreshing medications...');
+              _fetchPatientMedicationsAndAllergies();
+            },
+          );
         }
+      } else {
+        debugPrint('[PharmacyHubScreen] Prescription file selection cancelled');
       }
     } catch (e) {
+      debugPrint('[PharmacyHubScreen] Prescription verification failed: $e');
       if (mounted) {
         setState(() => _isScanning = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -223,6 +262,7 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
   void _runSampleScan() async {
     setState(() => _isScanning = true);
     final patientId = _getPatientId(context);
+    debugPrint('[PharmacyHubScreen] Executing demo clinical prescription scan for patient: $patientId');
     final activeGenerics = _activeMeds.map((m) => m['generic']?.toString() ?? '').where((g) => g.isNotEmpty).toList();
 
     final summary = await _sentinelService.parsePrescription(
@@ -231,9 +271,17 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
       activeMedications: activeGenerics.isNotEmpty ? activeGenerics : ['Warfarin'],
       allergies: _patientAllergies.isNotEmpty ? _patientAllergies : ['PENICILLINS'],
     );
+    debugPrint('[PharmacyHubScreen] Demo scan complete: ${summary.extractedDrugs.length} drugs | Safety conflict: ${summary.hasSafetyConflict}');
     if (mounted) {
       setState(() => _isScanning = false);
-      PrescriptionReviewModal.show(context, summary: summary);
+      PrescriptionReviewModal.show(
+        context,
+        summary: summary,
+        onConfirm: () {
+          debugPrint('[PharmacyHubScreen] Demo scan confirmed, refreshing medications...');
+          _fetchPatientMedicationsAndAllergies();
+        },
+      );
     }
   }
 
@@ -295,30 +343,36 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        'Active Medications Roster',
-                        style: GoogleFonts.outfit(
-                          color: const Color(0xFF0F172A),
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            'Active Medications Roster',
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.outfit(
+                              color: const Color(0xFF0F172A),
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0D9488).withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(8),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0D9488).withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '${_activeMeds.length} in DB',
+                            style: const TextStyle(color: Color(0xFF0D9488), fontSize: 11, fontWeight: FontWeight.bold),
+                          ),
                         ),
-                        child: Text(
-                          '${_activeMeds.length} in DB',
-                          style: const TextStyle(color: Color(0xFF0D9488), fontSize: 11, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   TextButton.icon(
                     onPressed: _showAddMedicationDialog,
                     icon: const Icon(Icons.add_circle_outline, size: 16, color: Color(0xFF0D9488)),
@@ -412,22 +466,26 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
                 child: const Icon(Icons.shield, color: Colors.white, size: 22),
               ),
               const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Medication Safety Check',
-                    style: GoogleFonts.outfit(
-                      color: Colors.white,
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Medication Safety Check',
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.outfit(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                  Text(
-                    'Real-Time Drug Interaction & Allergy Verification',
-                    style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 12),
-                  ),
-                ],
+                    Text(
+                      'Real-Time Drug Interaction & Allergy Verification',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 12),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -470,22 +528,26 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
                 child: const Icon(Icons.document_scanner, color: Color(0xFF0D9488), size: 22),
               ),
               const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Scan Prescription Slip',
-                    style: GoogleFonts.outfit(
-                      color: const Color(0xFF0F172A),
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Scan Prescription Slip',
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.outfit(
+                        color: const Color(0xFF0F172A),
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                  const Text(
-                    'PDF, PNG, or JPEG camera upload',
-                    style: TextStyle(color: Color(0xFF64748B), fontSize: 11),
-                  ),
-                ],
+                    const Text(
+                      'PDF, PNG, or JPEG camera upload',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -588,6 +650,8 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
                     _patientAllergies.isEmpty
                         ? 'No active drug allergies on file'
                         : 'Active: ${_patientAllergies.join(', ')}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: _patientAllergies.isEmpty ? const Color(0xFF64748B) : const Color(0xFFEF4444),
                       fontSize: 11.5,
@@ -658,12 +722,14 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${med['dosage']} • ${med['frequency']}',
+                  '${med['dosage'] ?? ''} • ${med['frequency'] ?? ''}',
                   style: const TextStyle(color: Color(0xFF0D9488), fontSize: 11.5, fontWeight: FontWeight.w600),
+                  overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  'Indication: ${med['indication']}',
+                  'Indication: ${med['indication'] ?? 'Clinical Database Verified'}',
                   style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),

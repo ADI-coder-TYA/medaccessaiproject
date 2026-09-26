@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../../config/api_config.dart';
 import '../../providers/auth_provider.dart';
 import '../../modules/pharmacy/services/rx_sentinel_service.dart';
+import '../../modules/pharmacy/models/medication_entity.dart';
 import '../../modules/pharmacy/ui/prescription_review_modal.dart';
 import '../../modules/pharmacy/ui/patient_allergy_profile_screen.dart';
 
@@ -101,8 +102,12 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
       debugPrint('[PharmacyHubScreen] Successfully loaded ${parsedMeds.length} active meds and ${parsedAllergies.length} allergies for patient: $patientId');
       if (mounted) {
         setState(() {
-          _activeMeds = parsedMeds;
-          _patientAllergies = parsedAllergies;
+          if (parsedMeds.isNotEmpty) {
+            _activeMeds = parsedMeds;
+          }
+          if (parsedAllergies.isNotEmpty) {
+            _patientAllergies = parsedAllergies;
+          }
           _isLoadingMeds = false;
         });
       }
@@ -239,9 +244,10 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
           PrescriptionReviewModal.show(
             context,
             summary: summary,
+            onConfirmWithDrugs: (confirmedDrugs) => _handleConfirmPrescription(confirmedDrugs),
             onConfirm: () {
               debugPrint('[PharmacyHubScreen] Prescription review confirmed, refreshing medications...');
-              _fetchPatientMedicationsAndAllergies();
+              if (widget.autoFetch) _fetchPatientMedicationsAndAllergies();
             },
           );
         }
@@ -256,6 +262,79 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
           SnackBar(content: Text('Prescription scan failed: $e')),
         );
       }
+    }
+  }
+
+  Future<void> _handleConfirmPrescription(List<ExtractedMedication> confirmedDrugs) async {
+    final patientId = _getPatientId(context);
+    debugPrint('[PharmacyHubScreen] Confirming ${confirmedDrugs.length} prescription medications for patient: $patientId');
+
+    if (confirmedDrugs.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Prescription attached. No medications to add.')),
+        );
+      }
+      return;
+    }
+
+    // 1. Immediately update local _activeMeds state so patient sees them on screen
+    final newMeds = confirmedDrugs.map((d) => {
+      'id': 'med-${DateTime.now().millisecondsSinceEpoch}-${d.brandName.hashCode.abs()}',
+      'brand': d.brandName,
+      'generic': d.activeIngredient,
+      'dosage': d.dosage,
+      'frequency': d.frequency,
+      'status': 'ACTIVE',
+      'indication': d.allergenGroup != null ? 'Class: ${d.allergenGroup}' : 'Rx Verified',
+    }).toList();
+
+    setState(() {
+      for (final nm in newMeds) {
+        final existingIdx = _activeMeds.indexWhere((m) =>
+          (m['generic']?.toString().toLowerCase() == nm['generic']?.toString().toLowerCase()) ||
+          (m['brand']?.toString().toLowerCase() == nm['brand']?.toString().toLowerCase()));
+        if (existingIdx >= 0) {
+          _activeMeds[existingIdx] = nm;
+        } else {
+          _activeMeds.insert(0, nm);
+        }
+      }
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Successfully attached ${confirmedDrugs.length} medication(s) to active record'),
+          backgroundColor: const Color(0xFF0D9488),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+
+    // 2. Persist each medication to the backend database asynchronously
+    for (final d in confirmedDrugs) {
+      try {
+        final uri = Uri.parse('${ApiConfig.baseUrl}/pharmacy/medications');
+        await http.post(
+          uri,
+          headers: ApiConfig.patientHeaders,
+          body: jsonEncode({
+            'patientId': patientId,
+            'medicationName': d.brandName,
+            'activeIngredient': d.activeIngredient,
+            'dosage': '${d.dosage} ${d.frequency} ${d.duration ?? ""}'.trim(),
+            'isActive': true,
+          }),
+        ).timeout(const Duration(seconds: 4));
+      } catch (e) {
+        debugPrint('[PharmacyHubScreen] Error persisting medication ${d.brandName}: $e');
+      }
+    }
+
+    // 3. Re-sync with backend database
+    if (widget.autoFetch) {
+      _fetchPatientMedicationsAndAllergies();
     }
   }
 
@@ -277,9 +356,10 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
       PrescriptionReviewModal.show(
         context,
         summary: summary,
+        onConfirmWithDrugs: (confirmedDrugs) => _handleConfirmPrescription(confirmedDrugs),
         onConfirm: () {
           debugPrint('[PharmacyHubScreen] Demo scan confirmed, refreshing medications...');
-          _fetchPatientMedicationsAndAllergies();
+          if (widget.autoFetch) _fetchPatientMedicationsAndAllergies();
         },
       );
     }

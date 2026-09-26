@@ -83,6 +83,30 @@ class ExtractedMedication {
     'matchedRxNormTerm': matchedRxNormTerm,
     'allergenGroup': allergenGroup,
   };
+
+  ExtractedMedication copyWith({
+    String? brandName,
+    String? activeIngredient,
+    String? dosage,
+    String? frequency,
+    String? duration,
+    String? rawText,
+    double? confidence,
+    String? matchedRxNormTerm,
+    String? allergenGroup,
+  }) {
+    return ExtractedMedication(
+      brandName: brandName ?? this.brandName,
+      activeIngredient: activeIngredient ?? this.activeIngredient,
+      dosage: dosage ?? this.dosage,
+      frequency: frequency ?? this.frequency,
+      duration: duration ?? this.duration,
+      rawText: rawText ?? this.rawText,
+      confidence: confidence ?? this.confidence,
+      matchedRxNormTerm: matchedRxNormTerm ?? this.matchedRxNormTerm,
+      allergenGroup: allergenGroup ?? this.allergenGroup,
+    );
+  }
 }
 
 class DDIPairResult {

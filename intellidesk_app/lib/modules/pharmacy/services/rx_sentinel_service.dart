@@ -173,6 +173,31 @@ class RxSentinelService {
     }
   }
 
+  Future<List<RxScanSummary>> getPatientPrescriptions(String patientId) async {
+    try {
+      final uri = Uri.parse('$_baseUrl/api/v1/pharmacy/prescriptions/$patientId');
+      final res = await _client.get(uri, headers: ApiConfig.adminHeaders).timeout(const Duration(seconds: 5));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final list = data['prescriptions'] as List? ?? [];
+        return list.map((s) => RxScanSummary.fromJson(s)).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Future<Map<String, dynamic>?> getPatientFullPharmacyProfile(String patientId) async {
+    try {
+      final uri = Uri.parse('$_baseUrl/api/v1/pharmacy/patient-profile/$patientId');
+      final res = await _client.get(uri, headers: ApiConfig.adminHeaders).timeout(const Duration(seconds: 5));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        return data['profile'] as Map<String, dynamic>?;
+      }
+    } catch (_) {}
+    return null;
+  }
+
   RxScanSummary _generateOfflineScanSummary({
     required String rawText,
     String? patientId,
@@ -185,22 +210,77 @@ class RxSentinelService {
     final List<DDIPairResult> ddis = [];
     final List<AllergyConflictResult> allergyConflicts = [];
 
-    // Helper: extracts dosage from string
+    // Helper: checks if line is non-medication (addresses, physician info, vitals, clinic headers)
+    bool isNonMed(String text) {
+      final t = text.toLowerCase().trim();
+      return RegExp(r'\b(hospital|clinic|center|centre|street|road|avenue|suite|floor|doctor|dr\.|physician|patient|vitals|pulse|bp|temp|diagnosis|complaint|history|advice|signature|follow\s*up)\b', caseSensitive: false).hasMatch(t) &&
+          !RegExp(r'\b(tab\.?|tablet|cap\.?|capsule|syp\.?|inj\.?|\d+\s*mg)\b', caseSensitive: false).hasMatch(t);
+    }
+
+    if (isNonMed(rawText)) {
+      return RxScanSummary(
+        patientId: patientId,
+        extractedDrugs: [],
+        ddiWarnings: [],
+        allergyConflicts: [],
+        hasSafetyConflict: false,
+        requiresPharmacistReview: false,
+        rawOcrText: rawText,
+      );
+    }
+
+    // Helper: extracts dosage from string (explicit units or contextual numbers like 625, 650, 40)
     String extractDose(String text, String fallback) {
       final m = RegExp(r'\b(\d+(?:\.\d+)?\s*(?:mg|mcg|ml|g|gm|iu|mEq))\b', caseSensitive: false).firstMatch(text);
-      return m != null ? m.group(1)!.replaceAll(' ', '') : fallback;
+      if (m != null) return m.group(1)!.replaceAll(' ', '').toLowerCase();
+
+      final mNum = RegExp(r'\b(5|10|20|25|40|50|75|80|100|125|150|200|250|300|375|400|500|600|625|650|750|800|850|1000)\b').firstMatch(text);
+      if (mNum != null) return '${mNum.group(1)}mg';
+
+      return fallback;
     }
 
-    // Helper: extracts frequency
+    // Helper: extracts and standardizes clinical frequency
     String extractFreq(String text, String fallback) {
-      final m = RegExp(r'\b(1-0-1|1-1-1|1-0-0-1|BID|TID|QID|QD|PRN|STAT|ONCE\s+DAILY)\b', caseSensitive: false).firstMatch(text);
-      return m != null ? m.group(1)!.toUpperCase() : fallback;
+      final m = RegExp(r'\b(1-0-1|1-1-1|1-0-0|0-0-1|0-1-0|1-0-1-1|1-1-1-1|BID|TID|QID|QD|OD|BD|TDS|QDS|SOS|PRN|STAT|HS|QHS|ONCE\s+DAILY|TWICE\s+DAILY)\b', caseSensitive: false).firstMatch(text);
+      if (m != null) {
+        final val = m.group(1)!.toUpperCase().replaceAll('.', '');
+        if (val == 'OD' || val == 'ONCE DAILY') return 'QD';
+        if (val == 'BD' || val == 'TWICE DAILY') return 'BID';
+        if (val == 'TDS') return 'TID';
+        if (val == 'QDS') return 'QID';
+        if (val == 'SOS') return 'PRN';
+        if (val == 'HS') return 'QHS';
+        return val;
+      }
+      return fallback;
     }
 
-    // Helper: extracts duration
+    // Helper: extracts duration (explicit, medical fractions X/7, or frequency-followed count)
     String? extractDur(String text) {
-      final m = RegExp(r'\b(?:FOR\s+)?(\d+\s*(?:DAYS|DAY|WEEKS|WEEK|MONTHS|MONTH|D|W))\b', caseSensitive: false).firstMatch(text);
-      return m != null ? m.group(1) : null;
+      final mFrac = RegExp(r'\b(\d+)\s*\/\s*(7|52|12)\b').firstMatch(text);
+      if (mFrac != null) {
+        final n = mFrac.group(1);
+        final d = mFrac.group(2);
+        if (d == '7') return '$n days';
+        if (d == '52') return '$n weeks';
+        if (d == '12') return '$n months';
+      }
+
+      final m = RegExp(r'(?:(?:FOR|X|\*)\s*)?\(?(\d+\s*(?:DAYS?|DAY|WEEKS?|WEEK|MONTHS?|MONTH|D|W))\)?', caseSensitive: false).firstMatch(text);
+      if (m != null) {
+        var dur = m.group(1)!.trim();
+        if (RegExp(r'^\d+\s*d$', caseSensitive: false).hasMatch(dur)) dur = '${dur.replaceAll(RegExp(r'd', caseSensitive: false), '').trim()} days';
+        if (RegExp(r'^\d+\s*w$', caseSensitive: false).hasMatch(dur)) dur = '${dur.replaceAll(RegExp(r'w', caseSensitive: false), '').trim()} weeks';
+        return dur;
+      }
+
+      final mFreqFollow = RegExp(r'(?:1-0-1|1-1-1|1-0-0|0-0-1|BID|TID|QD|QID|OD|BD|TDS|PRN|SOS)\s*(?:x\s*|\*\s*|\bfor\s+)(\d{1,2})\b', caseSensitive: false).firstMatch(text);
+      if (mFreqFollow != null) {
+        return '${mFreqFollow.group(1)} days';
+      }
+
+      return null;
     }
 
     // Parse clinical keywords in offline mode
@@ -241,6 +321,43 @@ class RxSentinelService {
         rawText: 'Ibuprofen 400mg PO TID PRN 5 days',
         confidence: 0.95,
         allergenGroup: 'NSAIDS',
+      ));
+    }
+
+    if (lower.contains('dolo') || lower.contains('crocin') || lower.contains('paracetamol') || lower.contains('tylenol')) {
+      drugs.add(ExtractedMedication(
+        brandName: lower.contains('dolo') ? 'Dolo 650mg' : 'Paracetamol 500mg',
+        activeIngredient: 'Acetaminophen',
+        dosage: extractDose(rawText, lower.contains('dolo') ? '650mg' : '500mg'),
+        frequency: extractFreq(rawText, 'TID'),
+        duration: extractDur(rawText) ?? '3 days',
+        rawText: 'Dolo 650mg TDS PRN',
+        confidence: 0.97,
+      ));
+    }
+
+    if (lower.contains('pantocid') || lower.contains('pantop') || lower.contains('protonix') || lower.contains('pantoprazole')) {
+      drugs.add(ExtractedMedication(
+        brandName: 'Pantocid 40mg',
+        activeIngredient: 'Pantoprazole',
+        dosage: extractDose(rawText, '40mg'),
+        frequency: extractFreq(rawText, 'QD'),
+        duration: extractDur(rawText) ?? '14 days',
+        rawText: 'Tab Pantocid 40mg OD before food',
+        confidence: 0.96,
+      ));
+    }
+
+    if (lower.contains('azithral') || lower.contains('zithromax') || lower.contains('azithromycin')) {
+      drugs.add(ExtractedMedication(
+        brandName: 'Azithral 500mg',
+        activeIngredient: 'Azithromycin',
+        dosage: extractDose(rawText, '500mg'),
+        frequency: extractFreq(rawText, 'QD'),
+        duration: extractDur(rawText) ?? '3 days',
+        rawText: 'Tab Azithral 500mg OD 3 days',
+        confidence: 0.96,
+        allergenGroup: 'MACROLIDES',
       ));
     }
 
@@ -302,19 +419,6 @@ class RxSentinelService {
         duration: extractDur(rawText),
         rawText: 'Nitroglycerin 0.4mg SL PRN',
         confidence: 0.98,
-      ));
-    }
-
-    if (drugs.isEmpty) {
-      drugs.add(const ExtractedMedication(
-        brandName: 'Amoxicillin 500mg',
-        activeIngredient: 'Amoxicillin',
-        dosage: '500mg',
-        frequency: 'TID',
-        duration: '5 days',
-        rawText: 'Amoxicillin 500mg TID 5 days',
-        confidence: 0.92,
-        allergenGroup: 'PENICILLINS',
       ));
     }
 

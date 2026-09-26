@@ -2,15 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/medication_entity.dart';
 
-class PrescriptionReviewModal extends StatelessWidget {
+class PrescriptionReviewModal extends StatefulWidget {
   final RxScanSummary summary;
   final VoidCallback? onConfirm;
+  final void Function(List<ExtractedMedication> confirmedDrugs)? onConfirmWithDrugs;
   final VoidCallback? onDiscard;
 
   const PrescriptionReviewModal({
     super.key,
     required this.summary,
     this.onConfirm,
+    this.onConfirmWithDrugs,
     this.onDiscard,
   });
 
@@ -18,6 +20,7 @@ class PrescriptionReviewModal extends StatelessWidget {
     BuildContext context, {
     required RxScanSummary summary,
     VoidCallback? onConfirm,
+    void Function(List<ExtractedMedication> confirmedDrugs)? onConfirmWithDrugs,
     VoidCallback? onDiscard,
   }) async {
     debugPrint('[PrescriptionReviewModal] Opening modal. Drugs: ${summary.extractedDrugs.length}, DDIs: ${summary.ddiWarnings.length}, Conflicts: ${summary.allergyConflicts.length}, SafetyConflict: ${summary.hasSafetyConflict}');
@@ -30,29 +33,186 @@ class PrescriptionReviewModal extends StatelessWidget {
       builder: (ctx) => PrescriptionReviewModal(
         summary: summary,
         onConfirm: onConfirm,
+        onConfirmWithDrugs: onConfirmWithDrugs,
         onDiscard: onDiscard,
       ),
     );
   }
 
+  @override
+  State<PrescriptionReviewModal> createState() => _PrescriptionReviewModalState();
+}
+
+class _PrescriptionReviewModalState extends State<PrescriptionReviewModal> {
+  late List<ExtractedMedication> _extractedDrugs;
+
+  @override
+  void initState() {
+    super.initState();
+    _extractedDrugs = List.from(widget.summary.extractedDrugs);
+  }
+
   Color _getStatusColor() {
-    if (summary.hasSafetyConflict) {
+    if (widget.summary.hasSafetyConflict) {
       return const Color(0xFFEF4444); // Red
     }
-    if (summary.ddiWarnings.any((d) => d.severity == DDISeverity.moderateMonitor)) {
+    if (widget.summary.ddiWarnings.any((d) => d.severity == DDISeverity.moderateMonitor)) {
       return const Color(0xFFF59E0B); // Amber
     }
     return const Color(0xFF10B981); // Green
   }
 
   String _getStatusTitle() {
-    if (summary.hasSafetyConflict) {
+    if (widget.summary.hasSafetyConflict) {
       return 'CONTRAINDICATED ALLERGY / DDI ALERT';
     }
-    if (summary.ddiWarnings.isNotEmpty) {
+    if (widget.summary.ddiWarnings.isNotEmpty) {
       return 'MODERATE INTERACTION WARNING';
     }
     return 'SAFE / CLEAR - NO ADVERSE INTERACTIONS';
+  }
+
+  void _showEditMedicationDialog({ExtractedMedication? existingMed, int? index}) {
+    final brandCtrl = TextEditingController(text: existingMed?.brandName ?? '');
+    final genericCtrl = TextEditingController(text: existingMed?.activeIngredient ?? '');
+    final dosageCtrl = TextEditingController(text: existingMed?.dosage ?? '500mg');
+    final freqCtrl = TextEditingController(text: existingMed?.frequency ?? '1-0-1');
+    final durationCtrl = TextEditingController(text: existingMed?.duration ?? '5 days');
+
+    final isEditing = existingMed != null;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(
+              isEditing ? Icons.edit_note : Icons.add_circle_outline,
+              color: const Color(0xFF0D9488),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              isEditing ? 'Edit Extracted Medicine' : 'Add Missing Medicine',
+              style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: brandCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Brand / Commercial Name',
+                  hintText: 'e.g. Augmentin 625mg',
+                  prefixIcon: Icon(Icons.medication_outlined, size: 20),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: genericCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Generic Active Ingredient',
+                  hintText: 'e.g. Amoxicillin-Clavulanate',
+                  prefixIcon: Icon(Icons.science_outlined, size: 20),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: dosageCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Dosage',
+                        hintText: 'e.g. 625mg',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: freqCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Frequency',
+                        hintText: 'e.g. 1-0-1 or TID',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: durationCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Duration',
+                  hintText: 'e.g. 7 days',
+                  prefixIcon: Icon(Icons.calendar_today_outlined, size: 20),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0D9488),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () {
+              final brand = brandCtrl.text.trim();
+              final generic = genericCtrl.text.trim();
+              if (brand.isEmpty) return;
+
+              final updated = ExtractedMedication(
+                brandName: brand,
+                activeIngredient: generic.isNotEmpty ? generic : brand,
+                dosage: dosageCtrl.text.trim().isNotEmpty ? dosageCtrl.text.trim() : 'Standard Dose',
+                frequency: freqCtrl.text.trim().isNotEmpty ? freqCtrl.text.trim() : 'QD',
+                duration: durationCtrl.text.trim().isNotEmpty ? durationCtrl.text.trim() : null,
+                rawText: '$brand ${dosageCtrl.text.trim()} ${freqCtrl.text.trim()}',
+                confidence: 1.0,
+                allergenGroup: existingMed?.allergenGroup,
+              );
+
+              setState(() {
+                if (isEditing && index != null) {
+                  _extractedDrugs[index] = updated;
+                } else {
+                  _extractedDrugs.add(updated);
+                }
+              });
+
+              Navigator.pop(ctx);
+            },
+            child: Text(isEditing ? 'Save Changes' : 'Add to Prescription'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _removeMedication(int index) {
+    if (index >= 0 && index < _extractedDrugs.length) {
+      final removed = _extractedDrugs[index];
+      setState(() {
+        _extractedDrugs.removeAt(index);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Removed ${removed.brandName}'),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
@@ -103,7 +263,7 @@ class PrescriptionReviewModal extends StatelessWidget {
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          summary.hasSafetyConflict
+                          widget.summary.hasSafetyConflict
                               ? Icons.warning_amber_rounded
                               : Icons.verified_user_outlined,
                           color: statusColor,
@@ -166,7 +326,7 @@ class PrescriptionReviewModal extends StatelessWidget {
                       Row(
                         children: [
                           Icon(
-                            summary.hasSafetyConflict
+                            widget.summary.hasSafetyConflict
                                 ? Icons.dangerous_outlined
                                 : Icons.check_circle_outline,
                             color: statusColor,
@@ -186,7 +346,7 @@ class PrescriptionReviewModal extends StatelessWidget {
                           ),
                         ],
                       ),
-                      if (summary.hasSafetyConflict) ...[
+                      if (widget.summary.hasSafetyConflict) ...[
                         const SizedBox(height: 8),
                         Text(
                           'CRITICAL WARNING: Adverse interaction or allergen cross-reactivity detected. Automatic copay review flagged for clinical pharmacist oversight before disbursement.',
@@ -209,10 +369,10 @@ class PrescriptionReviewModal extends StatelessWidget {
                 ),
 
                 // 2. Allergy Conflicts Section
-                if (summary.allergyConflicts.isNotEmpty) ...[
+                if (widget.summary.allergyConflicts.isNotEmpty) ...[
                   const SizedBox(height: 18),
                   Text(
-                    'ALLERGY CONFLICTS DETECTED (${summary.allergyConflicts.length})',
+                    'ALLERGY CONFLICTS DETECTED (${widget.summary.allergyConflicts.length})',
                     style: GoogleFonts.inter(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w800,
@@ -221,7 +381,7 @@ class PrescriptionReviewModal extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  ...summary.allergyConflicts.map(
+                  ...widget.summary.allergyConflicts.map(
                     (c) => Container(
                       margin: const EdgeInsets.only(bottom: 10),
                       padding: const EdgeInsets.all(14),
@@ -263,10 +423,10 @@ class PrescriptionReviewModal extends StatelessWidget {
                 ],
 
                 // 3. Drug-Drug Interactions Section
-                if (summary.ddiWarnings.isNotEmpty) ...[
+                if (widget.summary.ddiWarnings.isNotEmpty) ...[
                   const SizedBox(height: 18),
                   Text(
-                    'DRUG INTERACTIONS (${summary.ddiWarnings.length})',
+                    'DRUG INTERACTIONS (${widget.summary.ddiWarnings.length})',
                     style: GoogleFonts.inter(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w800,
@@ -275,7 +435,7 @@ class PrescriptionReviewModal extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  ...summary.ddiWarnings.map(
+                  ...widget.summary.ddiWarnings.map(
                     (d) {
                       final isSevere = d.severity == DDISeverity.contraindicatedSevere;
                       final cardColor = isSevere ? const Color(0xFFFEF2F2) : const Color(0xFFFFFBEB);
@@ -344,100 +504,148 @@ class PrescriptionReviewModal extends StatelessWidget {
                   ),
                 ],
 
-                // 4. Extracted Medication Line Items
+                // 4. Extracted Medication Line Items with Manual Edit & Delete
                 const SizedBox(height: 18),
-                Text(
-                  'EXTRACTED MEDICATIONS (${summary.extractedDrugs.length})',
-                  style: GoogleFonts.inter(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.grey[700],
-                    letterSpacing: 0.6,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'EXTRACTED MEDICATIONS (${_extractedDrugs.length})',
+                      style: GoogleFonts.inter(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.grey[700],
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF0D9488),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      icon: const Icon(Icons.add_circle_outline, size: 16),
+                      label: const Text('Add Missing', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      onPressed: () => _showEditMedicationDialog(),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
-                if (summary.extractedDrugs.isEmpty)
+                if (_extractedDrugs.isEmpty)
                   Container(
+                    width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: Colors.grey.withOpacity(0.08),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Text('No individual medications parsed from document.'),
+                    child: Column(
+                      children: [
+                        const Text(
+                          'No medications in review list.',
+                          style: TextStyle(color: Color(0xFF64748B)),
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.add, size: 16),
+                          label: const Text('Add Medication Manually'),
+                          onPressed: () => _showEditMedicationDialog(),
+                        ),
+                      ],
+                    ),
                   )
                 else
-                  ...summary.extractedDrugs.map(
-                    (med) => Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.withOpacity(0.2)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  med.brandName,
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                  overflow: TextOverflow.ellipsis,
+                  ..._extractedDrugs.asMap().entries.map(
+                    (entry) {
+                      final i = entry.key;
+                      final med = entry.value;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.withOpacity(0.2)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    med.brandName,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.blueGrey.withOpacity(0.12),
-                                  borderRadius: BorderRadius.circular(6),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blueGrey.withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    '${(med.confidence * 100).round()}% match',
+                                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+                                  ),
                                 ),
-                                child: Text(
-                                  '${(med.confidence * 100).round()}% match',
-                                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+                                const SizedBox(width: 4),
+                                IconButton(
+                                  icon: const Icon(Icons.edit_outlined, size: 18, color: Color(0xFF0D9488)),
+                                  tooltip: 'Edit Medication',
+                                  padding: const EdgeInsets.all(4),
+                                  constraints: const BoxConstraints(),
+                                  onPressed: () => _showEditMedicationDialog(existingMed: med, index: i),
                                 ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            'Active Ingredient: ${med.activeIngredient}',
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Theme.of(context).primaryColor,
-                              fontWeight: FontWeight.w600,
+                                const SizedBox(width: 4),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFEF4444)),
+                                  tooltip: 'Remove',
+                                  padding: const EdgeInsets.all(4),
+                                  constraints: const BoxConstraints(),
+                                  onPressed: () => _removeMedication(i),
+                                ),
+                              ],
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 4,
-                            children: [
-                              Chip(
-                                label: Text(med.dosage, style: const TextStyle(fontSize: 11)),
-                                visualDensity: VisualDensity.compact,
-                                padding: EdgeInsets.zero,
+                            const SizedBox(height: 3),
+                            Text(
+                              'Active Ingredient: ${med.activeIngredient}',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(context).primaryColor,
+                                fontWeight: FontWeight.w600,
                               ),
-                              Chip(
-                                label: Text(med.frequency, style: const TextStyle(fontSize: 11)),
-                                visualDensity: VisualDensity.compact,
-                                padding: EdgeInsets.zero,
-                              ),
-                              if (med.duration != null)
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 4,
+                              children: [
                                 Chip(
-                                  label: Text(med.duration!, style: const TextStyle(fontSize: 11)),
+                                  label: Text(med.dosage, style: const TextStyle(fontSize: 11)),
                                   visualDensity: VisualDensity.compact,
                                   padding: EdgeInsets.zero,
                                 ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
+                                Chip(
+                                  label: Text(med.frequency, style: const TextStyle(fontSize: 11)),
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                ),
+                                if (med.duration != null)
+                                  Chip(
+                                    label: Text(med.duration!, style: const TextStyle(fontSize: 11)),
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
               ],
             ),
@@ -461,7 +669,7 @@ class PrescriptionReviewModal extends StatelessWidget {
                     onPressed: () {
                       debugPrint('[PrescriptionReviewModal] Discard button clicked');
                       Navigator.of(context).pop();
-                      if (onDiscard != null) onDiscard!();
+                      if (widget.onDiscard != null) widget.onDiscard!();
                     },
                     child: const Text('Discard / Re-scan'),
                   ),
@@ -476,12 +684,17 @@ class PrescriptionReviewModal extends StatelessWidget {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     onPressed: () {
-                      debugPrint('[PrescriptionReviewModal] Confirm button clicked');
+                      debugPrint('[PrescriptionReviewModal] Confirm button clicked with ${_extractedDrugs.length} medications');
                       Navigator.of(context).pop();
-                      if (onConfirm != null) onConfirm!();
+                      if (widget.onConfirmWithDrugs != null) {
+                        widget.onConfirmWithDrugs!(_extractedDrugs);
+                      }
+                      if (widget.onConfirm != null) {
+                        widget.onConfirm!();
+                      }
                     },
                     child: Text(
-                      summary.hasSafetyConflict
+                      widget.summary.hasSafetyConflict
                           ? 'Acknowledge & Attach'
                           : 'Confirm & Attach',
                       style: const TextStyle(fontWeight: FontWeight.bold),

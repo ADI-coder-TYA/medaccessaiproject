@@ -174,6 +174,137 @@ void main() {
       expect(find.text('Acknowledge & Attach'), findsOneWidget);
       expect(find.byIcon(Icons.dangerous_outlined), findsOneWidget);
     });
+
+    testWidgets('Allows patient to manually edit extracted medicine details', (tester) async {
+      List<ExtractedMedication>? confirmed;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PrescriptionReviewModal(
+              summary: testSafeSummary,
+              onConfirmWithDrugs: (drugs) => confirmed = drugs,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Find first edit button
+      final editButtons = find.byIcon(Icons.edit_outlined);
+      expect(editButtons, findsWidgets);
+
+      // Tap edit on first medication (Amoxicillin 500mg)
+      await tester.tap(editButtons.first);
+      await tester.pumpAndSettle();
+
+      // Verify dialog is shown
+      expect(find.text('Edit Extracted Medicine'), findsOneWidget);
+      expect(find.text('Brand / Commercial Name'), findsOneWidget);
+
+      // Change dosage field from 500mg to 1000mg
+      final dosageField = find.widgetWithText(TextField, 'Dosage');
+      expect(dosageField, findsOneWidget);
+      await tester.enterText(dosageField, '1000mg');
+      await tester.pumpAndSettle();
+
+      // Tap Save Changes
+      await tester.tap(find.text('Save Changes'));
+      await tester.pumpAndSettle();
+
+      // Dialog is dismissed and new dosage is displayed
+      expect(find.text('Edit Extracted Medicine'), findsNothing);
+      expect(find.text('1000mg'), findsOneWidget);
+
+      // Tap Confirm & Attach
+      await tester.tap(find.text('Confirm & Attach'));
+      await tester.pumpAndSettle();
+
+      expect(confirmed, isNotNull);
+      expect(confirmed!.first.dosage, equals('1000mg'));
+    });
+
+    testWidgets('Allows patient to delete an extracted medication', (tester) async {
+      List<ExtractedMedication>? confirmed;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PrescriptionReviewModal(
+              summary: testSafeSummary,
+              onConfirmWithDrugs: (drugs) => confirmed = drugs,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('EXTRACTED MEDICATIONS (2)'), findsOneWidget);
+      final deleteButtons = find.byIcon(Icons.delete_outline);
+      expect(deleteButtons, findsNWidgets(2));
+
+      // Tap delete on first medication
+      await tester.tap(deleteButtons.first);
+      await tester.pumpAndSettle();
+
+      // Count decreased to 1 and Amoxicillin removed
+      expect(find.text('EXTRACTED MEDICATIONS (1)'), findsOneWidget);
+      expect(find.text('Amoxicillin 500mg'), findsNothing);
+      expect(find.text('Paracetamol 500mg'), findsOneWidget);
+
+      // Tap Confirm & Attach
+      await tester.tap(find.text('Confirm & Attach'));
+      await tester.pumpAndSettle();
+
+      expect(confirmed, isNotNull);
+      expect(confirmed!.length, equals(1));
+      expect(confirmed!.first.brandName, equals('Paracetamol 500mg'));
+    });
+
+    testWidgets('Allows patient to manually add a missing medication', (tester) async {
+      List<ExtractedMedication>? confirmed;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PrescriptionReviewModal(
+              summary: testSafeSummary,
+              onConfirmWithDrugs: (drugs) => confirmed = drugs,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Tap "Add Missing"
+      await tester.tap(find.text('Add Missing'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Add Missing Medicine'), findsOneWidget);
+
+      // Fill in medication details
+      final brandField = find.widgetWithText(TextField, 'Brand / Commercial Name');
+      await tester.enterText(brandField, 'Pantocid 40mg');
+      final genericField = find.widgetWithText(TextField, 'Generic Active Ingredient');
+      await tester.enterText(genericField, 'Pantoprazole');
+      await tester.pumpAndSettle();
+
+      // Tap Add to Prescription
+      await tester.tap(find.text('Add to Prescription'));
+      await tester.pumpAndSettle();
+
+      // Newly added medication appears in the list
+      expect(find.text('EXTRACTED MEDICATIONS (3)'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('Pantocid 40mg'), 200);
+      expect(find.text('Pantocid 40mg'), findsOneWidget);
+      expect(find.text('Active Ingredient: Pantoprazole'), findsOneWidget);
+
+      // Tap Confirm & Attach
+      await tester.tap(find.text('Confirm & Attach'));
+      await tester.pumpAndSettle();
+
+      expect(confirmed, isNotNull);
+      expect(confirmed!.length, equals(3));
+      expect(confirmed!.last.brandName, equals('Pantocid 40mg'));
+      expect(confirmed!.last.activeIngredient, equals('Pantoprazole'));
+    });
   });
 
   group('PatientAllergyProfileScreen Widget Tests', () {

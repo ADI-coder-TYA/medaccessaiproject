@@ -223,6 +223,32 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('Medication Safety Check'), findsOneWidget);
     });
+
+    testWidgets('Demo Slip scan opens modal and Confirm & Attach adds medicines to roster', (tester) async {
+      await tester.pumpWidget(buildTestScreen(initialMeds: [], initialAllergies: []));
+      await tester.pumpAndSettle();
+
+      expect(find.text('0 in DB'), findsOneWidget);
+
+      // Tap Demo Slip
+      final demoBtn = find.text('Demo Slip');
+      expect(demoBtn, findsOneWidget);
+      await tester.tap(demoBtn);
+      await tester.pumpAndSettle();
+
+      // Modal appears
+      expect(find.text('Prescription Safety Review'), findsOneWidget);
+      expect(find.text('Acknowledge & Attach'), findsOneWidget);
+
+      // Tap Confirm / Acknowledge & Attach
+      await tester.tap(find.text('Acknowledge & Attach'));
+      await tester.pumpAndSettle();
+
+      // Modal dismissed and medicines added to active roster
+      expect(find.text('Prescription Safety Review'), findsNothing);
+      expect(find.text('Augmentin 625mg'), findsOneWidget);
+      expect(find.textContaining('Amoxicillin-Clavulanate'), findsOneWidget);
+    });
   });
 
   group('PrescriptionReviewModal Tests & Overflow Prevention', () {

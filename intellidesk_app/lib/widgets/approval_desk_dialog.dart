@@ -7,11 +7,13 @@ import '../utils/currency_formatter.dart';
 class ApprovalDeskDialog extends StatefulWidget {
   final Ticket ticket;
   final Function(String method, double amount, String ref)? onDisbursed;
+  final bool initialShowReceipt;
 
   const ApprovalDeskDialog({
     super.key,
     required this.ticket,
     this.onDisbursed,
+    this.initialShowReceipt = false,
   });
 
   @override
@@ -59,6 +61,28 @@ class _ApprovalDeskDialogState extends State<ApprovalDeskDialog> {
     _accountNumberController = TextEditingController(text: '999900001111');
     _ifscController = TextEditingController(text: 'HDFC0001234');
     _campusCardController = TextEditingController(text: 'CC-${cleanPhone.isNotEmpty ? cleanPhone.substring(cleanPhone.length > 6 ? cleanPhone.length - 6 : 0) : "882194"}');
+
+    final isAlreadyApproved = widget.ticket.status == 'Approved' || widget.ticket.status == 'Resolved';
+    if (widget.initialShowReceipt || isAlreadyApproved) {
+      final payoutMethod = widget.ticket.payoutMethod ?? _selectedPayoutMethod;
+      _selectedPayoutMethod = payoutMethod;
+      final grantAmt = widget.ticket.recommendedGrantAmount ?? widget.ticket.calculatedAmount;
+      final ref = widget.ticket.payoutReference ?? widget.ticket.voucherCode ?? 'POUT-CONFIRMED-${widget.ticket.id}';
+
+      debugPrint('[ApprovalDeskDialog] Initialized in Receipt Mode for Ticket: ${widget.ticket.id} | Status: ${widget.ticket.status} | Ref: $ref | Amount: $grantAmt | Rail: $payoutMethod | Currency: ${widget.ticket.currency}');
+
+      _successReceipt = {
+        'transactionReference': ref,
+        'payoutReference': ref,
+        'grantAmount': grantAmt > 0 ? grantAmt : 0.0,
+        'fundName': widget.ticket.fundSourceName ?? 'General Student Relief Fund',
+        'voucherCode': widget.ticket.voucherCode,
+        'payoutMethod': payoutMethod,
+        'isLiveRecord': true,
+      };
+    } else {
+      debugPrint('[ApprovalDeskDialog] Initialized in Disbursement Input Mode for Ticket: ${widget.ticket.id} | Status: ${widget.ticket.status} | Requested Amount: $requestedAmount');
+    }
   }
 
   @override
@@ -92,6 +116,7 @@ class _ApprovalDeskDialogState extends State<ApprovalDeskDialog> {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     
     try {
+      debugPrint('[ApprovalDeskDialog] Processing approval for Ticket ID: ${widget.ticket.id} | Amount: $parsedAmount | Method: $_selectedPayoutMethod');
       final res = await context.read<TicketProvider>().approveTicket(
         widget.ticket.id,
         amount: parsedAmount,
@@ -103,6 +128,7 @@ class _ApprovalDeskDialogState extends State<ApprovalDeskDialog> {
       );
 
       final transactionRef = res['transactionReference'] ?? res['payoutReference'] ?? res['voucherCode'] ?? 'POUT-CONFIRMED';
+      debugPrint('[ApprovalDeskDialog] Disbursement Confirmed | Ticket ID: ${widget.ticket.id} | Ref: $transactionRef');
       
       if (mounted) {
         setState(() {
@@ -130,6 +156,7 @@ class _ApprovalDeskDialogState extends State<ApprovalDeskDialog> {
         ),
       );
     } catch (e) {
+      debugPrint('[ApprovalDeskDialog] Payout Execution Failed | Ticket ID: ${widget.ticket.id} | Error: $e');
       if (mounted) setState(() => _isProcessing = false);
       scaffoldMessenger.showSnackBar(
         SnackBar(
@@ -151,6 +178,7 @@ class _ApprovalDeskDialogState extends State<ApprovalDeskDialog> {
       return;
     }
     
+    debugPrint('[ApprovalDeskDialog] Escalating/Denying Ticket ID: ${widget.ticket.id} | Notes: ${_notesController.text.trim()}');
     setState(() => _isProcessing = true);
     try {
       await context.read<TicketProvider>().denyTicket(
@@ -185,6 +213,8 @@ class _ApprovalDeskDialogState extends State<ApprovalDeskDialog> {
         return 'Campus Digital Voucher';
       case 'EMERGENCY_DEBIT':
         return 'Relief Debit Card';
+      case 'STRIPE_ACH':
+        return 'Direct Bank Transfer (ACH / SEPA)';
       default:
         return method;
     }
@@ -327,10 +357,15 @@ class _ApprovalDeskDialogState extends State<ApprovalDeskDialog> {
 
   Widget _buildSuccessView(BuildContext context) {
     final ref = _successReceipt!['transactionReference'] ?? _successReceipt!['payoutReference'] ?? _successReceipt!['voucherCode'] ?? 'SUCCESS';
-    final amount = _successReceipt!['grantAmount'] ?? _amountController.text;
-    final fund = _successReceipt!['fundName'] ?? 'General Student Relief Fund';
-    final method = _getPayoutTitle(_selectedPayoutMethod);
-    final voucherCode = _successReceipt!['voucherCode'];
+    final rawAmount = _successReceipt!['grantAmount'];
+    final num amountNum = (rawAmount is num)
+        ? rawAmount
+        : (double.tryParse(rawAmount?.toString() ?? '') ?? double.tryParse(_amountController.text) ?? 0.0);
+    final fund = _successReceipt!['fundName'] ?? widget.ticket.fundSourceName ?? 'General Student Relief Fund';
+    final payoutMethod = _successReceipt!['payoutMethod'] ?? widget.ticket.payoutMethod ?? _selectedPayoutMethod;
+    final method = _getPayoutTitle(payoutMethod.toString());
+    final voucherCode = _successReceipt!['voucherCode'] ?? widget.ticket.voucherCode;
+    final isLiveRecord = _successReceipt!['isLiveRecord'] == true;
 
     return Center(
       child: SingleChildScrollView(
@@ -353,26 +388,39 @@ class _ApprovalDeskDialogState extends State<ApprovalDeskDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFECFDF5),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 36),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const SizedBox(width: 28),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFECFDF5),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 36),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Color(0xFF1F1B2C), size: 20),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
               ),
               const SizedBox(height: 10),
-              const Text(
-                'Disbursement Successful!',
-                style: TextStyle(
+              Text(
+                isLiveRecord ? 'Live Disbursement Receipt' : 'Disbursement Successful!',
+                style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
                   color: Color(0xFF1F1B2C),
                 ),
+                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 4),
               Text(
-                'Grant funds have been released and transaction confirmed.',
+                isLiveRecord
+                    ? 'Official institutional grant disbursement record on live ledger.'
+                    : 'Grant funds have been released and transaction confirmed.',
                 style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                 textAlign: TextAlign.center,
               ),
@@ -391,8 +439,8 @@ class _ApprovalDeskDialogState extends State<ApprovalDeskDialog> {
                     _buildSuccessRow(
                       'Disbursed Amount',
                       CurrencyFormatter.format(
-                        amount,
-                        currency: _selectedPayoutMethod == 'STRIPE_ACH' ? 'USD' : (_selectedPayoutMethod.startsWith('RAZORPAY') ? 'INR' : widget.ticket.currency),
+                        amountNum,
+                        currency: payoutMethod == 'STRIPE_ACH' ? 'USD' : (payoutMethod.toString().startsWith('RAZORPAY') ? 'INR' : widget.ticket.currency),
                         decimalDigits: 2,
                       ),
                       isHighlight: true,
@@ -401,7 +449,7 @@ class _ApprovalDeskDialogState extends State<ApprovalDeskDialog> {
                     _buildSuccessRow('Disbursement Rail', method),
                     const Divider(height: 14),
                     _buildSuccessRow('Transaction Reference', '$ref', isMono: true),
-                    if (voucherCode != null) ...[
+                    if (voucherCode != null && voucherCode.toString().isNotEmpty) ...[
                       const Divider(height: 14),
                       _buildSuccessRow('Voucher Code', '$voucherCode', isHighlight: true, isMono: true),
                     ],
@@ -450,10 +498,18 @@ class _ApprovalDeskDialogState extends State<ApprovalDeskDialog> {
   Widget _buildSuccessRow(String label, String value, {bool isHighlight = false, bool isMono = false}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+        Flexible(
+          flex: 4,
+          child: Text(
+            label,
+            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+          ),
+        ),
         const SizedBox(width: 8),
         Flexible(
+          flex: 6,
           child: Text(
             value,
             textAlign: TextAlign.end,
@@ -802,9 +858,14 @@ class _ApprovalDeskDialogState extends State<ApprovalDeskDialog> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Settlement Rail:', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-                    Text(
-                      _getPayoutTitle(widget.ticket.payoutMethod ?? "RAZORPAY_UPI"),
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        _getPayoutTitle(widget.ticket.payoutMethod ?? "RAZORPAY_UPI"),
+                        textAlign: TextAlign.end,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                      ),
                     ),
                   ],
                 ),
@@ -813,9 +874,14 @@ class _ApprovalDeskDialogState extends State<ApprovalDeskDialog> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Transaction Ref:', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-                    Text(
-                      widget.ticket.payoutReference ?? widget.ticket.voucherCode ?? "TXN_MED_CONFIRMED",
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'monospace', color: Color(0xFF334155)),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        widget.ticket.payoutReference ?? widget.ticket.voucherCode ?? "TXN_MED_CONFIRMED",
+                        textAlign: TextAlign.end,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'monospace', color: Color(0xFF334155)),
+                      ),
                     ),
                   ],
                 ),

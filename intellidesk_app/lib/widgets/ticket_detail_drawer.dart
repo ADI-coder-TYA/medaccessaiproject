@@ -112,7 +112,10 @@ class TicketDetailDrawer extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 8,
+                          runSpacing: 4,
                           children: [
                             const Text(
                               'Claim Adjudication',
@@ -123,7 +126,6 @@ class TicketDetailDrawer extends StatelessWidget {
                                 letterSpacing: -0.4,
                               ),
                             ),
-                            const SizedBox(width: 8),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(
@@ -336,12 +338,15 @@ class TicketDetailDrawer extends StatelessWidget {
                               child: const Icon(Icons.account_balance_wallet, color: Color(0xFF10B981), size: 20),
                             ),
                             const SizedBox(width: 12),
-                            const Text(
-                              'Copay & Relief Allocation',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                                color: Color(0xFF1F1B2C),
+                            const Expanded(
+                              child: Text(
+                                'Copay & Relief Allocation',
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                  color: Color(0xFF1F1B2C),
+                                ),
                               ),
                             ),
                           ],
@@ -352,40 +357,58 @@ class TicketDetailDrawer extends StatelessWidget {
                         ),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Incurred Bill Amount',
-                                  style: TextStyle(fontSize: 12, color: const Color(0xFF1F1B2C).withValues(alpha: 0.5)),
-                                ),
-                                Text(
-                                  CurrencyFormatter.format(ticket.calculatedAmount, currency: ticket.currency, decimalDigits: 2),
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF64748B),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Incurred Bill Amount',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontSize: 12, color: const Color(0xFF1F1B2C).withValues(alpha: 0.5)),
                                   ),
-                                ),
-                              ],
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      CurrencyFormatter.format(ticket.calculatedAmount, currency: ticket.currency, decimalDigits: 2),
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF64748B),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  'AI Approved Copay Relief',
-                                  style: TextStyle(fontSize: 12, color: const Color(0xFF1F1B2C).withValues(alpha: 0.5)),
-                                ),
-                                Text(
-                                  CurrencyFormatter.format(ticket.recommendedGrantAmount ?? ticket.calculatedAmount, currency: ticket.currency, decimalDigits: 2),
-                                  style: const TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w800,
-                                    color: Color(0xFF059669),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    'AI Approved Copay Relief',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontSize: 12, color: const Color(0xFF1F1B2C).withValues(alpha: 0.5)),
                                   ),
-                                ),
-                              ],
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerRight,
+                                    child: Text(
+                                      CurrencyFormatter.format(ticket.recommendedGrantAmount ?? ticket.calculatedAmount, currency: ticket.currency, decimalDigits: 2),
+                                      style: const TextStyle(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF059669),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),
@@ -772,10 +795,14 @@ class TicketDetailDrawer extends StatelessWidget {
                     ),
                     BoutiqueButton(
                       onPressed: () {
+                        debugPrint('[TicketDetailDrawer] "View Live Disbursement Receipt" tapped | Ticket ID: ${ticket.id} | Status: ${ticket.status} | Amount: ${ticket.recommendedGrantAmount ?? ticket.calculatedAmount} | PayoutRef: ${ticket.payoutReference}');
                         Navigator.of(context).pop();
                         showDialog(
                           context: context,
-                          builder: (ctx) => ApprovalDeskDialog(ticket: ticket),
+                          builder: (ctx) => ApprovalDeskDialog(
+                            ticket: ticket,
+                            initialShowReceipt: true,
+                          ),
                         );
                       },
                       child: Container(
@@ -798,9 +825,12 @@ class TicketDetailDrawer extends StatelessWidget {
                           children: [
                             Icon(Icons.receipt_long, color: Colors.white, size: 20),
                             SizedBox(width: 8),
-                            Text(
-                              'View Live Disbursement Receipt & Audit',
-                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                            Flexible(
+                              child: Text(
+                                'View Live Disbursement Receipt',
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
                             ),
                           ],
                         ),
@@ -809,10 +839,14 @@ class TicketDetailDrawer extends StatelessWidget {
                   ] else ...[
                     BoutiqueButton(
                       onPressed: () {
+                        debugPrint('[TicketDetailDrawer] "Confirm AI Decision & Open Payment Desk" tapped | Ticket ID: ${ticket.id}');
                         Navigator.of(context).pop();
                         showDialog(
                           context: context,
-                          builder: (ctx) => ApprovalDeskDialog(ticket: ticket),
+                          builder: (ctx) => ApprovalDeskDialog(
+                            ticket: ticket,
+                            initialShowReceipt: false,
+                          ),
                         );
                       },
                       child: Container(
@@ -835,9 +869,12 @@ class TicketDetailDrawer extends StatelessWidget {
                           children: [
                             Icon(Icons.check_circle, color: Colors.white, size: 20),
                             SizedBox(width: 8),
-                            Text(
-                              'Confirm AI Decision & Open Payment Desk',
-                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                            Flexible(
+                              child: Text(
+                                'Confirm AI Decision & Open Payment Desk',
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
                             ),
                           ],
                         ),
@@ -846,10 +883,14 @@ class TicketDetailDrawer extends StatelessWidget {
                     const SizedBox(height: 10),
                     BoutiqueButton(
                       onPressed: () {
+                        debugPrint('[TicketDetailDrawer] "Override & Custom Approve" tapped | Ticket ID: ${ticket.id}');
                         Navigator.of(context).pop();
                         showDialog(
                           context: context,
-                          builder: (ctx) => ApprovalDeskDialog(ticket: ticket),
+                          builder: (ctx) => ApprovalDeskDialog(
+                            ticket: ticket,
+                            initialShowReceipt: false,
+                          ),
                         );
                       },
                       child: Container(
@@ -864,9 +905,12 @@ class TicketDetailDrawer extends StatelessWidget {
                           children: [
                             Icon(Icons.edit_note, color: Color(0xFF1F1B2C), size: 20),
                             SizedBox(width: 8),
-                            Text(
-                              'Override & Custom Approve',
-                              style: TextStyle(color: Color(0xFF1F1B2C), fontWeight: FontWeight.bold, fontSize: 14),
+                            Flexible(
+                              child: Text(
+                                'Override & Custom Approve',
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(color: Color(0xFF1F1B2C), fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
                             ),
                           ],
                         ),
@@ -875,6 +919,7 @@ class TicketDetailDrawer extends StatelessWidget {
                     const SizedBox(height: 8),
                     BoutiqueButton(
                       onPressed: () {
+                        debugPrint('[TicketDetailDrawer] "Escalate to Clinical Board" tapped | Ticket ID: ${ticket.id}');
                         context.read<TicketProvider>().denyTicket(ticket.id, notes: 'Escalated to Clinical Medical Board');
                         Navigator.of(context).pop();
                       },
@@ -885,9 +930,12 @@ class TicketDetailDrawer extends StatelessWidget {
                           children: [
                             Icon(Icons.arrow_upward, color: Color(0xFFEE4D9F), size: 18),
                             SizedBox(width: 6),
-                            Text(
-                              'Escalate to Clinical Board',
-                              style: TextStyle(color: Color(0xFFEE4D9F), fontWeight: FontWeight.bold, fontSize: 14),
+                            Flexible(
+                              child: Text(
+                                'Escalate to Clinical Board',
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(color: Color(0xFFEE4D9F), fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
                             ),
                           ],
                         ),

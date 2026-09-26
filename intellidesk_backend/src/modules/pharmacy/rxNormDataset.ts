@@ -137,6 +137,26 @@ export const ALLERGEN_CROSS_REACTIVITY_MAP: Record<AllergenGroup, string[]> = {
     'rosuvastatin',
     'crestor',
     'pravastatin'
+  ],
+  ACE_INHIBITORS: [
+    'lisinopril',
+    'prinivil',
+    'zestril',
+    'enalapril',
+    'vasotec',
+    'ramipril',
+    'altace',
+    'captopril',
+    'benazepril'
+  ],
+  FLUOROQUINOLONES: [
+    'ciprofloxacin',
+    'cipro',
+    'levofloxacin',
+    'levaquin',
+    'moxifloxacin',
+    'avelox',
+    'ofloxacin'
   ]
 };
 

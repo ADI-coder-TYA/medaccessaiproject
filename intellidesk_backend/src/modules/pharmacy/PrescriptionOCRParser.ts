@@ -186,23 +186,28 @@ export function parseMedicationLine(rawLine: string): ExtractedMedication | null
   const dosageMatch = line.match(dosageRegex);
   const dosage = dosageMatch ? dosageMatch[1].replace(/\s+/g, '') : '';
 
-  // 2. Extract Frequency (e.g., BID, TID, QD, QID, 1-0-1, 1-1-1, once daily, PRN)
-  const freqRegex = /\b(1-0-1|1-1-1|0-0-1|1-0-0|0-1-0|BID|TID|QID|QD|QAM|QPM|QHS|PRN|STAT|ONCE\s+DAILY|TWICE\s+DAILY|THRICE\s+DAILY|EVERY\s+\d+\s*(?:HOURS|HRS)|Q\d+H|DAILY)\b/i;
+  // 2. Extract Frequency (e.g., BID, B.I.D., TID, T.I.D., QD, Q.D., QID, 1-0-1, 1-1-1, 1-0-0-1, once daily, PRN)
+  const freqRegex = /\b(1-0-1-1|1-0-0-1|1-1-1-1|1-0-1|1-1-1|0-0-1|1-0-0|0-1-0|0-1-1|1-1-0|B\.?I\.?D\.?|T\.?I\.?D\.?|Q\.?I\.?D\.?|Q\.?D\.?|QAM|QPM|QHS|P\.?R\.?N\.?|STAT|ONCE\s+DAILY|TWICE\s+DAILY|THRICE\s+DAILY|EVERY\s+\d+\s*(?:HOURS|HRS)|Q\d+H|DAILY)\b/i;
   const freqMatch = line.match(freqRegex);
-  const frequency = freqMatch ? freqMatch[1].toUpperCase() : 'QD';
+  const frequency = freqMatch ? freqMatch[1].toUpperCase().replace(/\./g, '') : 'QD';
 
   // 3. Extract Duration (e.g., for 5 days, 5 days, 10 d, 2 weeks)
   const durationRegex = /\b(?:FOR\s+)?(\d+\s*(?:DAYS|DAY|WEEKS|WEEK|MONTHS|MONTH|D|W))\b/i;
   const durationMatch = line.match(durationRegex);
   const duration = durationMatch ? durationMatch[1] : undefined;
 
-  // 4. Extract Drug Name Candidate
-  // Clean line of matched dosage, frequency, duration, and common prefix symbols
+  // 4. Extract Route (e.g., PO, P.O., IV, IM, SC, SL, oral)
+  const routeRegex = /\b(?:PO|P\.O\.|IV|I\.V\.|IM|I\.M\.|SC|SubQ|SL|oral|orally)\b/gi;
+
+  // 5. Extract Drug Name Candidate
+  // Clean line of item numbering (1., 2), #1), matched dosage, frequency, route, duration, and common prefix symbols
   let cleanedDrugCandidate = line
+    .replace(/^(?:\d+[\.\)\-\:]\s*|#\d+\s*)/, '') // Strip item numbering: 1., 2), #1
     .replace(/^(?:Rx|Tab\.?|Tablet|Cap\.?|Capsule|Syp\.?|Syrup|Inj\.?|Injection|Drop|Drops)\s+/i, '')
     .replace(dosageRegex, '')
     .replace(freqRegex, '')
     .replace(durationRegex, '')
+    .replace(routeRegex, '')
     .replace(/[-–—,:;()#*]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -213,7 +218,7 @@ export function parseMedicationLine(rawLine: string): ExtractedMedication | null
 
   const candidate = words.slice(0, 3).join(' ');
 
-  // 5. Fuzzy match against RxNorm dataset
+  // 6. Fuzzy match against RxNorm dataset
   const matchResult = findBestRxNormMatch(candidate, 0.75);
 
   return {

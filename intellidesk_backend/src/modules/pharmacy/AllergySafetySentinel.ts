@@ -27,13 +27,28 @@ export class AllergySafetySentinel {
         const rawGroup = (allergy.allergenGroup || '').toUpperCase().trim();
         const reaction = allergy.reactionDescription || 'Known Hypersensitivity';
 
-        // Check if rawGroup is one of our mapped AllergenGroups
-        let cleanGroup = rawGroup.replace(/[^A-Z]/g, '');
-        if (cleanGroup === 'SULFONAMIDE') cleanGroup = 'SULFONAMIDES';
-        if (cleanGroup === 'PENICILLIN') cleanGroup = 'PENICILLINS';
-        const normalizedGroup = cleanGroup as AllergenGroup;
-        const crossReactivityList = ALLERGEN_CROSS_REACTIVITY_MAP[normalizedGroup] ||
-          (cleanGroup === 'SULFONAMIDES' ? ALLERGEN_CROSS_REACTIVITY_MAP['SULFA'] : []);
+        // Normalize allergen group from compound string (e.g. "Penicillin Allergy", "Sulfa Drugs", "NSAIDs")
+        let normalizedGroup: AllergenGroup | null = null;
+        if (rawGroup.includes('PENICILLIN')) normalizedGroup = 'PENICILLINS';
+        else if (rawGroup.includes('SULFA') || rawGroup.includes('SULFONAMIDE')) normalizedGroup = 'SULFA';
+        else if (rawGroup.includes('NSAID')) normalizedGroup = 'NSAIDS';
+        else if (rawGroup.includes('OPIOID')) normalizedGroup = 'OPIOIDS';
+        else if (rawGroup.includes('CEPHALOSPORIN')) normalizedGroup = 'CEPHALOSPORINS';
+        else if (rawGroup.includes('STATIN')) normalizedGroup = 'STATINS';
+        else if (rawGroup.includes('ACE_INHIBITOR') || rawGroup.includes('ACE INHIBITOR')) normalizedGroup = 'ACE_INHIBITORS';
+        else if (rawGroup.includes('MACROLIDE')) normalizedGroup = 'MACROLIDES';
+        else if (rawGroup.includes('FLUOROQUINOLONE') || rawGroup.includes('QUINOLONE')) normalizedGroup = 'FLUOROQUINOLONES';
+        else if (rawGroup.includes('TETRACYCLINE')) normalizedGroup = 'TETRACYCLINES';
+        else {
+          let clean = rawGroup.replace(/[^A-Z]/g, '');
+          if (clean === 'SULFONAMIDE' || clean === 'SULFONAMIDES') clean = 'SULFA';
+          if (clean === 'PENICILLIN') clean = 'PENICILLINS';
+          if (ALLERGEN_CROSS_REACTIVITY_MAP[clean as AllergenGroup]) {
+            normalizedGroup = clean as AllergenGroup;
+          }
+        }
+
+        const crossReactivityList = normalizedGroup ? (ALLERGEN_CROSS_REACTIVITY_MAP[normalizedGroup] || []) : [];
 
         // 1. Direct cross-reactivity list check
         const isCrossReactive = crossReactivityList.some(child => 
@@ -43,10 +58,13 @@ export class AllergySafetySentinel {
 
         // 2. Direct name matching against allergen description or group name
         const groupLower = rawGroup.toLowerCase();
-        const isDirectGroupMatch = activeIng.includes(groupLower) || groupLower.includes(activeIng);
+        const isDirectGroupMatch = groupLower.length > 2 && (
+          activeIng.includes(groupLower) || groupLower.includes(activeIng) ||
+          matchedTerm.includes(groupLower) || groupLower.includes(matchedTerm)
+        );
 
         // 3. Tagged concept allergenGroup match
-        const isConceptGroupMatch = match.concept?.allergenGroup === normalizedGroup;
+        const isConceptGroupMatch = normalizedGroup ? (match.concept?.allergenGroup === normalizedGroup) : false;
 
         if (isCrossReactive || isDirectGroupMatch || isConceptGroupMatch) {
           const conflictKey = `${normalizedGroup}::${match.activeIngredient}`.toLowerCase();

@@ -50,13 +50,27 @@ pharmacyRouter.post(
         });
       }
 
-      const activeMeds = activeMedicationsOverride
-        ? (Array.isArray(activeMedicationsOverride) ? activeMedicationsOverride : [activeMedicationsOverride])
-        : undefined;
+      const parseList = (val: any): string[] | undefined => {
+        if (!val) return undefined;
+        if (Array.isArray(val)) return val.map(String).filter(Boolean);
+        if (typeof val === 'string') {
+          const trimmed = val.trim();
+          if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+            try {
+              const parsed = JSON.parse(trimmed);
+              if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
+            } catch (_) {}
+          }
+          if (trimmed.includes(',')) {
+            return trimmed.split(',').map(s => s.trim()).filter(Boolean);
+          }
+          return [trimmed];
+        }
+        return undefined;
+      };
 
-      const allergies = allergiesOverride
-        ? (Array.isArray(allergiesOverride) ? allergiesOverride : [allergiesOverride])
-        : undefined;
+      const activeMeds = parseList(activeMedicationsOverride);
+      const allergies = parseList(allergiesOverride);
 
       const summary = await RxSentinelService.analyzePrescription({
         input,

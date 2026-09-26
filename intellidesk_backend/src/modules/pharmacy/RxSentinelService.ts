@@ -98,4 +98,47 @@ export class RxSentinelService {
     const saved = await PharmacyDbService.savePrescriptionScan(summary);
     return saved;
   }
+
+  /**
+   * Technical Guardrail: Admin Clinical Assessment
+   * Assembles the complete patient pharmacy dossier: active medications, recorded allergies,
+   * prescription scans, and live pairwise DDI + cross-allergen safety evaluations.
+   */
+  public static async getPatientFullPharmacyProfile(patientId: string) {
+    const [medications, allergies, prescriptions] = await Promise.all([
+      PharmacyDbService.getPatientMedications(patientId, true),
+      PharmacyDbService.getPatientAllergies(patientId),
+      PharmacyDbService.getPatientPrescriptionScans(patientId)
+    ]);
+
+    const activeIngredients = medications.map(m => m.activeIngredient);
+
+    // Evaluate pairwise DDIs across all active medications
+    const ddiWarnings = DrugInteractionEngine.evaluateInteractions(
+      activeIngredients,
+      activeIngredients
+    );
+
+    // Evaluate drug-allergy contraindications across all active medications
+    const allergyConflicts = AllergySafetySentinel.evaluateAllergies(
+      activeIngredients,
+      allergies
+    );
+
+    const hasSevereDDI = ddiWarnings.some(d => d.severity === 'CONTRAINDICATED_SEVERE');
+    const hasAllergyConflict = allergyConflicts.length > 0;
+    const hasSafetyConflict = hasSevereDDI || hasAllergyConflict;
+
+    return {
+      patientId,
+      medications,
+      allergies,
+      prescriptions,
+      ddiWarnings,
+      allergyConflicts,
+      hasSafetyConflict,
+      requiresPharmacistReview: hasSafetyConflict
+    };
+  }
 }
+

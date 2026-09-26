@@ -165,66 +165,264 @@ export async function extractRawPrescriptionText(input: Buffer | string): Promis
 }
 
 /**
+ * Common medical, institutional, and clinical non-drug stop words.
+ * Any candidate matching these will be rejected immediately.
+ */
+export const COMMON_MEDICAL_STOP_WORDS = new Set([
+  'fever', 'cough', 'cold', 'headache', 'pain', 'chest pain', 'back pain', 'body ache',
+  'hypertension', 'htn', 'diabetes', 'dm', 't2dm', 't1dm', 'asthma', 'copd', 'bronchitis',
+  'pneumonia', 'infection', 'uti', 'vomiting', 'nausea', 'diarrhea', 'constipation',
+  'acidity', 'gastritis', 'gerd', 'ulcer', 'rash', 'allergy', 'itching', 'swelling',
+  'edema', 'weakness', 'fatigue', 'dizziness', 'vertigo', 'insomnia', 'migraine',
+  'sinusitis', 'pharyngitis', 'tonsillitis', 'arthritis', 'spondylitis',
+  'doctor', 'dr', 'physician', 'patient', 'hospital', 'clinic', 'center', 'centre',
+  'address', 'street', 'road', 'floor', 'suite', 'block', 'sector', 'pin', 'zip',
+  'date', 'time', 'male', 'female', 'years', 'yrs', 'age', 'sex', 'gender',
+  'vitals', 'pulse', 'temp', 'temperature', 'blood', 'pressure', 'weight', 'height', 'bmi',
+  'diagnosis', 'provisional', 'complaint', 'complaints', 'history', 'findings', 'impression',
+  'investigation', 'investigations', 'tests', 'lab', 'xray', 'ecg', 'echo', 'usg',
+  'advice', 'review', 'follow', 'visit', 'referral', 'signature', 'sign', 'seal', 'stamp',
+  'morning', 'evening', 'night', 'afternoon', 'food', 'meals', 'water', 'bedtime',
+  'tablets', 'capsules', 'syrup', 'injection', 'drops', 'ointment', 'cream', 'rx', 'take'
+]);
+
+/**
+ * Known oral solid dosage strengths (mg) commonly written without explicit unit.
+ * Used to safely contextualize "Augmentin 625" or "Dolo 650" without capturing arbitrary numbers.
+ */
+const COMMON_TABLET_STRENGTHS = new Set([
+  5, 10, 20, 25, 40, 50, 75, 80, 100, 125, 150, 200, 250, 300, 375, 400, 500, 600, 625, 650, 750, 800, 850, 1000, 1200
+]);
+
+/**
+ * Document-Wide Semantic Filter:
+ * Detects hospital banners, clinic addresses, physician headers, patient vitals, clinical diagnoses, and notes.
+ */
+export function isNonMedicationLine(line: string): boolean {
+  const lower = line.toLowerCase().trim();
+  if (lower.length < 3) return true;
+
+  // Institutional, administrative, and clinical note markers
+  const nonMedRegexes = [
+    /\b(hospital|clinic|center|centre|medical\s+center|health\s+center|nursing\s+home|infirmary|dispensary|healthcare|foundation)\b/i,
+    /\b(avenue|ave\b|street|road|rd\b|lane|ln\b|blvd|boulevard|suite|ste\b|floor|fl\b|building|bldg|block|sector|plot|cross|pin\s*code|zip\s*code|postal)\b/i,
+    /\b(phone|tel\b|telephone|mobile|mob\b|cell\b|fax|email|mail\b|website|web\b|www\.|https?)\b/i,
+    /\b(doctor|dr\.|physician|consultant|specialist|surgeon|cardiologist|pediatrician|mbbs|md\b|ms\b|dm\b|mch\b|frcs|mrcp|facc|phd|reg\s*no|licen[sc]e|npi|dea)\b/i,
+    /\b(patient\s*name|pt\s*name|patient\s*id|uhid|mrn|opd|ipd|admission|discharge|bed\s*no|room\s*no)\b/i,
+    /\b(age\b|gender|sex\b|male|female|yrs|years\s*old|dob|date\s*of\s*birth|date\s*[:\=]|dated)\b/i,
+    /\b(diagnosis|provisional\s*diagnosis|differential\s*diagnosis|chief\s*complaint|complaints|history|past\s*history|symptoms|findings|impression|assessment|plan|clinical\s*notes)\b/i,
+    /\b(blood\s*pressure|bp\s*[:\=]|pulse\s*[:\=]|spo2|temperature|temp\s*[:\=]|weight|wt\b|height|ht\b|bmi|vitals|heart\s*rate|respiratory\s*rate)\b/i,
+    /\b(investigation|investigations|advised\s*tests|lab\s*reports|x-ray|ecg|echo|usg|ct\s*scan|mri)\b/i,
+    /\b(follow\s*up|next\s*visit|review\s*after|refer\s*to|referred\s*to|advice|precautions|diet|rest|warm\s*water|gargle)\b/i,
+    /\b(signature|sign\b|seal|stamp|verified\s*by|pharmacist\s*signature|dispensed\s*by)\b/i,
+    /^[-=_*#\s]{3,}$/
+  ];
+
+  for (const regex of nonMedRegexes) {
+    if (regex.test(lower)) {
+      // Exception: If line has strong medication indicators, e.g. "Rx: Amoxicillin 500mg" or "Tab Augmentin 625mg", don't reject
+      const hasExplicitRx = /\b(rx\b|tab\.?|tablet|cap\.?|capsule|syp\.?|inj\.?)\b/i.test(line);
+      const hasExplicitDose = /\b\d+(?:\.\d+)?\s*(?:mg|mcg|ml|iu|g)\b/i.test(line);
+      if (!(hasExplicitRx && hasExplicitDose)) {
+        return true;
+      }
+    }
+  }
+
+  // Check pure symptom/disease lines (e.g. "Fever, headache and cough for 3 days")
+  if (/\b(fever|cough|cold|headache|chest\s*pain|abdominal\s*pain|vomiting|diarrhea|acidity|hypertension|diabetes|asthma|bronchitis)\b/i.test(lower)) {
+    const hasMedicationForm = /\b(tab\.?|tablet|cap\.?|capsule|syp\.?|syrup|inj\.?|injection)\b/i.test(line);
+    const hasExplicitDose = /\b\d+(?:\.\d+)?\s*(?:mg|mcg|ml|iu|g)\b/i.test(line);
+    if (!hasMedicationForm && !hasExplicitDose) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Preprocesses and merges fragmented OCR continuation lines.
+ * E.g.
+ * Line 1: Tab Augmentin 625mg
+ * Line 2: 1-0-1
+ * Line 3: for 7 days
+ * -> "Tab Augmentin 625mg 1-0-1 for 7 days"
+ */
+export function preprocessPrescriptionLines(rawLines: string[]): string[] {
+  const merged: string[] = [];
+
+  for (let i = 0; i < rawLines.length; i++) {
+    let current = rawLines[i].trim();
+    if (!current) continue;
+
+    // Check if next line is continuation (starts with frequency, duration, or timing instruction)
+    while (i + 1 < rawLines.length) {
+      const next = rawLines[i + 1].trim();
+      const isContinuation =
+        /^(1-0-1-1|1-0-0-1|1-1-1-1|1-0-1|1-1-1|0-0-1|1-0-0|0-1-0|0-1-1|1-1-0|B\.?I\.?D\.?|T\.?I\.?D\.?|Q\.?I\.?D\.?|Q\.?D\.?|O\.?D\.?|B\.?D\.?|T\.?D\.?S\.?|Q\.?D\.?S\.?|S\.?O\.?S\.?|PRN|STAT|ONCE|TWICE|FOR|\(?\d+\s*(?:DAYS?|WEEKS?|MONTHS?|D|W)\)?|x\s*\d+|PO\b|after\s+food|before\s+food|pc\b|ac\b|at\s+bedtime)/i.test(next) &&
+        !/^(rx|tab|cap|inj|syp|\d+[\.\)])/i.test(next);
+
+      if (isContinuation) {
+        current = `${current} ${next}`;
+        i++;
+      } else {
+        break;
+      }
+    }
+
+    merged.push(current);
+  }
+
+  return merged;
+}
+
+/**
  * Line parser: extracts drug candidate, dosage, frequency, and duration from a sanitized line.
  */
 export function parseMedicationLine(rawLine: string): ExtractedMedication | null {
   const line = rawLine.trim();
   if (!line || line.length < 3) return null;
 
-  // Ignore header/footer metadata lines
-  const ignorePatterns = [
-    /^(doctor|dr\.|patient|name|age|gender|sex|date|rx\s*#|reg\s*no|clinic|hospital|signature|address|phone|email)\b/i,
-    /^(diagnosis|instructions|notes|bp:|pulse:|temp:|vitals:)/i,
-    /^[-=_*#\s]{3,}$/
-  ];
-  for (const pattern of ignorePatterns) {
-    if (pattern.test(line)) return null;
+  // Filter out headers, addresses, doctor info, patient vitals, diagnosis
+  if (isNonMedicationLine(line)) return null;
+
+  // 1. Extract Dosage (explicit units or contextual numbers like 625, 650, 500, 40)
+  const explicitDosageRegex = /\b(\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)*\s*(?:mg|mcg|µg|ug|ml|g|gm|iu|mEq|units?|puffs?|drops?)(?:\s*\/\s*\d+(?:\.\d+)?\s*(?:ml|mg))?)\b/i;
+  const dosageMatch = line.match(explicitDosageRegex);
+  let dosage = dosageMatch ? dosageMatch[1].replace(/\s+/g, '').toLowerCase() : '';
+
+  // Contextual dosage: match known oral tablet strengths (e.g. "Augmentin 625", "Dolo 650", "Pantocid 40")
+  if (!dosage) {
+    const standaloneDoseRegex = /\b(\d{2,4})\b/g;
+    let match: RegExpExecArray | null;
+    while ((match = standaloneDoseRegex.exec(line)) !== null) {
+      const numVal = parseInt(match[1], 10);
+      if (COMMON_TABLET_STRENGTHS.has(numVal)) {
+        dosage = `${numVal}mg`;
+        break;
+      }
+    }
   }
 
-  // 1. Extract Dosage (e.g., 500mg, 500 mg, 10mg, 250mg/5ml, 0.5mg, 5ml)
-  const dosageRegex = /\b(\d+(?:\.\d+)?\s*(?:mg|mcg|ml|g|gm|iu|mEq)(?:\s*\/\s*\d+(?:\.\d+)?\s*(?:ml|mg))?)\b/i;
-  const dosageMatch = line.match(dosageRegex);
-  const dosage = dosageMatch ? dosageMatch[1].replace(/\s+/g, '') : '';
-
-  // 2. Extract Frequency (e.g., BID, B.I.D., TID, T.I.D., QD, Q.D., QID, 1-0-1, 1-1-1, 1-0-0-1, once daily, PRN)
-  const freqRegex = /\b(1-0-1-1|1-0-0-1|1-1-1-1|1-0-1|1-1-1|0-0-1|1-0-0|0-1-0|0-1-1|1-1-0|B\.?I\.?D\.?|T\.?I\.?D\.?|Q\.?I\.?D\.?|Q\.?D\.?|QAM|QPM|QHS|P\.?R\.?N\.?|STAT|ONCE\s+DAILY|TWICE\s+DAILY|THRICE\s+DAILY|EVERY\s+\d+\s*(?:HOURS|HRS)|Q\d+H|DAILY)\b/i;
+  // 2. Extract Frequency (1-0-1, BID, TID, QID, OD, BD, TDS, QDS, SOS, PRN, once daily, etc.)
+  const freqRegex = /\b(1-0-1-1|1-0-0-1|1-1-1-1|1-0-1|1-1-1|0-0-1|1-0-0|0-1-0|0-1-1|1-1-0|B\.?I\.?D\.?|T\.?I\.?D\.?|Q\.?I\.?D\.?|Q\.?D\.?|O\.?D\.?|B\.?D\.?|T\.?D\.?S\.?|Q\.?D\.?S\.?|S\.?O\.?S\.?|QAM|QPM|QHS|H\.?S\.?|P\.?R\.?N\.?|STAT|ONCE\s+DAILY|TWICE\s+DAILY|THRICE\s+DAILY|EVERY\s+\d+\s*(?:HOURS|HRS)|Q\d+H|DAILY)\b/i;
   const freqMatch = line.match(freqRegex);
-  const frequency = freqMatch ? freqMatch[1].toUpperCase().replace(/\./g, '') : 'QD';
+  let rawFreq = freqMatch ? freqMatch[1].toUpperCase().replace(/\./g, '').trim() : '';
 
-  // 3. Extract Duration (e.g., for 5 days, 5 days, 10 d, 2 weeks)
-  const durationRegex = /\b(?:FOR\s+)?(\d+\s*(?:DAYS|DAY|WEEKS|WEEK|MONTHS|MONTH|D|W))\b/i;
-  const durationMatch = line.match(durationRegex);
-  const duration = durationMatch ? durationMatch[1] : undefined;
+  // Standardize clinical frequency nomenclature
+  let frequency = 'QD';
+  if (rawFreq) {
+    if (rawFreq === 'OD' || rawFreq === 'ONCE DAILY' || rawFreq === 'DAILY') frequency = 'QD';
+    else if (rawFreq === 'BD' || rawFreq === 'TWICE DAILY') frequency = 'BID';
+    else if (rawFreq === 'TDS' || rawFreq === 'THRICE DAILY') frequency = 'TID';
+    else if (rawFreq === 'QDS') frequency = 'QID';
+    else if (rawFreq === 'SOS') frequency = 'PRN';
+    else if (rawFreq === 'HS') frequency = 'QHS';
+    else frequency = rawFreq;
+  }
 
-  // 4. Extract Route (e.g., PO, P.O., IV, IM, SC, SL, oral)
+  // 3. Extract Duration (for 5 days, x 5 days, x 7d, 5/7, 1/12, (7 days), 2 weeks, 1-0-1 x 5)
+  let duration: string | undefined;
+
+  // Duration Pattern A: Shorthand medical fractions (5/7 = 5 days, 2/52 = 2 weeks, 1/12 = 1 month)
+  const fractionMatch = line.match(/\b(\d+)\s*\/\s*(7|52|12)\b/);
+  if (fractionMatch) {
+    const num = fractionMatch[1];
+    const denom = fractionMatch[2];
+    if (denom === '7') duration = `${num} days`;
+    else if (denom === '52') duration = `${num} weeks`;
+    else if (denom === '12') duration = `${num} months`;
+  }
+
+  // Duration Pattern B: Explicit duration phrases (e.g. "for 7 days", "x 5 days", "(7 days)", "x 10d")
+  if (!duration) {
+    const durationRegex = /(?:(?:FOR|X|\*)\s*)?\(?(\d+\s*(?:DAYS?|DAY|WEEKS?|WEEK|MONTHS?|MONTH|D|W))\)?/i;
+    const durationMatch = line.match(durationRegex);
+    if (durationMatch) {
+      let dur = durationMatch[1].trim();
+      if (/^\d+\s*d$/i.test(dur)) dur = `${dur.replace(/d/i, '').trim()} days`;
+      if (/^\d+\s*w$/i.test(dur)) dur = `${dur.replace(/w/i, '').trim()} weeks`;
+      duration = dur;
+    }
+  }
+
+  // Duration Pattern C: Frequency followed immediately by count e.g. "1-0-1 x 5" or "BID x 7"
+  if (!duration) {
+    const freqFollowedRegex = /(?:1-0-1|1-1-1|1-0-0|0-0-1|BID|TID|QD|QID|OD|BD|TDS|PRN|SOS)\s*(?:x\s*|\*\s*|\bfor\s+)(\d{1,2})\b/i;
+    const freqFollowedMatch = line.match(freqFollowedRegex);
+    if (freqFollowedMatch) {
+      duration = `${freqFollowedMatch[1]} days`;
+    }
+  }
+
+  // 4. Extract Route (PO, P.O., IV, IM, SC, SL, oral)
   const routeRegex = /\b(?:PO|P\.O\.|IV|I\.V\.|IM|I\.M\.|SC|SubQ|SL|oral|orally)\b/gi;
 
   // 5. Extract Drug Name Candidate
-  // Clean line of item numbering (1., 2), #1), matched dosage, frequency, route, duration, and common prefix symbols
   let cleanedDrugCandidate = line
     .replace(/^(?:\d+[\.\)\-\:]\s*|#\d+\s*)/, '') // Strip item numbering: 1., 2), #1
     .replace(/^(?:Rx|Tab\.?|Tablet|Cap\.?|Capsule|Syp\.?|Syrup|Inj\.?|Injection|Drop|Drops)\s+/i, '')
-    .replace(dosageRegex, '')
+    .replace(explicitDosageRegex, '')
+    .replace(/\b\d{2,4}\b/g, (match) => COMMON_TABLET_STRENGTHS.has(parseInt(match, 10)) ? '' : match)
     .replace(freqRegex, '')
-    .replace(durationRegex, '')
+    .replace(/(?:(?:FOR|X|\*)\s*)?\(?\d+\s*(?:DAYS?|DAY|WEEKS?|WEEK|MONTHS?|MONTH|D|W)\)?/gi, '')
+    .replace(/\b\d+\s*\/\s*(?:7|52|12)\b/g, '')
+    .replace(/(?:1-0-1|1-1-1|1-0-0|0-0-1|BID|TID|QD|QID|OD|BD|TDS|PRN|SOS)\s*(?:x\s*|\*\s*|\bfor\s+)\d{1,2}\b/gi, '')
     .replace(routeRegex, '')
+    .replace(/\b(?:after\s+food|before\s+food|pc\b|ac\b|at\s+bedtime|daily|prn|stat)\b/gi, '')
     .replace(/[-–—,:;()#*]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
   // Pick first 1-3 words representing the drug name
-  const words = cleanedDrugCandidate.split(' ').filter(w => w.length > 2);
+  const words = cleanedDrugCandidate.split(' ').filter(w => w.length >= 3);
   if (words.length === 0) return null;
 
   const candidate = words.slice(0, 3).join(' ');
+  const candidateLower = candidate.toLowerCase();
+
+  // Reject candidates that match medical stop words
+  if (COMMON_MEDICAL_STOP_WORDS.has(candidateLower)) {
+    return null;
+  }
+  for (const word of words) {
+    if (COMMON_MEDICAL_STOP_WORDS.has(word.toLowerCase()) && words.length === 1) {
+      return null;
+    }
+  }
 
   // 6. Fuzzy match against RxNorm dataset
   const matchResult = findBestRxNormMatch(candidate, 0.75);
 
+  // STRICT CLINICAL GATEKEEPING:
+  // Reject lines that are not verified in RxNorm UNLESS they meet rigorous clinical criteria
+  const hasExplicitRxPrefix = /^(?:Rx|Tab\.?|Tablet|Cap\.?|Capsule|Syp\.?|Syrup|Inj\.?|Injection|Drop|Drops)\b/i.test(line);
+  const hasExplicitDosage = Boolean(dosage);
+  const hasClinicalFrequency = Boolean(freqMatch);
+
+  if (!matchResult.isVerified) {
+    const isStopWord = COMMON_MEDICAL_STOP_WORDS.has(candidateLower) ||
+                       COMMON_MEDICAL_STOP_WORDS.has(matchResult.matchedTerm.toLowerCase());
+    if (isStopWord) return null;
+
+    // To prevent arbitrary text extraction, unverified terms MUST:
+    // 1) Have an explicit medication form OR an explicit dosage with medical unit (e.g. mg, ml)
+    // 2) Have an explicit clinical frequency (e.g. 1-0-1, BID)
+    // 3) Have confidence >= 0.60
+    const hasMedForm = hasExplicitRxPrefix;
+    const hasStrictDose = hasExplicitDosage && !dosage.endsWith('mg') || Boolean(dosageMatch);
+    const hasValidFrequency = hasClinicalFrequency;
+
+    if (!((hasMedForm || hasStrictDose) && hasValidFrequency && matchResult.confidence >= 0.60)) {
+      return null;
+    }
+  }
+
   return {
     brandName: matchResult.brandName || candidate,
     activeIngredient: matchResult.activeIngredient || candidate,
-    dosage: dosage || 'Standard Dose',
+    dosage: dosage || (matchResult.isVerified ? 'Standard Dose' : ''),
     frequency: frequency,
     duration: duration,
     rawText: line,
@@ -235,7 +433,7 @@ export function parseMedicationLine(rawLine: string): ExtractedMedication | null
 }
 
 /**
- * Main parser entrypoint: sanitizes OCR text, splits lines, and extracts medications.
+ * Main parser entrypoint: sanitizes OCR text, merges multi-line blocks, and extracts verified medications.
  */
 export async function parsePrescriptionDocument(input: Buffer | string): Promise<{
   extractedText: string;
@@ -244,13 +442,15 @@ export async function parsePrescriptionDocument(input: Buffer | string): Promise
   const rawText = await extractRawPrescriptionText(input);
   const sanitizedText = sanitizeOcrText(rawText);
 
-  const lines = sanitizedText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const rawLines = sanitizedText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const lines = preprocessPrescriptionLines(rawLines);
+
   const medications: ExtractedMedication[] = [];
   const seenIngredients = new Set<string>();
 
   for (const line of lines) {
     const med = parseMedicationLine(line);
-    if (med) {
+    if (med && med.activeIngredient && med.activeIngredient.length > 2) {
       const key = med.activeIngredient.toLowerCase();
       if (!seenIngredients.has(key)) {
         seenIngredients.add(key);

@@ -210,7 +210,7 @@ export const RX_NORM_DATASET: RxNormConcept[] = [
   },
   {
     activeIngredient: 'Azithromycin',
-    brandAliases: ['Zithromax', 'Z-Pak', 'AzaSite'],
+    brandAliases: ['Zithromax', 'Z-Pak', 'AzaSite', 'Azithral'],
     allergenGroup: 'MACROLIDES',
     category: 'Antibiotic (Macrolide)'
   },
@@ -294,7 +294,7 @@ export const RX_NORM_DATASET: RxNormConcept[] = [
   },
   {
     activeIngredient: 'Acetaminophen',
-    brandAliases: ['Tylenol', 'Panadol', 'Calpol', 'Paracetamol'],
+    brandAliases: ['Tylenol', 'Panadol', 'Calpol', 'Paracetamol', 'Dolo', 'Dolo 650', 'Crocin', 'P-650'],
     category: 'Analgesic / Antipyretic'
   },
   {
@@ -449,7 +449,7 @@ export const RX_NORM_DATASET: RxNormConcept[] = [
   // --- Gastrointestinal & Minerals ---
   {
     activeIngredient: 'Calcium Carbonate',
-    brandAliases: ['Tums', 'Caltrate', 'Os-Cal'],
+    brandAliases: ['Tums', 'Caltrate', 'Os-Cal', 'Shelcal', 'Cipcal'],
     category: 'Antacid / Mineral Supplement'
   },
   {
@@ -464,12 +464,12 @@ export const RX_NORM_DATASET: RxNormConcept[] = [
   },
   {
     activeIngredient: 'Omeprazole',
-    brandAliases: ['Prilosec', 'Prilosec OTC'],
+    brandAliases: ['Prilosec', 'Prilosec OTC', 'Omez', 'Omee'],
     category: 'Proton Pump Inhibitor (PPI)'
   },
   {
     activeIngredient: 'Pantoprazole',
-    brandAliases: ['Protonix'],
+    brandAliases: ['Protonix', 'Pantocid', 'Pantop', 'Pan 40', 'Pan-D'],
     category: 'Proton Pump Inhibitor (PPI)'
   },
 

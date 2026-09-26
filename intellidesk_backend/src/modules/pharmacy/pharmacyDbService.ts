@@ -316,6 +316,39 @@ export class PharmacyDbService {
   }
 
   /**
+   * Retrieves all prescription scans for a patient from Supabase or in-memory store.
+   */
+  public static async getPatientPrescriptionScans(patientId: string): Promise<RxScanSummary[]> {
+    if (!patientId) return [];
+
+    try {
+      const { data, error } = await supabase
+        .from('prescription_scans')
+        .select('*')
+        .eq('patient_id', patientId)
+        .order('created_at', { ascending: false });
+
+      if (!error && Array.isArray(data) && data.length > 0) {
+        return data.map(row => ({
+          id: row.id,
+          patientId: row.patient_id,
+          imageUrl: row.image_url,
+          extractedDrugs: row.extracted_drugs || [],
+          ddiWarnings: row.ddi_warnings || [],
+          allergyConflicts: row.allergy_conflicts || [],
+          hasSafetyConflict: row.has_safety_conflict,
+          requiresPharmacistReview: row.has_safety_conflict,
+          createdAt: row.created_at
+        }));
+      }
+    } catch (err) {
+      console.warn(`[Pharmacy DB] Supabase scans lookup failed for patient ${patientId}:`, err);
+    }
+
+    return Array.from(this._scansStore.values()).filter(s => s.patientId === patientId);
+  }
+
+  /**
    * Technical Guardrail 3: Patient Safety Banner Override
    * Sets requires_clinical_pharmacist_review: true on claims table in Supabase.
    */

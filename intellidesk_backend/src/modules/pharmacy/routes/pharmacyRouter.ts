@@ -261,3 +261,46 @@ pharmacyRouter.delete('/allergies/:patientId/:allergenGroup', async (req: Reques
     });
   }
 });
+
+/**
+ * GET /api/v1/pharmacy/prescriptions/:patientId
+ * Retrieves all stored prescription scans and OCR records for a patient.
+ */
+pharmacyRouter.get('/prescriptions/:patientId', async (req: Request, res: Response) => {
+  try {
+    const patientId = String(req.params.patientId);
+    const prescriptions = await PharmacyDbService.getPatientPrescriptionScans(patientId);
+    return res.status(200).json({
+      success: true,
+      patientId,
+      prescriptions
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      error: 'Failed to retrieve patient prescriptions',
+      details: err?.message || String(err)
+    });
+  }
+});
+
+/**
+ * GET /api/v1/pharmacy/patient-profile/:patientId
+ * Clinical Admin Assessment: returns complete dossier of active medications, recorded allergies,
+ * verified prescriptions, and live DDI + allergy cross-reaction safety evaluation.
+ */
+pharmacyRouter.get('/patient-profile/:patientId', async (req: Request, res: Response) => {
+  try {
+    const patientId = String(req.params.patientId);
+    const profile = await RxSentinelService.getPatientFullPharmacyProfile(patientId);
+    return res.status(200).json({
+      success: true,
+      profile
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      error: 'Failed to retrieve complete patient pharmacy profile',
+      details: err?.message || String(err)
+    });
+  }
+});
+

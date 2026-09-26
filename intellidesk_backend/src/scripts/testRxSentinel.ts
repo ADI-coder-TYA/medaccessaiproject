@@ -90,6 +90,69 @@ Rx
   assert(advil?.activeIngredient.toLowerCase() === 'ibuprofen', 'Mapped Advil brand to Ibuprofen generic active ingredient');
 
   // -------------------------------------------------------------
+  // TEST 3B: Noisy Real-World OCR with Addresses, Doctors, Diseases, Contextual Dosages & Shorthand Durations
+  // -------------------------------------------------------------
+  console.log('\n--- TEST 3B: Noisy Prescription OCR Filtering & Shorthand Precision ---');
+  const noisyPrescriptionText = `
+APOLLO SPECIALTY HOSPITALS
+154/11 Bannerghatta Road, Opp IIM, Bangalore - 560076
+Phone: +91-80-26304050 | Email: care@apollohospitals.com
+Dr. Rajesh Sharma, MBBS, MD (Internal Medicine), FACC - Reg No: KMC-48291
+Date: 26-Sep-2026 | UHID: APL-992144 | Room: OPD-304
+Patient: Alice Cooper, 45 Yrs / Female
+Vitals: BP 130/85 mmHg, Pulse 76 bpm, SpO2 99%, Temp 98.4 F, Wt 62 kg
+Chief Complaints: Fever, headache, severe cough, and sore throat for 3 days
+Diagnosis: Acute Upper Respiratory Tract Infection, Essential Hypertension
+Rx
+1. Tab. Augmentin 625 1-0-1 x 5/7
+2. Dolo 650 TDS SOS
+3. Pantocid 40 OD ac (14 days)
+4. Azithral 500
+   1-0-0 x 3 days
+General Advice: Steam inhalation, drink plenty of warm water, bed rest
+Review after 5 days with CBC reports
+Doctor's Signature: Dr. R. Sharma
+`;
+
+  const noisyParsed = await parsePrescriptionDocument(noisyPrescriptionText);
+
+  // Must only extract actual medications (Augmentin, Dolo, Pantocid, Azithral)
+  assert(noisyParsed.medications.length === 4, `Extracted exactly 4 medications without noise (got: ${noisyParsed.medications.length})`);
+
+  // Verify none of the non-medication words are present
+  const extractedNames = noisyParsed.medications.map(m => m.brandName.toLowerCase() + ' ' + m.activeIngredient.toLowerCase()).join(' ');
+  const forbiddenTerms = ['apollo', 'bannerghatta', 'bangalore', 'rajesh', 'sharma', 'alice', 'cooper', 'fever', 'headache', 'cough', 'hypertension', 'infection', 'vitals', 'advice', 'water', 'signature'];
+  for (const term of forbiddenTerms) {
+    assert(!extractedNames.includes(term), `Forbidden term "${term}" correctly rejected from medications list`);
+  }
+
+  // Verify Augmentin 625 dosage and 5/7 duration
+  const aug = noisyParsed.medications.find(m => m.brandName.toLowerCase().includes('augmentin') || m.activeIngredient.toLowerCase().includes('amoxicillin'));
+  assert(!!aug, 'Found Augmentin');
+  assert(aug?.dosage === '625mg', `Extracted unitless contextual dosage 625mg (got: ${aug?.dosage})`);
+  assert(aug?.frequency === '1-0-1', `Extracted frequency 1-0-1 (got: ${aug?.frequency})`);
+  assert(aug?.duration === '5 days', `Extracted shorthand fraction 5/7 as 5 days (got: ${aug?.duration})`);
+
+  // Verify Dolo 650 dosage, TDS frequency, SOS
+  const dolo = noisyParsed.medications.find(m => m.brandName.toLowerCase().includes('dolo') || m.activeIngredient.toLowerCase().includes('acetaminophen'));
+  assert(!!dolo, 'Found Dolo');
+  assert(dolo?.dosage === '650mg', `Extracted unitless contextual dosage 650mg (got: ${dolo?.dosage})`);
+  assert(dolo?.frequency === 'TID', `Standardized TDS frequency to TID (got: ${dolo?.frequency})`);
+
+  // Verify Pantocid 40 OD (14 days)
+  const panto = noisyParsed.medications.find(m => m.brandName.toLowerCase().includes('panto') || m.activeIngredient.toLowerCase().includes('pantoprazole'));
+  assert(!!panto, 'Found Pantocid / Pantoprazole');
+  assert(panto?.dosage === '40mg', `Extracted unitless dosage 40mg (got: ${panto?.dosage})`);
+  assert(panto?.frequency === 'QD', `Standardized OD frequency to QD (got: ${panto?.frequency})`);
+  assert(panto?.duration === '14 days', `Extracted duration 14 days (got: ${panto?.duration})`);
+
+  // Verify multi-line Azithral continuation
+  const azith = noisyParsed.medications.find(m => m.brandName.toLowerCase().includes('azith') || m.activeIngredient.toLowerCase().includes('azithromycin'));
+  assert(!!azith, 'Found Azithral / Azithromycin merged continuation');
+  assert(azith?.dosage === '500mg', `Extracted dosage 500mg (got: ${azith?.dosage})`);
+  assert(azith?.duration === '3 days', `Extracted duration 3 days (got: ${azith?.duration})`);
+
+  // -------------------------------------------------------------
   // TEST 4: Drug-Drug Interaction (DDI) Pairwise Engine
   // -------------------------------------------------------------
   console.log('\n--- TEST 4: Drug-Drug Interaction (DDI) Pairwise Engine ---');

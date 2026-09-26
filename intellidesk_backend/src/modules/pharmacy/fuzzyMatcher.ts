@@ -140,11 +140,12 @@ export function findBestRxNormMatch(rawCandidate: string, threshold = 0.75): Fuz
   // 1. Direct O(1) hash table lookup
   const exact = NORMALIZED_DRUG_INDEX.get(queryLower);
   if (exact) {
+    const matchedBrand = exact.brandAliases.find(b => b.toLowerCase() === queryLower);
     return {
       concept: exact,
-      matchedTerm: safeQuery,
+      matchedTerm: matchedBrand || safeQuery,
       activeIngredient: exact.activeIngredient,
-      brandName: exact.brandAliases[0] || exact.activeIngredient,
+      brandName: matchedBrand || exact.brandAliases[0] || exact.activeIngredient,
       confidence: 1.0,
       isVerified: true
     };
@@ -176,11 +177,12 @@ export function findBestRxNormMatch(rawCandidate: string, threshold = 0.75): Fuz
   }
 
   if (bestScore >= threshold && bestConcept) {
+    const matchedBrand = bestConcept.brandAliases.find(b => b.toLowerCase() === bestTerm.toLowerCase());
     return {
       concept: bestConcept,
       matchedTerm: bestTerm,
       activeIngredient: bestConcept.activeIngredient,
-      brandName: bestConcept.brandAliases[0] || bestConcept.activeIngredient,
+      brandName: matchedBrand || bestConcept.brandAliases[0] || bestConcept.activeIngredient,
       confidence: Math.round(bestScore * 100) / 100,
       isVerified: true
     };

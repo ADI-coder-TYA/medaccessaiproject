@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
-import 'package:url_launcher/url_launcher.dart';
 import '../../config/api_config.dart';
 import '../../theme/app_theme.dart';
 import '../../modules/cdss/services/cdss_service.dart';
@@ -197,19 +196,6 @@ class _AdminWarRoomScreenState extends State<AdminWarRoomScreen> with SingleTick
     }
   }
 
-  Future<void> _downloadAuditPdf() async {
-    final url = Uri.parse('${ApiConfig.baseUrl}/reports/clinical-audit-pdf');
-    try {
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Downloading Clinical Audit PDF: $url')),
-      );
-    }
-  }
-
   void _showClaimDetails(Map<String, dynamic> claim) {
     final esiLevel = claim['esi_level'] ?? 'ROUTINE';
     final esiColor = AppTheme.getEsiColor(esiLevel);
@@ -400,11 +386,6 @@ class _AdminWarRoomScreenState extends State<AdminWarRoomScreen> with SingleTick
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
-            tooltip: 'Export Clinical Audit PDF',
-            onPressed: _downloadAuditPdf,
-          ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
             tooltip: 'Refresh Queue',

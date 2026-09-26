@@ -98,6 +98,7 @@ async function runEmergencyFacilityTests() {
   if (failed > 0) {
     process.exit(1);
   }
+  process.exit(0);
 }
 
 runEmergencyFacilityTests().catch((err) => {

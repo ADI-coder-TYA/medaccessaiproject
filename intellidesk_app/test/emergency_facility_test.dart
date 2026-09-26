@@ -77,6 +77,7 @@ void main() {
     });
 
     test('HospitalLocatorService offline facilities query within 20 km', () async {
+      HospitalLocatorService.clearCache();
       final locator = HospitalLocatorService();
       final facilities = await locator.getNearbyFacilities(
         latitude: 40.7128,
@@ -94,6 +95,28 @@ void main() {
           expect(facilities[i].distanceKm, greaterThanOrEqualTo(facilities[i - 1].distanceKm));
         }
       }
+    });
+
+    test('HospitalLocatorService throttles re-queries when displacement < 100m', () async {
+      HospitalLocatorService.clearCache();
+      final locator = HospitalLocatorService();
+
+      // Initial query at origin
+      final first = await locator.getNearbyFacilities(
+        latitude: 40.7128,
+        longitude: -74.0060,
+        radiusKm: 20.0,
+      );
+      expect(first.isNotEmpty, isTrue);
+
+      // Micro-shift: ~22 meters away (0.0002 deg lat)
+      final cached = await locator.getNearbyFacilities(
+        latitude: 40.7130,
+        longitude: -74.0060,
+        radiusKm: 20.0,
+      );
+      expect(cached.length, equals(first.length));
+      expect(cached[0].id, equals(first[0].id));
     });
 
     testWidgets('EmergencyFacilityCard renders facility info and actions', (tester) async {

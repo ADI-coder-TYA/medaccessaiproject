@@ -511,7 +511,10 @@ router.get('/facilities/nearby', async (req: Request, res: Response) => {
     const radiusKm = req.query.radiusKm ? parseFloat(String(req.query.radiusKm)) : 20.0;
     const type = req.query.type as any;
 
+    console.log(`📍 [Diagnostics Router] GET /facilities/nearby | Lat: ${lat}, Lng: ${lng}, Radius: ${radiusKm}km, Type: ${type || 'ALL'}`);
+
     if (isNaN(lat) || isNaN(lng)) {
+      console.warn(`⚠️ [Diagnostics Router] Rejected invalid coordinates (lat=${req.query.lat}, lng=${req.query.lng})`);
       return res.status(400).json({
         success: false,
         error: 'Invalid coordinates: "lat" and "lng" must be valid numeric floating point values.'
@@ -519,6 +522,7 @@ router.get('/facilities/nearby', async (req: Request, res: Response) => {
     }
 
     const result = await EmergencyFacilityService.getNearbyFacilities(lat, lng, radiusKm, type);
+    console.log(`🏁 [Diagnostics Router] Responded with ${result.totalFound} facilities (Closest: "${result.facilities[0]?.name || 'None'}", ${result.facilities[0]?.distanceKm ?? 0}km)`);
     return res.status(200).json({
       success: true,
       ...result

@@ -30,6 +30,7 @@ class DiagnosticResultsScreen extends StatefulWidget {
 
 class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
   bool _hasAutoTriggeredEmergencySheet = false;
+  bool _isLoadingCDSS = false;
 
   Color _getRiskColor(ClinicalRiskLevel level) {
     switch (level) {
@@ -566,101 +567,145 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
               key: const Key('openResultsCDSSButton'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xFF0D9488),
-                side: const BorderSide(color: Color(0xFF0D9488)),
+                side: BorderSide(
+                  color: _isLoadingCDSS ? const Color(0xFF0D9488).withOpacity(0.5) : const Color(0xFF0D9488),
+                  width: _isLoadingCDSS ? 1.5 : 1.0,
+                ),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                backgroundColor: _isLoadingCDSS ? const Color(0xFF0D9488).withOpacity(0.08) : null,
               ),
-              icon: const Icon(Icons.psychology_outlined),
-              label: const FittedBox(
+              icon: _isLoadingCDSS
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0D9488)),
+                      ),
+                    )
+                  : const Icon(Icons.psychology_outlined),
+              label: FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Text(
-                  'Clinical Decision Support (ICD-11 & DDx)',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  _isLoadingCDSS
+                      ? 'Consulting Qwen 2.5 72B CDSS...'
+                      : 'Clinical Decision Support (ICD-11 & DDx)',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: _isLoadingCDSS ? const Color(0xFF0D9488) : null,
+                  ),
                 ),
               ),
-              onPressed: () async {
-                // Resolve anatomical location from session, stateProvider, or infer from diagnosis
-                String bodyLocation = '';
-                if (session?.symptomVector.bodyLocation != null &&
-                    session!.symptomVector.bodyLocation.isNotEmpty &&
-                    session.symptomVector.bodyLocation != 'General / Unspecified') {
-                  bodyLocation = session.symptomVector.bodyLocation;
-                } else if (stateProvider.selectedBodyLocation != null &&
-                    stateProvider.selectedBodyLocation!.isNotEmpty &&
-                    stateProvider.selectedBodyLocation != 'General / Unspecified') {
-                  bodyLocation = stateProvider.selectedBodyLocation!;
-                }
+              onPressed: _isLoadingCDSS
+                  ? null
+                  : () async {
+                      if (_isLoadingCDSS) return;
+                      setState(() => _isLoadingCDSS = true);
 
-                // If bodyLocation is not yet specialized, infer from primary diagnosis
-                final lowerDx = assessment.primaryDiagnosis.toLowerCase();
-                if (lowerDx.contains('conjunctivit') ||
-                    lowerDx.contains('eye') ||
-                    lowerDx.contains('ophthalm') ||
-                    lowerDx.contains('blepharit') ||
-                    lowerDx.contains('sclerit')) {
-                  bodyLocation = 'Eye / Ophthalmology';
-                } else if (lowerDx.contains('dermatit') || lowerDx.contains('eczema') || lowerDx.contains('rash') || lowerDx.contains('skin')) {
-                  if (bodyLocation.isEmpty) bodyLocation = 'Skin / Epidermis';
-                }
+                      try {
+                        // Resolve anatomical location from session, stateProvider, or infer from diagnosis
+                        String bodyLocation = '';
+                        if (session?.symptomVector.bodyLocation != null &&
+                            session!.symptomVector.bodyLocation.isNotEmpty &&
+                            session.symptomVector.bodyLocation != 'General / Unspecified') {
+                          bodyLocation = session.symptomVector.bodyLocation;
+                        } else if (stateProvider.selectedBodyLocation != null &&
+                            stateProvider.selectedBodyLocation!.isNotEmpty &&
+                            stateProvider.selectedBodyLocation != 'General / Unspecified') {
+                          bodyLocation = stateProvider.selectedBodyLocation!;
+                        }
 
-                List<String> symptomsList = [];
-                if (session?.symptomVector.symptoms != null && session!.symptomVector.symptoms.isNotEmpty) {
-                  symptomsList = List<String>.from(session.symptomVector.symptoms);
-                } else if (stateProvider.selectedSecondarySymptoms.isNotEmpty) {
-                  symptomsList = stateProvider.selectedSecondarySymptoms.toList();
-                }
-                if (symptomsList.isEmpty && bodyLocation.contains('Eye')) {
-                  symptomsList = ['Erythema / Redness', 'Pruritus / Itching'];
-                }
+                        // If bodyLocation is not yet specialized, infer from primary diagnosis
+                        final lowerDx = assessment.primaryDiagnosis.toLowerCase();
+                        if (lowerDx.contains('conjunctivit') ||
+                            lowerDx.contains('eye') ||
+                            lowerDx.contains('ophthalm') ||
+                            lowerDx.contains('blepharit') ||
+                            lowerDx.contains('sclerit')) {
+                          bodyLocation = 'Eye / Ophthalmology';
+                        } else if (lowerDx.contains('dermatit') ||
+                            lowerDx.contains('eczema') ||
+                            lowerDx.contains('rash') ||
+                            lowerDx.contains('skin')) {
+                          if (bodyLocation.isEmpty) bodyLocation = 'Skin / Epidermis';
+                        }
 
-                final auth = Provider.of<AuthProvider>(context, listen: false);
-                final user = auth.user;
-                final instId = (session?.institutionId != null && session!.institutionId.isNotEmpty)
-                    ? session.institutionId
-                    : (user?.institutionId != null && user!.institutionId.isNotEmpty)
-                        ? user.institutionId
-                        : ApiConfig.activeInstitutionId;
+                        List<String> symptomsList = [];
+                        if (session?.symptomVector.symptoms != null && session!.symptomVector.symptoms.isNotEmpty) {
+                          symptomsList = List<String>.from(session.symptomVector.symptoms);
+                        } else if (stateProvider.selectedSecondarySymptoms.isNotEmpty) {
+                          symptomsList = stateProvider.selectedSecondarySymptoms.toList();
+                        }
+                        if (symptomsList.isEmpty && bodyLocation.contains('Eye')) {
+                          symptomsList = ['Erythema / Redness', 'Pruritus / Itching'];
+                        }
 
-                final instName = await InstitutionService.getInstitutionName(instId);
+                        final auth = Provider.of<AuthProvider>(context, listen: false);
+                        final user = auth.user;
+                        final instId = (session?.institutionId != null && session!.institutionId.isNotEmpty)
+                            ? session.institutionId
+                            : (user?.institutionId != null && user!.institutionId.isNotEmpty)
+                                ? user.institutionId
+                                : ApiConfig.activeInstitutionId;
 
-                final eval = await CDSSService().evaluateScreening(
-                  screeningId: session?.id ?? 'SCR-${DateTime.now().millisecondsSinceEpoch}',
-                  patientId: session?.patientId ?? user?.patientId ?? 'PATIENT-ANON',
-                  institutionId: instId,
-                  institutionName: instName,
-                  riskScore: assessment.riskScore,
-                  symptoms: {
-                    'bodyLocation': bodyLocation,
-                    'anatomicalLocation': bodyLocation,
-                    'symptoms': symptomsList,
-                    'primaryDiagnosis': assessment.primaryDiagnosis,
-                    'recommendations': assessment.clinicalRecommendations,
-                    'riskLevel': assessment.riskLevel.name,
-                    'clinicalSummary': '${assessment.primaryDiagnosis}. ${assessment.clinicalRecommendations.join("; ")}',
-                    if (session?.symptomVector.vitals != null)
-                      'vitals': session!.symptomVector.vitals.toMap(),
-                  },
-                  visionFindings: [
-                    {
-                      'condition': assessment.primaryDiagnosis,
-                      'confidence': 0.95,
-                      'anatomicalSite': bodyLocation,
-                    }
-                  ],
-                  audioClassification: (diag.lastCoughClassification?['classification'] as Map<String, dynamic>?) ??
-                      diag.lastCoughClassification,
-                );
+                        final instName = await InstitutionService.getInstitutionName(instId);
 
-                if (context.mounted) {
-                  CDSSDecisionDrawer.show(
-                    context,
-                    evaluation: eval,
-                    isClinicianView: false,
-                    institutionId: instId,
-                    institutionName: instName,
-                  );
-                }
-              },
+                        final eval = await CDSSService().evaluateScreening(
+                          screeningId: session?.id ?? 'SCR-${DateTime.now().millisecondsSinceEpoch}',
+                          patientId: session?.patientId ?? user?.patientId ?? 'PATIENT-ANON',
+                          institutionId: instId,
+                          institutionName: instName,
+                          riskScore: assessment.riskScore,
+                          symptoms: {
+                            'bodyLocation': bodyLocation,
+                            'anatomicalLocation': bodyLocation,
+                            'symptoms': symptomsList,
+                            'primaryDiagnosis': assessment.primaryDiagnosis,
+                            'recommendations': assessment.clinicalRecommendations,
+                            'riskLevel': assessment.riskLevel.name,
+                            'clinicalSummary':
+                                '${assessment.primaryDiagnosis}. ${assessment.clinicalRecommendations.join("; ")}',
+                            if (session?.symptomVector.vitals != null)
+                              'vitals': session!.symptomVector.vitals.toMap(),
+                          },
+                          visionFindings: [
+                            {
+                              'condition': assessment.primaryDiagnosis,
+                              'confidence': 0.95,
+                              'anatomicalSite': bodyLocation,
+                            }
+                          ],
+                          audioClassification: (diag.lastCoughClassification?['classification']
+                                  as Map<String, dynamic>?) ??
+                              diag.lastCoughClassification,
+                        );
+
+                        if (context.mounted) {
+                          CDSSDecisionDrawer.show(
+                            context,
+                            evaluation: eval,
+                            isClinicianView: false,
+                            institutionId: instId,
+                            institutionName: instName,
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to load CDSS evaluation: $e'),
+                              backgroundColor: Colors.redAccent,
+                            ),
+                          );
+                        }
+                      } finally {
+                        if (mounted) {
+                          setState(() => _isLoadingCDSS = false);
+                        }
+                      }
+                    },
             ),
           ],
         ),

@@ -61,6 +61,11 @@ class _CDSSDecisionDrawerState extends State<CDSSDecisionDrawer> {
   final Set<String> _selectedImaging = {};
   String? _resolvedInstitutionName;
 
+  bool _isDispatching = false;
+  bool _isDispatched = false;
+  String? _dispatchTimestamp;
+  String? _reviewQueueNumber;
+
   bool get _isClinician =>
       widget.isClinicianView ||
       ApiConfig.userRole == 'ADMIN' ||
@@ -137,6 +142,107 @@ class _CDSSDecisionDrawerState extends State<CDSSDecisionDrawer> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Approval failed: $e'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleDispatchToMedicalBoard() async {
+    if (_isDispatching || _isDispatched) return;
+    setState(() => _isDispatching = true);
+
+    try {
+      final effectiveInstId = widget.institutionId ?? _evaluation.institutionId ?? ApiConfig.activeInstitutionId;
+      final instName = _resolvedInstitutionName ?? 'Institution';
+
+      final result = await _cdssService.dispatchToMedicalBoard(
+        screeningId: _evaluation.screeningId,
+        evaluationId: _evaluation.id,
+        patientId: _evaluation.patientId,
+        institutionId: effectiveInstId,
+        institutionName: instName,
+        primaryICD11Code: _evaluation.primaryICD11Code,
+        primaryICD11Title: _evaluation.primaryICD11Title,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _isDispatching = false;
+        _isDispatched = true;
+        _dispatchTimestamp = result['dispatchedAt'] != null
+            ? DateTime.tryParse(result['dispatchedAt'].toString())?.toLocal().toString().substring(11, 16)
+            : 'Just now';
+        _reviewQueueNumber = result['reviewQueueNumber']?.toString() ?? 'MB-2401';
+      });
+
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF1E293B),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: const [
+              Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 24),
+              SizedBox(width: 10),
+              Text(
+                'Dispatched to Medical Board',
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Clinical encounter & CDSS Protocol (${_evaluation.primaryICD11Code}: ${_evaluation.primaryICD11Title}) successfully routed to $instName Medical Administration.',
+                style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 13, height: 1.4),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF334155)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.confirmation_number_outlined, color: Color(0xFF14B8A6), size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Review Queue: ${_reviewQueueNumber ?? "Active"}',
+                      style: const TextStyle(color: Color(0xFF14B8A6), fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Attending physician will review vitals, validate diagnostic criteria, and issue verified treatment.',
+                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0D9488),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Acknowledged', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isDispatching = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Dispatch failed: $e'),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -879,26 +985,48 @@ class _CDSSDecisionDrawerState extends State<CDSSDecisionDrawer> {
                 child: ElevatedButton.icon(
                   key: const Key('dispatchedToInstitutionButton'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0D9488),
+                    backgroundColor: _isDispatched ? const Color(0xFF065F46) : const Color(0xFF0D9488),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  icon: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
-                  label: const Text(
-                    'Dispatched to Institution Medical Board',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Report linked to $instName medical board. Attending physician will review shortly.',
+                  icon: _isDispatching
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : Icon(
+                          _isDispatched ? Icons.check_circle_rounded : Icons.send_rounded,
+                          color: Colors.white,
+                          size: 18,
                         ),
-                        backgroundColor: const Color(0xFF0D9488),
-                      ),
-                    );
-                  },
+                  label: Text(
+                    _isDispatching
+                        ? 'Routing to Medical Board...'
+                        : _isDispatched
+                            ? 'Dispatched to Institution Medical Board'
+                            : 'Dispatch to Institution Medical Board',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  onPressed: (_isDispatching || _isDispatched) ? null : _handleDispatchToMedicalBoard,
                 ),
               ),
+              if (_isDispatched) ...[
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 14),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        'Report linked to $instName medical board. Attending physician will review shortly.',
+                        style: const TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.w600),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),

@@ -135,3 +135,41 @@ cdssRouter.get('/concepts', (_req: Request, res: Response) => {
     concepts: ICD11ConceptStore.getAllConcepts()
   });
 });
+
+/**
+ * POST /api/v1/cdss/dispatch
+ * POST /api/v1/cdss/dispatch/:screeningId
+ * Dispatches screening and evaluation to institutional medical board review queue.
+ */
+cdssRouter.post('/dispatch/:screeningId?', async (req: Request, res: Response) => {
+  try {
+    const rawScreeningId = req.params.screeningId || req.body?.screeningId || req.body?.screening_id;
+    const screeningId = rawScreeningId ? String(rawScreeningId) : null;
+    const {
+      evaluationId,
+      patientId = 'anonymous',
+      institutionId,
+      institutionName,
+      primaryICD11Code,
+      primaryICD11Title
+    } = req.body;
+
+    const result = await CDSSService.dispatchToMedicalBoard({
+      screeningId,
+      evaluationId: evaluationId ? String(evaluationId) : null,
+      patientId: String(patientId),
+      institutionId: institutionId ? String(institutionId) : undefined,
+      institutionName: institutionName ? String(institutionName) : undefined,
+      primaryICD11Code: primaryICD11Code ? String(primaryICD11Code) : undefined,
+      primaryICD11Title: primaryICD11Title ? String(primaryICD11Title) : undefined
+    });
+
+    return res.status(200).json(result);
+  } catch (err: any) {
+    console.error('❌ [CDSS Router] Error dispatching to medical board:', err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || 'Medical board dispatch failed'
+    });
+  }
+});

@@ -102,7 +102,7 @@ void main() {
       expect(find.text('Alex Rivera'), findsWidgets);
     });
 
-    testWidgets('Tapping Assess Pharmacy & Medications on patient card opens AdminPatientPharmacyModal', (tester) async {
+    testWidgets('Tapping patient avatar on card opens AdminPatientPharmacyModal', (tester) async {
       tester.view.physicalSize = const Size(1400, 1800);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -134,12 +134,12 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      // Find the Assess Pharmacy & Medications button on the card
-      final assessBtn = find.text('Assess Pharmacy & Medications');
-      expect(assessBtn, findsOneWidget);
+      // Find the patient avatar on the card
+      final avatar = find.byType(CircleAvatar).first;
+      expect(avatar, findsOneWidget);
 
-      // Tap to assess patient's pharmacy information
-      await tester.tap(assessBtn);
+      // Tap patient avatar to open pharmacy modal
+      await tester.tap(avatar);
       await tester.pumpAndSettle();
 
       // Verify AdminPatientPharmacyModal opens with patient information

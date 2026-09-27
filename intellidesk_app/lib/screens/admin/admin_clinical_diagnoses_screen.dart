@@ -1062,14 +1062,6 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              IconButton(
-                tooltip: 'Assess Pharmacy & Medications',
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                icon: const Icon(Icons.local_pharmacy_outlined, color: Color(0xFF0D9488), size: 19),
-                onPressed: () => _openPatientPharmacyModal(patient),
-              ),
-              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
@@ -1109,102 +1101,11 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
                   _buildQuickPill('$totalCount Diagnostic Encounters', Icons.history, const Color(0xFF0D9488)),
                 ],
               ),
-              const SizedBox(height: 8),
-              InkWell(
-                borderRadius: BorderRadius.circular(8),
-                onTap: () => _openPatientPharmacyModal(patient),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0D9488).withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFF0D9488).withValues(alpha: 0.2)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.medication_outlined, color: Color(0xFF0D9488), size: 14),
-                      const SizedBox(width: 5),
-                      const Text(
-                        'Assess Pharmacy & Medications',
-                        style: TextStyle(
-                          color: Color(0xFF0D9488),
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      if (hasDDI) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFDC2626),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text('DDI Alert', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
-                        ),
-                      ],
-                      const SizedBox(width: 4),
-                      const Icon(Icons.arrow_forward_ios, color: Color(0xFF0D9488), size: 10),
-                    ],
-                  ),
-                ),
-              ),
             ],
           ),
           children: [
             const Divider(color: Color(0xFFE2E8F0), height: 1),
             const SizedBox(height: 12),
-            Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF0FDFA),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF99F6E4)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0D9488).withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.local_pharmacy_rounded, color: Color(0xFF0D9488), size: 18),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          'Pharmacy Hub & Prescriptions Dossier',
-                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                        ),
-                        Text(
-                          'Assess medications, drug allergies, verified prescriptions & DDI sentinel.',
-                          style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                        ),
-                      ],
-                    ),
-                  ),
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0D9488),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      minimumSize: const Size(60, 32),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      elevation: 0,
-                    ),
-                    icon: const Icon(Icons.analytics_outlined, size: 14),
-                    label: const Text('Assess Rx', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                    onPressed: () => _openPatientPharmacyModal(patient),
-                  ),
-                ],
-              ),
-            ),
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
@@ -1285,10 +1186,6 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
             ),
           ),
           TextButton(
-            onPressed: () => _openPatientPharmacyModalFromScreening(sc),
-            child: const Text('Rx Hub', style: TextStyle(fontSize: 11.5, color: Color(0xFF0D9488), fontWeight: FontWeight.bold)),
-          ),
-          TextButton(
             onPressed: () => _showDiagnosisDetailsModal(context, sc),
             child: const Text('View Dossier', style: TextStyle(fontSize: 11.5, color: Color(0xFF0D9488), fontWeight: FontWeight.bold)),
           ),
@@ -1352,12 +1249,19 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
                   Expanded(
                     child: Row(
                       children: [
-                        CircleAvatar(
-                          radius: 14,
-                          backgroundColor: const Color(0xFF0D9488).withValues(alpha: 0.12),
-                          child: Text(
-                            patientName.isNotEmpty ? patientName[0].toUpperCase() : 'P',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0D9488)),
+                        InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: () => _openPatientPharmacyModalFromScreening(sc),
+                          child: Tooltip(
+                            message: 'Assess Pharmacy Profile',
+                            child: CircleAvatar(
+                              radius: 14,
+                              backgroundColor: const Color(0xFF0D9488).withValues(alpha: 0.12),
+                              child: Text(
+                                patientName.isNotEmpty ? patientName[0].toUpperCase() : 'P',
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0D9488)),
+                              ),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -1424,12 +1328,6 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  TextButton.icon(
-                    icon: const Icon(Icons.local_pharmacy_outlined, size: 14, color: Color(0xFF0D9488)),
-                    label: const Text('Pharmacy Hub', style: TextStyle(fontSize: 12, color: Color(0xFF0D9488), fontWeight: FontWeight.bold)),
-                    onPressed: () => _openPatientPharmacyModalFromScreening(sc),
-                  ),
-                  const SizedBox(width: 6),
                   TextButton.icon(
                     icon: const Icon(Icons.description_outlined, size: 14, color: Color(0xFF0D9488)),
                     label: const Text('Clinical Dossier', style: TextStyle(fontSize: 12, color: Color(0xFF0D9488), fontWeight: FontWeight.bold)),

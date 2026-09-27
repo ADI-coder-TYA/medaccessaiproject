@@ -52,6 +52,8 @@ export interface DifferentialDiagnosis {
   condition: string;
   probability: number;
   urgency: 'ROUTINE' | 'PROMPT_CARE' | 'EMERGENCY';
+  icd11Code?: string;
+  code?: string;
 }
 
 export interface MultimodalRiskResult {

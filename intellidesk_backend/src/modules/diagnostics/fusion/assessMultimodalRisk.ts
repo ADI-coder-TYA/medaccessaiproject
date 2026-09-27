@@ -3,6 +3,7 @@ import { MultimodalFusionModel, MultimodalPredictionOutput } from './MultimodalF
 import { VisionDiagnosticService } from '../vision/VisionDiagnosticService.js';
 import { AudioFeatureExtractor, CoughClassifier, CoughClassificationResult } from '../audio/index.js';
 import { PhysiologicalRedFlagSentinel } from '../vitals/PhysiologicalRedFlagSentinel.js';
+import { DiseasePredictionModel } from './diseasePredictionModel.js';
 import {
   SymptomInputPayload,
   MultimodalRiskResult,
@@ -309,8 +310,8 @@ export async function assessMultimodalRisk(
     }
   }
 
-  // 6. Differential Diagnoses & Clinical Recommendations
-  const differentialDiagnoses = generateDifferentialDiagnoses(
+  // 6. Differential Diagnoses & Clinical Recommendations (ML Disease Prediction)
+  const differentialDiagnoses = await DiseasePredictionModel.predictDifferentials(
     symptomData,
     visionFindings,
     finalRiskScore
@@ -398,70 +399,6 @@ export async function assessMultimodalRisk(
     audioFeatures,
     audioClassification
   };
-}
-
-function generateDifferentialDiagnoses(
-  symptomData?: Partial<SymptomInputPayload> | null,
-  visionFindings?: any[],
-  riskScore = 0.5
-): DifferentialDiagnosis[] {
-  const differentials: DifferentialDiagnosis[] = [];
-
-  const body = ((symptomData as any)?.anatomicalLocation || symptomData?.bodyLocation || '').toLowerCase();
-  const symptoms = (symptomData?.symptoms || []).join(' ').toLowerCase();
-
-  // 1. Ocular / Ophthalmology Differential Diagnosis Routing
-  if (body.includes('eye') || body.includes('ophthalm')) {
-    differentials.push({
-      condition: 'Infectious Conjunctivitis (9A60)',
-      probability: 0.85,
-      urgency: 'ROUTINE'
-    });
-    differentials.push({
-      condition: 'Blepharitis (9A03)',
-      probability: 0.42,
-      urgency: 'ROUTINE'
-    });
-    differentials.push({
-      condition: 'Episcleritis / Scleritis (9A20)',
-      probability: 0.25,
-      urgency: riskScore >= 0.6 ? 'PROMPT_CARE' : 'ROUTINE'
-    });
-    differentials.push({
-      condition: 'Acute Contact Dermatitis / Periorbital Erythema (EK02)',
-      probability: 0.20,
-      urgency: 'ROUTINE'
-    });
-  } else if (visionFindings && visionFindings.length > 0) {
-    const top = visionFindings[0];
-    differentials.push({
-      condition: top.className || 'Dermatological / Tissue Finding',
-      probability: Number(Math.min(0.95, top.probability + 0.1).toFixed(2)),
-      urgency: riskScore >= 0.75 ? 'EMERGENCY' : riskScore >= 0.5 ? 'PROMPT_CARE' : 'ROUTINE'
-    });
-  }
-
-  if (differentials.length > 0) {
-    return differentials;
-  }
-
-  if (body.includes('chest') || symptoms.includes('chest pain')) {
-    differentials.push({ condition: 'Acute Coronary Syndrome Rule-Out', probability: 0.88, urgency: 'EMERGENCY' });
-    differentials.push({ condition: 'Costochondritis / Musculoskeletal Chest Wall Strain', probability: 0.45, urgency: 'PROMPT_CARE' });
-  } else if (body.includes('throat') || body.includes('mouth') || symptoms.includes('difficulty swallowing')) {
-    differentials.push({ condition: 'Acute Streptococcal Pharyngitis', probability: 0.76, urgency: 'PROMPT_CARE' });
-    differentials.push({ condition: 'Peritonsillar Abscess Evaluation', probability: 0.38, urgency: 'PROMPT_CARE' });
-  } else if (body.includes('skin') || symptoms.includes('rash') || symptoms.includes('erythema')) {
-    differentials.push({ condition: 'Acute Contact Dermatitis / Eczematous Flare', probability: 0.72, urgency: 'ROUTINE' });
-    differentials.push({ condition: 'Infectious Cellulitis', probability: 0.44, urgency: 'PROMPT_CARE' });
-  } else if (body.includes('abdomen') || symptoms.includes('nausea')) {
-    differentials.push({ condition: 'Acute Gastroenteritis', probability: 0.68, urgency: 'ROUTINE' });
-    differentials.push({ condition: 'Peritoneal Irritation Rule-Out', probability: 0.32, urgency: 'PROMPT_CARE' });
-  } else {
-    differentials.push({ condition: 'Non-Specific Acute Malaise', probability: 0.55, urgency: 'ROUTINE' });
-  }
-
-  return differentials;
 }
 
 function generateClinicalRecommendations(

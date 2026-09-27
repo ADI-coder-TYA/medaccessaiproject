@@ -38,8 +38,8 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
   void initState() {
     super.initState();
     if (widget.initialPatients != null) {
-      _patients = List<Map<String, dynamic>>.from(widget.initialPatients!);
-      _allScreenings = List<Map<String, dynamic>>.from(widget.initialScreenings ?? []);
+      _patients = List<Map<String, dynamic>>.from(widget.initialPatients!).map(_normalizePatientSummary).toList();
+      _allScreenings = List<Map<String, dynamic>>.from(widget.initialScreenings ?? []).map(_normalizeScreening).toList();
       _isLoading = false;
     } else if (widget.autoFetch) {
       _fetchAdminDiagnoses();
@@ -52,6 +52,163 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  static dynamic _safeJsonDecode(dynamic val, dynamic fallback) {
+    if (val == null) return fallback;
+    if (val is Map || val is List) return val;
+    if (val is String) {
+      try {
+        return jsonDecode(val);
+      } catch (_) {
+        return fallback;
+      }
+    }
+    return fallback;
+  }
+
+  Map<String, dynamic> _normalizeScreening(Map<String, dynamic> raw) {
+    final symptomPayload = Map<String, dynamic>.from(_safeJsonDecode(raw['symptom_payload'], <String, dynamic>{}));
+    final rawFindings = List<dynamic>.from(_safeJsonDecode(raw['clinical_findings'], <dynamic>[]));
+    final uncertaintyBounds = Map<String, dynamic>.from(_safeJsonDecode(raw['uncertainty_bounds'], <String, dynamic>{}));
+    final physiologicalAlerts = List<dynamic>.from(_safeJsonDecode(raw['physiological_alerts'], <dynamic>[]));
+    final rppg = Map<String, dynamic>.from(_safeJsonDecode(raw['rppg_vitals_payload'], <String, dynamic>{}));
+
+    final vitals = (symptomPayload['vitals'] is Map)
+        ? Map<String, dynamic>.from(symptomPayload['vitals'])
+        : <String, dynamic>{};
+
+    final hr = rppg['heartRate'] ?? rppg['heartRateBpm'] ?? vitals['heartRate'] ?? vitals['heartRateBpm'] ?? vitals['heart_rate'] ?? vitals['pulse'] ?? 74;
+    final spo2 = rppg['oxygenSaturation'] ?? rppg['oxygenSaturationSpo2'] ?? vitals['oxygenSaturation'] ?? vitals['oxygenSaturationSpo2'] ?? vitals['oxygen_saturation'] ?? vitals['spo2'] ?? 98;
+    final sys = rppg['systolicBP'] ?? rppg['bloodPressureSystolicMmHg'] ?? vitals['systolicBP'] ?? vitals['bloodPressureSystolicMmHg'] ?? vitals['blood_pressure_systolic'] ?? 120;
+    final dia = rppg['diastolicBP'] ?? rppg['bloodPressureDiastolicMmHg'] ?? vitals['diastolicBP'] ?? vitals['bloodPressureDiastolicMmHg'] ?? vitals['blood_pressure_diastolic'] ?? 80;
+    final rr = rppg['respiratoryRate'] ?? rppg['respiratoryRateBpm'] ?? vitals['respiratoryRate'] ?? vitals['respiratoryRateBpm'] ?? vitals['respiratory_rate'] ?? 16;
+    final temp = rppg['temperatureCelsius'] ?? rppg['temperature'] ?? vitals['temperatureCelsius'] ?? vitals['temperature'] ?? 37.0;
+
+    final normalizedVitals = {
+      'heartRate': hr,
+      'heartRateBpm': hr,
+      'oxygenSaturation': spo2,
+      'oxygenSaturationSpo2': spo2,
+      'systolicBP': sys,
+      'bloodPressureSystolicMmHg': sys,
+      'diastolicBP': dia,
+      'bloodPressureDiastolicMmHg': dia,
+      'respiratoryRate': rr,
+      'respiratoryRateBpm': rr,
+      'temperatureCelsius': temp,
+      'temperature': temp,
+    };
+
+    symptomPayload['vitals'] = normalizedVitals;
+    final normalizedRppg = {
+      ...rppg,
+      ...normalizedVitals,
+      'signalQuality': rppg['signalQuality'] ?? 0.95,
+      'alerts': physiologicalAlerts,
+    };
+
+    List<Map<String, dynamic>> clinicalFindings = [];
+    if (rawFindings.isNotEmpty) {
+      for (int i = 0; i < rawFindings.length; i++) {
+        final f = (rawFindings[i] is Map) ? Map<String, dynamic>.from(rawFindings[i]) : <String, dynamic>{};
+        final diag = f['diagnosis']?.toString() ?? f['condition']?.toString() ?? 'Multimodal Clinical Checkup';
+        final code = f['icd11Code']?.toString() ?? f['code']?.toString() ?? 'MG40';
+
+        clinicalFindings.add({
+          ...f,
+          'diagnosis': diag,
+          'condition': diag,
+          'icd11Code': code,
+          'code': code,
+          'differentialRank': f['differentialRank'] ?? (i + 1),
+        });
+      }
+    } else {
+      clinicalFindings.add({
+        'diagnosis': 'Multimodal Clinical Checkup',
+        'condition': 'Multimodal Clinical Checkup',
+        'icd11Code': 'MG40',
+        'code': 'MG40',
+        'probability': 0.75,
+        'riskLevel': raw['risk_level'] ?? 'LOW',
+        'differentialRank': 1,
+        'recommendation': 'Periodic routine wellness screening recommended',
+        'evidence': ['Multimodal sensor presentation'],
+      });
+    }
+
+    final pid = raw['patient_id']?.toString() ?? raw['patientId']?.toString() ?? '';
+    final name = raw['patient_name'] ??
+        raw['patientName'] ??
+        symptomPayload['patient_name'] ??
+        symptomPayload['patientName'] ??
+        (pid.isNotEmpty ? 'Patient $pid' : 'Unknown Patient');
+
+    return {
+      ...raw,
+      'patient_id': pid,
+      'patient_name': name,
+      'patientName': name,
+      'symptom_payload': symptomPayload,
+      'clinical_findings': clinicalFindings,
+      'uncertainty_bounds': uncertaintyBounds,
+      'physiological_alerts': physiologicalAlerts,
+      'rppg_vitals_payload': normalizedRppg,
+    };
+  }
+
+  Map<String, dynamic> _normalizePatientSummary(Map<String, dynamic> patient) {
+    final rawScreenings = (patient['screenings'] is List) ? List<dynamic>.from(patient['screenings']) : [];
+    final normalizedScreenings = rawScreenings
+        .map((s) => (s is Map) ? _normalizeScreening(Map<String, dynamic>.from(s)) : <String, dynamic>{})
+        .toList();
+
+    String latestDiag = (patient['latestDiagnosis'] ?? '').toString();
+    String latestIcd = (patient['latestICD11'] ?? '').toString();
+
+    // If screenings exist, extract from the latest screening
+    if (normalizedScreenings.isNotEmpty) {
+      final latestSc = normalizedScreenings.first;
+      final findings = (latestSc['clinical_findings'] as List?) ?? [];
+      if (findings.isNotEmpty) {
+        final f = (findings.first is Map) ? Map<String, dynamic>.from(findings.first) : <String, dynamic>{};
+        latestDiag = f['diagnosis']?.toString() ?? f['condition']?.toString() ?? latestDiag;
+        latestIcd = f['icd11Code']?.toString() ?? f['code']?.toString() ?? latestIcd;
+      }
+    }
+
+    final rawVitals = (patient['latestVitals'] is Map) ? Map<String, dynamic>.from(patient['latestVitals']) : <String, dynamic>{};
+    final hr = rawVitals['heartRateBpm'] ?? rawVitals['heartRate'] ?? rawVitals['heart_rate'] ?? 74;
+    final spo2 = rawVitals['oxygenSaturationSpo2'] ?? rawVitals['oxygenSaturation'] ?? rawVitals['oxygen_saturation'] ?? 98;
+    final sys = rawVitals['bloodPressureSystolicMmHg'] ?? rawVitals['systolicBP'] ?? rawVitals['blood_pressure_systolic'] ?? 120;
+    final dia = rawVitals['bloodPressureDiastolicMmHg'] ?? rawVitals['diastolicBP'] ?? rawVitals['blood_pressure_diastolic'] ?? 80;
+    final temp = rawVitals['temperatureCelsius'] ?? rawVitals['temperature'] ?? 37.0;
+    final rr = rawVitals['respiratoryRateBpm'] ?? rawVitals['respiratoryRate'] ?? 16;
+
+    final normalizedVitals = {
+      ...rawVitals,
+      'heartRate': hr,
+      'heartRateBpm': hr,
+      'oxygenSaturation': spo2,
+      'oxygenSaturationSpo2': spo2,
+      'systolicBP': sys,
+      'bloodPressureSystolicMmHg': sys,
+      'diastolicBP': dia,
+      'bloodPressureDiastolicMmHg': dia,
+      'respiratoryRate': rr,
+      'respiratoryRateBpm': rr,
+      'temperatureCelsius': temp,
+      'temperature': temp,
+    };
+
+    return {
+      ...patient,
+      'latestDiagnosis': latestDiag.isNotEmpty ? latestDiag : 'Multimodal Clinical Checkup',
+      'latestICD11': latestIcd.isNotEmpty ? latestIcd : 'MG40',
+      'latestVitals': normalizedVitals,
+      'screenings': normalizedScreenings,
+    };
   }
 
   Future<void> _fetchAdminDiagnoses() async {
@@ -70,8 +227,8 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
         final dataScreenings = jsonDecode(resScreenings.body);
 
         if (mounted && dataPatients['success'] == true && dataScreenings['success'] == true) {
-          final loadedPatients = List<Map<String, dynamic>>.from(dataPatients['patients'] ?? []);
-          final loadedScreenings = List<Map<String, dynamic>>.from(dataScreenings['screenings'] ?? []);
+          final loadedPatients = List<Map<String, dynamic>>.from(dataPatients['patients'] ?? []).map(_normalizePatientSummary).toList();
+          final loadedScreenings = List<Map<String, dynamic>>.from(dataScreenings['screenings'] ?? []).map(_normalizeScreening).toList();
 
           setState(() {
             _patients = loadedPatients;
@@ -492,46 +649,56 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
                       ),
                       const SizedBox(height: 8),
 
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        child: Column(
-                          children: [
-                            _buildModalTelemetryRow(
-                              icon: Icons.thermostat,
-                              iconColor: const Color(0xFF0D9488),
-                              title: 'Body Temperature & Hemodynamics',
-                              value: '${vitals['temperature'] ?? 37.2}°C • BP ${vitals['blood_pressure_systolic'] ?? 120}/80 mmHg',
+                      Builder(
+                        builder: (_) {
+                          final hrVal = rppg['heartRate'] ?? rppg['heartRateBpm'] ?? vitals['heartRate'] ?? vitals['heartRateBpm'] ?? vitals['heart_rate'] ?? vitals['pulse'] ?? 74;
+                          final spo2Val = rppg['oxygenSaturation'] ?? rppg['oxygenSaturationSpo2'] ?? vitals['oxygenSaturation'] ?? vitals['oxygenSaturationSpo2'] ?? vitals['oxygen_saturation'] ?? vitals['spo2'] ?? 98.0;
+                          final sysVal = rppg['systolicBP'] ?? rppg['bloodPressureSystolicMmHg'] ?? vitals['systolicBP'] ?? vitals['bloodPressureSystolicMmHg'] ?? vitals['blood_pressure_systolic'] ?? 120;
+                          final diaVal = rppg['diastolicBP'] ?? rppg['bloodPressureDiastolicMmHg'] ?? vitals['diastolicBP'] ?? vitals['bloodPressureDiastolicMmHg'] ?? vitals['blood_pressure_diastolic'] ?? 80;
+                          final tempVal = rppg['temperatureCelsius'] ?? rppg['temperature'] ?? vitals['temperatureCelsius'] ?? vitals['temperature'] ?? 37.0;
+
+                          return Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
                             ),
-                            const Divider(color: Color(0xFFF1F5F9), height: 16),
-                            _buildModalTelemetryRow(
-                              icon: Icons.favorite,
-                              iconColor: const Color(0xFFEF4444),
-                              title: 'Contactless rPPG Vitals',
-                              value: 'HR: ${(rppg['heartRateBpm'] ?? vitals['heart_rate'] ?? 78).round()} BPM • SpO2: ${(rppg['oxygenSaturationSpo2'] ?? vitals['oxygen_saturation'] ?? 98.2).toStringAsFixed(1)}%',
+                            child: Column(
+                              children: [
+                                _buildModalTelemetryRow(
+                                  icon: Icons.thermostat,
+                                  iconColor: const Color(0xFF0D9488),
+                                  title: 'Body Temperature & Hemodynamics',
+                                  value: '$tempVal°C • BP $sysVal/$diaVal mmHg',
+                                ),
+                                const Divider(color: Color(0xFFF1F5F9), height: 16),
+                                _buildModalTelemetryRow(
+                                  icon: Icons.favorite,
+                                  iconColor: const Color(0xFFEF4444),
+                                  title: 'Contactless rPPG Vitals',
+                                  value: 'HR: ${(num.tryParse(hrVal.toString()) ?? 74).round()} BPM • SpO2: ${(num.tryParse(spo2Val.toString()) ?? 98.0).toStringAsFixed(1)}%',
+                                ),
+                                const Divider(color: Color(0xFFF1F5F9), height: 16),
+                                _buildModalTelemetryRow(
+                                  icon: Icons.mic,
+                                  iconColor: const Color(0xFF0284C7),
+                                  title: '5s Acoustic Respiratory WAV',
+                                  value: '${acoustic['predicted_class'] ?? 'Normal Airway'} (${((acoustic['confidence'] as num?)?.toDouble() ?? 0.92 * 100).toStringAsFixed(0)}% Conf)',
+                                ),
+                                const Divider(color: Color(0xFFF1F5F9), height: 16),
+                                _buildModalTelemetryRow(
+                                  icon: Icons.shield_outlined,
+                                  iconColor: const Color(0xFFD97706),
+                                  title: 'Medication Allergy & DDI Shield',
+                                  value: screening['symptom_payload']?['has_safety_conflict'] == true
+                                      ? (screening['symptom_payload']?['safety_conflict_summary'] ?? 'Contraindication Warning Detected')
+                                      : 'No active drug-drug or allergen conflicts detected',
+                                ),
+                              ],
                             ),
-                            const Divider(color: Color(0xFFF1F5F9), height: 16),
-                            _buildModalTelemetryRow(
-                              icon: Icons.mic,
-                              iconColor: const Color(0xFF0284C7),
-                              title: '5s Acoustic Respiratory WAV',
-                              value: '${acoustic['predicted_class'] ?? 'Normal Airway'} (${((acoustic['confidence'] as num?)?.toDouble() ?? 0.92 * 100).toStringAsFixed(0)}% Conf)',
-                            ),
-                            const Divider(color: Color(0xFFF1F5F9), height: 16),
-                            _buildModalTelemetryRow(
-                              icon: Icons.shield_outlined,
-                              iconColor: const Color(0xFFD97706),
-                              title: 'Medication Allergy & DDI Shield',
-                              value: screening['symptom_payload']?['has_safety_conflict'] == true
-                                  ? (screening['symptom_payload']?['safety_conflict_summary'] ?? 'Contraindication Warning Detected')
-                                  : 'No active drug-drug or allergen conflicts detected',
-                            ),
-                          ],
-                        ),
+                          );
+                        },
                       ),
                       const SizedBox(height: 16),
 
@@ -596,6 +763,57 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
                             style: const TextStyle(fontSize: 12.5, color: Color(0xFF334155), height: 1.4),
                           ),
                         ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // 5. Multimodal Differential Diagnoses
+                      if (findings.length > 1) ...[
+                        Text(
+                          'Multimodal Differential Diagnoses',
+                          style: GoogleFonts.outfit(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF0F172A),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ...findings.skip(1).map((f) {
+                          final diffMap = (f is Map) ? f : <String, dynamic>{};
+                          final dName = diffMap['diagnosis'] ?? diffMap['condition'] ?? 'Differential';
+                          final dCode = diffMap['icd11Code'] ?? diffMap['code'] ?? 'MG40';
+                          final dProb = (((diffMap['probability'] as num?)?.toDouble() ?? 0.2) * 100).toStringAsFixed(0);
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    '$dName ($dCode)',
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0D9488).withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    '$dProb% match',
+                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0D9488)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
                         const SizedBox(height: 20),
                       ],
 

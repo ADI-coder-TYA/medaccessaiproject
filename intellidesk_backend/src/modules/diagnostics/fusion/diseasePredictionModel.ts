@@ -145,10 +145,33 @@ export class DiseasePredictionModel {
     // 1. One-hot / multi-hot symptom encoding against clinical vocabulary
     for (let i = 0; i < CLINICAL_SYMPTOM_VOCABULARY.length; i++) {
       const vocabWord = CLINICAL_SYMPTOM_VOCABULARY[i].toLowerCase();
+      let matched = false;
+
       if (
         symptoms.some((s) => s.includes(vocabWord) || vocabWord.includes(s)) ||
         combinedText.includes(vocabWord)
       ) {
+        matched = true;
+      } else {
+        // Semantic token overlap matching (e.g. "erythema / redness" in "eye" matches "redness of eyes" & "ocular erythema")
+        const vocabTokens = vocabWord.split(/[\s_/-]+/).filter((t) => t.length > 3);
+        const hasTokenOverlap = vocabTokens.some((vt) => symptoms.some((s) => s.includes(vt)));
+        if (hasTokenOverlap) {
+          if (vocabWord.includes('eye') || vocabWord.includes('ocular')) {
+            if (bodyLocation.includes('eye') || bodyLocation.includes('ophthalm') || bodyLocation.includes('ocular')) {
+              matched = true;
+            }
+          } else if (vocabWord.includes('skin')) {
+            if (bodyLocation.includes('skin') || bodyLocation.includes('epidermis')) {
+              matched = true;
+            }
+          } else {
+            matched = true;
+          }
+        }
+      }
+
+      if (matched) {
         vector[i] = 1.0;
       }
     }
@@ -190,43 +213,74 @@ export class DiseasePredictionModel {
 
   /**
    * Trains the Neural Network on clinical disease benchmark training permutations.
+   * Generates 11,500+ diverse clinical training cases across all 23 WHO ICD-11 classes.
    */
-  public static async trainAndPersistModel(): Promise<void> {
-    console.log('🧬 [DiseasePredictionML] Training Deep Neural Disease Classifier on Benchmark Corpus...');
+  public static async trainAndPersistModel(samplesPerDisease = 500): Promise<void> {
+    console.log(`🧬 [DiseasePredictionML] Training Deep Neural Disease Classifier on Comprehensive Dataset (${samplesPerDisease * CLINICAL_DISEASES.length} cases)...`);
     const model = this.buildModel();
 
     const xs: number[][] = [];
     const ys: number[][] = [];
 
-    // Synthesize clinical patient presentations with realistic variation & dropout
+    // Box-Muller Gaussian noise generator
+    const gaussianRandom = (mean = 0, std = 1): number => {
+      let u = 1 - Math.random();
+      let v = Math.random();
+      let z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+      return mean + z * std;
+    };
+
+    // Synthesize clinical patient presentations with realistic physiological distributions
     for (let dIdx = 0; dIdx < CLINICAL_DISEASES.length; dIdx++) {
       const disease = CLINICAL_DISEASES[dIdx];
-      const samplesPerDisease = 80;
 
       for (let s = 0; s < samplesPerDisease; s++) {
-        // Sample a subset of true symptoms (at least 1-3 characteristic symptoms)
+        // 1. Primary symptom selection (1 to all disease symptoms)
         const symptomCount = Math.max(1, Math.floor(Math.random() * disease.symptoms.length) + 1);
         const shuffled = [...disease.symptoms].sort(() => 0.5 - Math.random());
         const chosenSymptoms = shuffled.slice(0, symptomCount);
 
+        // 2. Realistic Co-morbidity / Non-specific symptom injection (20% probability)
+        if (Math.random() < 0.20) {
+          const nonSpecific = ['fatigue', 'mild fever', 'headache', 'restlessness', 'nausea'];
+          const noiseSym = nonSpecific[Math.floor(Math.random() * nonSpecific.length)];
+          if (!chosenSymptoms.includes(noiseSym)) {
+            chosenSymptoms.push(noiseSym);
+          }
+        }
+
+        // 3. Realistic Physiological Vitals Sampling
+        let baseHr = disease.urgency === 'EMERGENCY' ? 110 : 75;
+        let baseSpo2 = (disease.category === 'Pulmonology' || disease.category === 'Respiratory Diseases') ? 92 : 98;
+        let baseTemp = disease.symptoms.some(sym => sym.includes('fever') || sym.includes('chills')) ? 38.6 : 37.0;
+        let baseSys = disease.id === 'hypertension' ? 165 : 120;
+        let basePain = disease.urgency === 'EMERGENCY' ? 8.5 : (disease.urgency === 'PROMPT_CARE' ? 5.5 : 3.0);
+
+        const hr = Math.round(Math.max(45, Math.min(180, gaussianRandom(baseHr, 8))));
+        const spo2 = Math.round(Math.max(75, Math.min(100, gaussianRandom(baseSpo2, 2.5))));
+        const temp = Number(Math.max(35.0, Math.min(41.5, gaussianRandom(baseTemp, 0.4))).toFixed(1));
+        const sys = Math.round(Math.max(85, Math.min(210, gaussianRandom(baseSys, 12))));
+        const pain = Math.round(Math.max(1, Math.min(10, gaussianRandom(basePain, 1.2))));
+        const duration = Math.max(1, Math.round(Math.abs(gaussianRandom(4, 3))));
+
         const syntheticPayload: Partial<SymptomInputPayload> = {
           symptoms: chosenSymptoms,
           bodyLocation: disease.bodyLocations[Math.floor(Math.random() * disease.bodyLocations.length)],
-          painScale: disease.urgency === 'EMERGENCY' ? 8 + Math.random() * 2 : 4 + Math.random() * 4,
-          durationDays: Math.floor(Math.random() * 7) + 1,
+          painScale: pain,
+          durationDays: duration,
           vitals: {
-            heartRate: disease.urgency === 'EMERGENCY' ? 105 + Math.random() * 20 : 72 + Math.random() * 15,
-            temperatureCelsius: disease.symptoms.includes('high fever') ? 38.5 + Math.random() : 36.8 + Math.random() * 0.5,
-            oxygenSaturation: disease.category === 'Pulmonology' ? 92 + Math.random() * 4 : 98 + Math.random() * 2,
-            systolicBP: disease.id === 'hypertension' ? 165 + Math.random() * 20 : 120 + Math.random() * 15
+            heartRate: hr,
+            temperatureCelsius: temp,
+            oxygenSaturation: spo2,
+            systolicBP: sys
           }
         };
 
         const x = this.assembleFeatureVector(syntheticPayload);
 
-        // Label-smoothed target vector
-        const y = new Array<number>(NUM_DISEASE_CLASSES).fill(0.01 / (NUM_DISEASE_CLASSES - 1));
-        y[dIdx] = 0.99;
+        // Label smoothing: 0.98 target, distributed remaining 0.02
+        const y = new Array<number>(NUM_DISEASE_CLASSES).fill(0.02 / (NUM_DISEASE_CLASSES - 1));
+        y[dIdx] = 0.98;
 
         xs.push(x);
         ys.push(y);
@@ -236,11 +290,20 @@ export class DiseasePredictionModel {
     const xTensor = tf.tensor2d(xs);
     const yTensor = tf.tensor2d(ys);
 
-    await model.fit(xTensor, yTensor, {
+    console.log(`🧬 [DiseasePredictionML] Commencing neural training (${xs.length} training tensors)...`);
+    const history = await model.fit(xTensor, yTensor, {
       epochs: 35,
-      batchSize: 32,
+      batchSize: 64,
       shuffle: true,
-      verbose: 0
+      validationSplit: 0.15,
+      verbose: 0,
+      callbacks: {
+        onEpochEnd: (epoch: number, logs?: tf.Logs) => {
+          if ((epoch + 1) % 10 === 0 || epoch === 34) {
+            console.log(`  [Epoch ${epoch + 1}/35] Loss: ${logs?.loss?.toFixed(4)} | Acc: ${(Number(logs?.acc ?? 0) * 100).toFixed(1)}% | Val Loss: ${logs?.val_loss?.toFixed(4)} | Val Acc: ${(Number(logs?.val_acc ?? 0) * 100).toFixed(1)}%`);
+          }
+        }
+      }
     });
 
     xTensor.dispose();
@@ -252,7 +315,7 @@ export class DiseasePredictionModel {
 
     await model.save(`file://${DISEASE_MODEL_DIR}`);
     this.cachedModel = model;
-    console.log(`✅ [DiseasePredictionML] Neural Disease Classifier trained & saved to ${DISEASE_MODEL_DIR}`);
+    console.log(`✅ [DiseasePredictionML] Neural Disease Classifier trained on ${xs.length} cases & saved to ${DISEASE_MODEL_DIR}`);
   }
 
   /**

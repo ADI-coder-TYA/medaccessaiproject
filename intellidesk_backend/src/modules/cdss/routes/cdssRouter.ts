@@ -62,7 +62,11 @@ cdssRouter.post('/approve/:evaluationId', async (req: Request, res: Response) =>
       clinicianName = 'Dr. Attending Physician, MD',
       isOverridden = false,
       overriddenCode,
-      overrideNotes
+      overrideNotes,
+      currentEvaluation,
+      evaluation,
+      screeningId,
+      patientId
     } = req.body;
 
     const result = await CDSSService.approveEvaluation(evaluationId, {
@@ -70,7 +74,10 @@ cdssRouter.post('/approve/:evaluationId', async (req: Request, res: Response) =>
       clinicianName,
       isOverridden: Boolean(isOverridden),
       overriddenCode,
-      overrideNotes
+      overrideNotes,
+      currentEvaluation: currentEvaluation || evaluation,
+      screeningId,
+      patientId
     });
 
     return res.status(200).json({

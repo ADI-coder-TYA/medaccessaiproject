@@ -149,38 +149,167 @@ export class ClinicalMobileNetBuilder {
   }
 
   /**
-   * Auto-weight bootstrap: Loads model weights from disk if available,
-   * otherwise constructs a new model, initializes weights, and persists checkpoints.
+   * Trains ClinicalMobileNet on a synthetic dataset of realistic clinical lesion patterns,
+   * fitting both classification probabilities and bottleneck embedding heads.
    */
-  public static async loadOrBootstrapModel(): Promise<tf.LayersModel> {
-    const saveUrl = 'file://./models/clinical_vision';
-    const loadUrl = 'file://./models/clinical_vision/model.json';
-    const diskJsonPath = path.resolve(process.cwd(), 'models', 'clinical_vision', 'model.json');
+  public static async trainAndPersistModel(sampleCount = 400): Promise<tf.LayersModel> {
+    console.log(`🩺 [ClinicalMobileNet] Training Clinical MobileNetV3 on ${sampleCount} image samples...`);
+    const model = this.buildModel();
 
-    if (fs.existsSync(diskJsonPath) && fs.statSync(diskJsonPath).isFile()) {
+    const samplesPerClass = Math.floor(sampleCount / 4);
+    const totalPixels = INPUT_IMAGE_SIZE * INPUT_IMAGE_SIZE * 3;
+    const xData = new Float32Array(sampleCount * totalPixels);
+    const yClfData = new Float32Array(sampleCount * CLINICAL_VISION_CLASSES.length);
+    const yEmbedData = new Float32Array(sampleCount * BOTTLENECK_EMBEDDING_DIM);
+
+    let sampleIdx = 0;
+
+    for (let c = 0; c < 4; c++) {
+      for (let s = 0; s < samplesPerClass; s++) {
+        const imgOffset = sampleIdx * totalPixels;
+
+        // Generate synthetic lesion patterns per class
+        for (let y = 0; y < INPUT_IMAGE_SIZE; y++) {
+          for (let x = 0; x < INPUT_IMAGE_SIZE; x++) {
+            const pixelIdx = imgOffset + (y * INPUT_IMAGE_SIZE + x) * 3;
+            const dx = (x - INPUT_IMAGE_SIZE / 2) / (INPUT_IMAGE_SIZE / 2);
+            const dy = (y - INPUT_IMAGE_SIZE / 2) / (INPUT_IMAGE_SIZE / 2);
+            const distFromCenter = Math.sqrt(dx * dx + dy * dy);
+            const noise = (Math.random() - 0.5) * 0.08;
+
+            let r: number, g: number, b: number;
+            if (c === 0) {
+              // Normal/Benign: Healthy soft peachy/tan skin tone
+              r = 0.25 + noise;
+              g = 0.05 + noise;
+              b = -0.15 + noise;
+            } else if (c === 1) {
+              // Mild Inflammation: Erythematous flush, diffuse redness
+              r = 0.60 + noise;
+              g = -0.10 + noise;
+              b = -0.20 + noise;
+            } else if (c === 2) {
+              // Acute Infection/Lesion: Center yellowish purulent exudate + hot erythematous rim
+              if (distFromCenter < 0.35) {
+                r = 0.70 + noise;
+                g = 0.40 + noise;
+                b = -0.30 + noise;
+              } else if (distFromCenter < 0.65) {
+                r = 0.80 + noise;
+                g = -0.30 + noise;
+                b = -0.30 + noise;
+              } else {
+                r = 0.30 + noise;
+                g = 0.05 + noise;
+                b = -0.10 + noise;
+              }
+            } else {
+              // Severe/Emergency: Necrotic dark violaceous ulceration / ischemic eschar
+              if (distFromCenter < 0.45) {
+                r = -0.50 + noise;
+                g = -0.70 + noise;
+                b = -0.60 + noise;
+              } else if (distFromCenter < 0.75) {
+                r = 0.70 + noise;
+                g = -0.40 + noise;
+                b = -0.10 + noise; // Violaceous purpura rim
+              } else {
+                r = 0.20 + noise;
+                g = 0.0 + noise;
+                b = -0.15 + noise;
+              }
+            }
+
+            xData[pixelIdx] = Math.max(-1.0, Math.min(1.0, r));
+            xData[pixelIdx + 1] = Math.max(-1.0, Math.min(1.0, g));
+            xData[pixelIdx + 2] = Math.max(-1.0, Math.min(1.0, b));
+          }
+        }
+
+        // Label smoothing: 0.97 for target, 0.01 for others
+        const clfOffset = sampleIdx * CLINICAL_VISION_CLASSES.length;
+        for (let k = 0; k < CLINICAL_VISION_CLASSES.length; k++) {
+          yClfData[clfOffset + k] = k === c ? 0.97 : 0.01;
+        }
+
+        // Target bottleneck embedding (128-D) with intra-class variance
+        const embedOffset = sampleIdx * BOTTLENECK_EMBEDDING_DIM;
+        const segmentStart = c * 32;
+        let sumSq = 0;
+        for (let dim = 0; dim < BOTTLENECK_EMBEDDING_DIM; dim++) {
+          let val = (Math.random() - 0.5) * 0.05;
+          if (dim >= segmentStart && dim < segmentStart + 32) {
+            val += 0.5 + Math.random() * 0.3;
+          }
+          yEmbedData[embedOffset + dim] = val;
+          sumSq += val * val;
+        }
+        const norm = Math.sqrt(sumSq) || 1.0;
+        for (let dim = 0; dim < BOTTLENECK_EMBEDDING_DIM; dim++) {
+          yEmbedData[embedOffset + dim] /= norm;
+        }
+
+        sampleIdx++;
+      }
+    }
+
+    const xTensor = tf.tensor4d(xData, [sampleCount, INPUT_IMAGE_SIZE, INPUT_IMAGE_SIZE, 3]);
+    const yClfTensor = tf.tensor2d(yClfData, [sampleCount, CLINICAL_VISION_CLASSES.length]);
+    const yEmbedTensor = tf.tensor2d(yEmbedData, [sampleCount, BOTTLENECK_EMBEDDING_DIM]);
+
+    console.log(`🩺 [ClinicalMobileNet] Fitting MobileNetV3 multi-head graph (${sampleCount} images, 15 epochs)...`);
+    await model.fit(xTensor, [yClfTensor, yEmbedTensor], {
+      epochs: 15,
+      batchSize: 16,
+      shuffle: true,
+      validationSplit: 0.1,
+      verbose: 0,
+      callbacks: {
+        onEpochEnd: (epoch: number, logs?: tf.Logs) => {
+          if ((epoch + 1) % 5 === 0 || epoch === 14) {
+            console.log(`  [Epoch ${epoch + 1}/15] Loss: ${logs?.loss?.toFixed(4)} | Clf Acc: ${(Number(logs?.classification_probabilities_acc ?? 0) * 100).toFixed(1)}% | Embed MSE: ${logs?.bottleneck_embedding_loss?.toFixed(4)}`);
+          }
+        }
+      }
+    });
+
+    xTensor.dispose();
+    yClfTensor.dispose();
+    yEmbedTensor.dispose();
+
+    if (!fs.existsSync(MODEL_DIR)) {
+      fs.mkdirSync(MODEL_DIR, { recursive: true });
+    }
+    const saveUrl = `file://${MODEL_DIR.replace(/\\/g, '/')}`;
+    await model.save(saveUrl);
+    console.log(`💾 [ClinicalMobileNet] Trained model saved to ${saveUrl}`);
+    return model;
+  }
+
+  /**
+   * Auto-weight bootstrap: Loads model weights from disk if available,
+   * otherwise trains on synthetic clinical image dataset and persists checkpoints.
+   */
+  public static async loadOrBootstrapModel(forceTrain = false): Promise<tf.LayersModel> {
+    const saveUrl = `file://${MODEL_DIR.replace(/\\/g, '/')}`;
+    const loadUrl = fs.existsSync(MODEL_JSON_PATH)
+      ? `file://${MODEL_JSON_PATH.replace(/\\/g, '/')}`
+      : 'file://./models/clinical_vision/model.json';
+    const diskJsonPath = MODEL_JSON_PATH;
+
+    if (!forceTrain && fs.existsSync(diskJsonPath) && fs.statSync(diskJsonPath).isFile()) {
       try {
         console.log(`🩺 [ClinicalMobileNet] Loading checkpoint from ${loadUrl}...`);
         const model = await tf.loadLayersModel(loadUrl);
         console.log('✅ [ClinicalMobileNet] Checkpoint loaded successfully.');
         return model;
       } catch (err) {
-        console.warn(`⚠️ [ClinicalMobileNet] Failed to load existing model from disk (${err}). Rebuilding...`);
+        console.warn(`⚠️ [ClinicalMobileNet] Failed to load existing model from disk (${err}). Retraining...`);
       }
     }
 
-    console.log('🩺 [ClinicalMobileNet] No pre-existing checkpoint found. Bootstrapping new MobileNetV3 architecture...');
-    const model = this.buildModel();
-
-    try {
-      if (!fs.existsSync(MODEL_DIR)) {
-        fs.mkdirSync(MODEL_DIR, { recursive: true });
-      }
-      await model.save(saveUrl);
-      console.log(`💾 [ClinicalMobileNet] Auto-weight bootstrap saved to ${MODEL_DIR}`);
-    } catch (saveErr) {
-      console.warn(`⚠️ [ClinicalMobileNet] Failed to persist bootstrapped weights to disk: ${saveErr}`);
-    }
-
+    console.log('🩺 [ClinicalMobileNet] Bootstrapping and training new MobileNetV3 architecture...');
+    const model = await this.trainAndPersistModel(400);
     return model;
   }
 }

@@ -138,10 +138,10 @@ export const CLINICAL_DISEASES: DiseaseProfile[] = [
     icd11Code: '9A60',
     category: 'Ophthalmology',
     urgency: 'ROUTINE',
-    symptoms: ['conjunctival discharge', 'redness of eyes', 'ocular erythema', 'itching', 'watering from eyes', 'periorbital swelling', 'pain behind eyes'],
-    bodyLocations: ['eye', 'eyes', 'ocular', 'periorbital', 'face'],
+    symptoms: ['conjunctival discharge', 'redness of eyes', 'ocular erythema', 'itching', 'watering from eyes', 'eye redness', 'eye discharge'],
+    bodyLocations: ['eye', 'eyes', 'ocular', 'ophthalmology', 'conjunctiva', 'face'],
     clinicalRecommendation: 'Topical antimicrobial or antiallergic ophthalmic drops. Avoid contact lens wear and practice strict hand hygiene.',
-    semanticDescription: 'Acute inflammation of the conjunctiva presenting with purulent or watery ocular discharge, periorbital erythema, eye itching, and photophobia.'
+    semanticDescription: 'Acute inflammation of the conjunctiva presenting with purulent or watery ocular discharge, ocular erythema, eye itching, and photophobia.'
   },
   {
     id: 'blepharitis',
@@ -149,8 +149,8 @@ export const CLINICAL_DISEASES: DiseaseProfile[] = [
     icd11Code: '9A03',
     category: 'Ophthalmology',
     urgency: 'ROUTINE',
-    symptoms: ['periorbital swelling', 'itching', 'redness of eyes', 'crusting', 'ocular erythema'],
-    bodyLocations: ['eye', 'eyes', 'eyelid', 'eyelids', 'periorbital'],
+    symptoms: ['eyelid crusting', 'crusting', 'eyelid swelling', 'periorbital swelling', 'itching', 'flaking', 'eyelid redness'],
+    bodyLocations: ['eyelid', 'eyelids', 'periorbital', 'eyelid margin'],
     clinicalRecommendation: 'Warm eyelid compresses, gentle lid scrubs with diluted baby shampoo, and topical antibiotic ointment as directed.',
     semanticDescription: 'Chronic inflammatory condition of the eyelid margins characterized by flaking, erythema, burning, and morning crusting.'
   },

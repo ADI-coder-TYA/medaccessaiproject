@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import '../../config/api_config.dart';
 import '../../modules/cdss/models/cdss_evaluation.dart';
+import '../../modules/cdss/services/cdss_service.dart';
 import '../../modules/cdss/ui/cdss_decision_drawer.dart';
 import '../../modules/diagnostics/ui/LongitudinalHistoryScreen.dart';
 import '../../modules/pharmacy/ui/admin_patient_pharmacy_modal.dart';
@@ -298,17 +299,26 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
     }
   }
 
-  void _openCDSSDrawer(BuildContext context, Map<String, dynamic> screening) {
+  Future<void> _openCDSSDrawer(BuildContext context, Map<String, dynamic> screening) async {
     final findings = screening['clinical_findings'] as List? ?? [];
     final primary = findings.isNotEmpty ? findings[0] : null;
     final primaryTitle = primary?['diagnosis']?.toString() ?? 'Acute Clinical Presentation';
     final primaryCode = primary?['icd11Code']?.toString() ?? 'MG40';
     final pid = screening['patient_id']?.toString() ?? '';
+    final screeningId = screening['id']?.toString();
+    final riskScore = (screening['multimodal_risk_score'] as num?)?.toDouble() ?? 0.5;
+    final symptomPayload = (screening['symptom_payload'] is Map)
+        ? Map<String, dynamic>.from(screening['symptom_payload'])
+        : <String, dynamic>{};
+    final instId = screening['institutionId']?.toString() ?? screening['institution_id']?.toString() ?? ApiConfig.activeInstitutionId;
+    final instName = screening['institutionName']?.toString() ?? ApiConfig.activeInstitutionName;
 
-    final evaluation = CDSSEvaluationResult(
+    final fallbackEval = CDSSEvaluationResult(
       id: 'cdss-${screening['id'] ?? DateTime.now().millisecondsSinceEpoch}',
       screeningId: screening['id']?.toString(),
-      patientId: pid,
+      patientId: pid.isNotEmpty ? pid : 'PATIENT-ANON',
+      institutionId: instId,
+      institutionName: instName,
       primaryICD11Code: primaryCode,
       primaryICD11Title: primaryTitle,
       primaryICD11Uri: 'http://id.who.int/icd/release/11/mms/$primaryCode',
@@ -349,12 +359,28 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
       updatedAt: DateTime.now().toIso8601String(),
     );
 
+    CDSSEvaluationResult evaluation = fallbackEval;
+    try {
+      final evaluated = await CDSSService().evaluateScreening(
+        screeningId: screeningId,
+        patientId: pid.isNotEmpty ? pid : 'PATIENT-ANON',
+        institutionId: instId,
+        institutionName: instName,
+        riskScore: riskScore,
+        symptoms: symptomPayload,
+        visionFindings: findings.whereType<Map<String, dynamic>>().toList(),
+      );
+      evaluation = evaluated;
+    } catch (_) {}
+
+    if (!context.mounted) return;
+
     CDSSDecisionDrawer.show(
       context,
       evaluation: evaluation,
       isClinicianView: true,
-      institutionId: screening['institutionId']?.toString() ?? screening['institution_id']?.toString() ?? ApiConfig.activeInstitutionId,
-      institutionName: screening['institutionName']?.toString() ?? ApiConfig.activeInstitutionName,
+      institutionId: instId,
+      institutionName: instName,
     );
   }
 

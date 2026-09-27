@@ -87,6 +87,9 @@ class CDSSService {
       'isOverridden': isOverridden,
       if (overriddenCode != null) 'overriddenCode': overriddenCode,
       if (overrideNotes != null) 'overrideNotes': overrideNotes,
+      if (currentEvaluation != null) 'currentEvaluation': currentEvaluation.toJson(),
+      if (currentEvaluation?.screeningId != null) 'screeningId': currentEvaluation!.screeningId,
+      if (currentEvaluation?.patientId != null) 'patientId': currentEvaluation!.patientId,
     };
 
     try {
@@ -101,6 +104,8 @@ class CDSSService {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return CDSSEvaluationResult.fromJson(data['evaluation'] as Map<String, dynamic>);
+      } else {
+        debugPrint('⚠️ [CDSSService] Approval API returned ${response.statusCode}: ${response.body}. Updating offline locally.');
       }
     } catch (e) {
       debugPrint('⚠️ [CDSSService] Approval API failed: $e. Updating offline locally.');

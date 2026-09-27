@@ -210,8 +210,8 @@ export class ICD11ConceptStore {
         category: 'Dermatological Diseases',
         uri: this.buildUri('FB80'),
         clinicalCriteria: {
-          requiredKeywords: ['pruritus / itching', 'erythema / redness', 'swelling / edema', 'rash', 'crusting'],
-          anatomicalLocations: ['Skin / Epidermis', 'Arms / Hands', 'Legs / Feet', 'Face / Head'],
+          requiredKeywords: ['pruritus / itching', 'erythema / redness', 'swelling / edema', 'rash', 'crusting', 'skin rash', 'itching'],
+          anatomicalLocations: ['Skin / Epidermis', 'SKIN_EPIDERMIS', 'Arms / Hands', 'Legs / Feet', 'Face / Head', 'Torso / Trunk'],
           visionPatterns: ['Dermatological Rash', 'Erythema', 'Eczema / Atopic', 'Superficial Lesion'],
           minRiskScore: 0.10
         },
@@ -268,8 +268,7 @@ export class ICD11ConceptStore {
           anatomicalLocations: [
             'Eye / Ophthalmology',
             'EYE_OPHTHALMOLOGY',
-            'Skin / Epidermis',
-            'SKIN_EPIDERMIS',
+            'Eyelid / Periorbital',
             'Face / Head'
           ],
           visionPatterns: ['Periorbital Erythema', 'Erythema', 'Dermatological Rash'],
@@ -391,11 +390,10 @@ export class ICD11ConceptStore {
             'eyelid'
           ],
           anatomicalLocations: [
-            'Eye / Ophthalmology',
-            'EYE_OPHTHALMOLOGY',
-            'Face / Head',
-            'Eye',
-            'Ophthalmology'
+            'Eyelid / Lid Margin',
+            'Eyelids',
+            'Periorbital',
+            'Face / Head'
           ],
           visionPatterns: ['Eyelid Margin Erythema', 'Ciliary Crusting'],
           minRiskScore: 0.10

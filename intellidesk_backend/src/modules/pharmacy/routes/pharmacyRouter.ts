@@ -223,16 +223,27 @@ pharmacyRouter.get('/scans/:id', async (req: Request, res: Response) => {
 
 /**
  * DELETE /api/v1/pharmacy/medications/:id
+ * DELETE /api/v1/pharmacy/medications
  * Removes a medication from the patient active roster.
  */
-pharmacyRouter.delete('/medications/:id', async (req: Request, res: Response) => {
+pharmacyRouter.delete('/medications/:id?', async (req: Request, res: Response) => {
   try {
-    const id = String(req.params.id);
-    const patientId = req.query.patientId ? String(req.query.patientId) : undefined;
-    await PharmacyDbService.deletePatientMedication(id, patientId);
+    const rawId = req.params.id || req.query.id || req.body?.id || '';
+    const id = decodeURIComponent(String(rawId)).trim();
+    const rawPatientId = req.query.patientId || req.body?.patientId;
+    const patientId = rawPatientId ? decodeURIComponent(String(rawPatientId)).trim() : undefined;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Medication identifier or name is required for deletion'
+      });
+    }
+
+    const success = await PharmacyDbService.deletePatientMedication(id, patientId);
     return res.status(200).json({
-      success: true,
-      message: 'Medication removed successfully'
+      success,
+      message: success ? 'Medication removed successfully' : 'Medication delete could not be completed'
     });
   } catch (err: any) {
     return res.status(500).json({
@@ -248,11 +259,12 @@ pharmacyRouter.delete('/medications/:id', async (req: Request, res: Response) =>
  */
 pharmacyRouter.delete('/allergies/:patientId/:allergenGroup', async (req: Request, res: Response) => {
   try {
-    const { patientId, allergenGroup } = req.params;
-    await PharmacyDbService.deletePatientAllergy(String(patientId), String(allergenGroup));
+    const patientId = decodeURIComponent(String(req.params.patientId)).trim();
+    const allergenGroup = decodeURIComponent(String(req.params.allergenGroup)).trim();
+    const success = await PharmacyDbService.deletePatientAllergy(patientId, allergenGroup);
     return res.status(200).json({
-      success: true,
-      message: 'Allergy removed successfully'
+      success,
+      message: success ? 'Allergy removed successfully' : 'Allergy delete could not be completed'
     });
   } catch (err: any) {
     return res.status(500).json({

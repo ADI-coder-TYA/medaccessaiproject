@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { parsePrescriptionDocument, sanitizeOcrText, parseMedicationLine } from '../modules/pharmacy/PrescriptionOCRParser.js';
 import { findBestRxNormMatch, calculateSimilarity } from '../modules/pharmacy/fuzzyMatcher.js';
 import { DrugInteractionEngine } from '../modules/pharmacy/DrugInteractionEngine.js';
@@ -262,11 +263,50 @@ Tab Paracetamol 500mg PRN
   // TEST 7: Test Isolation in Memory Fallbacks (Guardrail 2)
   // -------------------------------------------------------------
   console.log('\n--- TEST 7: Test Isolation in Memory Fallbacks ---');
+  await PharmacyDbService.deletePatientMedication('Coumadin', 'pat-clinical-999');
+  await PharmacyDbService.deletePatientAllergy('pat-clinical-999', 'NSAIDS');
   PharmacyDbService.clearInMemoryStore();
   const resetAllergies = await PharmacyDbService.getPatientAllergies('pat-clinical-999');
   const resetMeds = await PharmacyDbService.getPatientMedications('pat-clinical-999');
-  assert(resetAllergies.length === 0, 'clearInMemoryStore resets allergies store cleanly');
-  assert(resetMeds.length === 0, 'clearInMemoryStore resets medications store cleanly');
+  assert(resetAllergies.length === 0, 'clearInMemoryStore & DB delete resets allergies store cleanly');
+  assert(resetMeds.length === 0, 'clearInMemoryStore & DB delete resets medications store cleanly');
+
+  // -------------------------------------------------------------
+  // TEST 8: Medication & Allergy DB Deletion Lifecycle
+  // -------------------------------------------------------------
+  console.log('\n--- TEST 8: Database Medication & Allergy Deletion ---');
+  const testPatient = 'PAT-TEST-DELETE-001';
+  const createdMed1 = await PharmacyDbService.addPatientMedication({
+    patientId: testPatient,
+    medicationName: 'Atorvastatin 20mg',
+    activeIngredient: 'Atorvastatin',
+    dosage: '20mg daily',
+    isActive: true
+  });
+  const createdMed2 = await PharmacyDbService.addPatientMedication({
+    patientId: `usr_pat_${testPatient}`,
+    medicationName: 'Metformin Hydrochloride 500mg',
+    activeIngredient: 'Metformin',
+    dosage: '500mg twice daily',
+    isActive: true
+  });
+
+  const medsBefore = await PharmacyDbService.getPatientMedications(testPatient);
+  assert(medsBefore.length >= 2, 'Retrieved active medications across patient ID variants', `count: ${medsBefore.length}`);
+
+  // Delete createdMed1 by UUID
+  const delMed1 = await PharmacyDbService.deletePatientMedication(createdMed1.id!, testPatient);
+  assert(delMed1 === true, 'Successfully deleted medication 1 by UUID');
+
+  // Delete createdMed2 by Name with prefix variant
+  const delMed2 = await PharmacyDbService.deletePatientMedication('Metformin', testPatient);
+  assert(delMed2 === true, 'Successfully deleted medication 2 by name with patient ID normalization');
+
+  const medsAfter = await PharmacyDbService.getPatientMedications(testPatient);
+  assert(
+    !medsAfter.some(m => m.id === createdMed1.id || m.medicationName.includes('Metformin')),
+    'Deleted medications are completely purged from database and memory'
+  );
 
   console.log('\n================================================================');
   console.log(`📊 RxSentinel Test Summary: ${passed} passed, ${failed} failed`);

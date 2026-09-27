@@ -154,21 +154,30 @@ class RxSentinelService {
 
   Future<bool> deletePatientMedication(String idOrName, {String? patientId}) async {
     try {
-      final queryParam = patientId != null ? '?patientId=$patientId' : '';
-      final uri = Uri.parse('$_baseUrl/api/v1/pharmacy/medications/$idOrName$queryParam');
+      final encodedId = Uri.encodeComponent(idOrName.trim());
+      final queryParam = patientId != null ? '?patientId=${Uri.encodeComponent(patientId.trim())}' : '';
+      final uri = Uri.parse('$_baseUrl/api/v1/pharmacy/medications/$encodedId$queryParam');
+      debugPrint('[RxSentinelService] Deleting medication from database: $uri');
       final res = await _client.delete(uri, headers: ApiConfig.patientHeaders).timeout(const Duration(seconds: 5));
+      debugPrint('[RxSentinelService] Delete medication response: ${res.statusCode} | body: ${res.body}');
       return res.statusCode == 200;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[RxSentinelService] Error deleting medication: $e');
       return false;
     }
   }
 
   Future<bool> deletePatientAllergy(String patientId, String allergenGroup) async {
     try {
-      final uri = Uri.parse('$_baseUrl/api/v1/pharmacy/allergies/$patientId/$allergenGroup');
+      final encodedPid = Uri.encodeComponent(patientId.trim());
+      final encodedGroup = Uri.encodeComponent(allergenGroup.trim());
+      final uri = Uri.parse('$_baseUrl/api/v1/pharmacy/allergies/$encodedPid/$encodedGroup');
+      debugPrint('[RxSentinelService] Deleting allergy from database: $uri');
       final res = await _client.delete(uri, headers: ApiConfig.patientHeaders).timeout(const Duration(seconds: 5));
+      debugPrint('[RxSentinelService] Delete allergy response: ${res.statusCode} | body: ${res.body}');
       return res.statusCode == 200;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[RxSentinelService] Error deleting allergy: $e');
       return false;
     }
   }

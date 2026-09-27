@@ -7,6 +7,13 @@ export class PharmacyDbService {
   private static _medicationsStore: Map<string, PatientMedication[]> = new Map();
   private static _scansStore: Map<string, RxScanSummary> = new Map();
 
+  private static getPatientIdVariants(id?: string): string[] {
+    if (!id) return [];
+    const clean = id.replace(/^usr_pat_/, '');
+    const prefixed = `usr_pat_${clean}`;
+    return Array.from(new Set([id, clean, prefixed])).filter(Boolean);
+  }
+
   /**
    * Technical Guardrail 2: Test Isolation in Memory Fallbacks
    * Resets mock patient allergies, active medications, and scan records between test runs.
@@ -24,13 +31,14 @@ export class PharmacyDbService {
     if (!patientId) return [];
 
     try {
+      const variants = this.getPatientIdVariants(patientId);
       const { data, error } = await supabase
         .from('patient_allergies')
         .select('*')
-        .eq('patient_id', patientId)
+        .in('patient_id', variants)
         .order('created_at', { ascending: false });
 
-      if (!error && Array.isArray(data) && data.length > 0) {
+      if (!error && Array.isArray(data)) {
         return data.map(row => ({
           id: row.id,
           patientId: row.patient_id,
@@ -43,6 +51,10 @@ export class PharmacyDbService {
       console.warn(`[Pharmacy DB] Supabase allergy query failed for patient ${patientId}:`, err);
     }
 
+    for (const v of this.getPatientIdVariants(patientId)) {
+      const cached = this._allergiesStore.get(v);
+      if (cached && cached.length > 0) return cached;
+    }
     return this._allergiesStore.get(patientId) || [];
   }
 
@@ -103,10 +115,11 @@ export class PharmacyDbService {
     if (!patientId) return [];
 
     try {
+      const variants = this.getPatientIdVariants(patientId);
       let query = supabase
         .from('patient_medications')
         .select('*')
-        .eq('patient_id', patientId);
+        .in('patient_id', variants);
 
       if (onlyActive) {
         query = query.eq('is_active', true);
@@ -114,7 +127,7 @@ export class PharmacyDbService {
 
       const { data, error } = await query.order('created_at', { ascending: false });
 
-      if (!error && Array.isArray(data) && data.length > 0) {
+      if (!error && Array.isArray(data)) {
         return data.map(row => ({
           id: row.id,
           patientId: row.patient_id,
@@ -129,6 +142,12 @@ export class PharmacyDbService {
       console.warn(`[Pharmacy DB] Supabase medication query failed for patient ${patientId}:`, err);
     }
 
+    for (const v of this.getPatientIdVariants(patientId)) {
+      const cached = this._medicationsStore.get(v);
+      if (cached && cached.length > 0) {
+        return onlyActive ? cached.filter(m => m.isActive) : cached;
+      }
+    }
     const cached = this._medicationsStore.get(patientId) || [];
     return onlyActive ? cached.filter(m => m.isActive) : cached;
   }
@@ -187,20 +206,42 @@ export class PharmacyDbService {
    */
   public static async deletePatientMedication(idOrName: string, patientId?: string): Promise<boolean> {
     try {
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrName);
+      const cleanTarget = (idOrName || '').trim();
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanTarget);
       let query = supabase.from('patient_medications').delete();
+
       if (isUuid) {
-        query = query.eq('id', idOrName);
+        // Primary key is globally unique UUID
+        query = query.eq('id', cleanTarget);
       } else {
-        query = query.ilike('medication_name', `%${idOrName}%`);
+        query = query.ilike('medication_name', `%${cleanTarget}%`);
+        if (patientId) {
+          const variants = this.getPatientIdVariants(patientId);
+          query = query.in('patient_id', variants);
+        }
       }
-      if (patientId) {
-        query = query.eq('patient_id', patientId);
-      }
+
       const { error } = await query;
       if (error) {
         console.warn('[Pharmacy DB] Supabase delete medication notice:', error.message);
       }
+
+      // Evict from in-memory cache across all patient ID variants
+      const candidateKeys = patientId
+        ? this.getPatientIdVariants(patientId)
+        : Array.from(this._medicationsStore.keys());
+
+      for (const k of candidateKeys) {
+        const current = this._medicationsStore.get(k);
+        if (current) {
+          const filtered = current.filter(m => {
+            if (isUuid && m.id) return m.id !== cleanTarget;
+            return !m.medicationName.toLowerCase().includes(cleanTarget.toLowerCase());
+          });
+          this._medicationsStore.set(k, filtered);
+        }
+      }
+
       return true;
     } catch (e) {
       console.warn('[Pharmacy DB] Delete medication error:', e);
@@ -213,25 +254,43 @@ export class PharmacyDbService {
    */
   public static async deletePatientAllergy(patientId: string, allergenGroupOrId: string): Promise<boolean> {
     try {
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(allergenGroupOrId);
+      const cleanTarget = (allergenGroupOrId || '').trim();
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanTarget);
       let query = supabase.from('patient_allergies').delete();
+
       if (isUuid) {
-        query = query.eq('id', allergenGroupOrId);
+        query = query.eq('id', cleanTarget);
       } else {
-        query = query.eq('patient_id', patientId);
-        const term = allergenGroupOrId.toUpperCase();
+        const variants = this.getPatientIdVariants(patientId);
+        query = query.in('patient_id', variants);
+        const term = cleanTarget.toUpperCase();
         if (term === 'SULFA' || term === 'SULFONAMIDES' || term === 'SULFONAMIDE') {
           query = query.or('allergen_group.ilike.%sulfa%,allergen_group.ilike.%sulfonamide%');
         } else if (term.startsWith('PENICILLIN')) {
           query = query.or('allergen_group.ilike.%penicillin%');
         } else {
-          query = query.ilike('allergen_group', allergenGroupOrId);
+          query = query.ilike('allergen_group', cleanTarget);
         }
       }
+
       const { error } = await query;
       if (error) {
         console.warn('[Pharmacy DB] Supabase delete allergy notice:', error.message);
       }
+
+      // Evict from in-memory store
+      const candidateKeys = this.getPatientIdVariants(patientId);
+      for (const k of candidateKeys) {
+        const current = this._allergiesStore.get(k);
+        if (current) {
+          const filtered = current.filter(a => {
+            if (isUuid && a.id) return a.id !== cleanTarget;
+            return !a.allergenGroup.toLowerCase().includes(cleanTarget.toLowerCase());
+          });
+          this._allergiesStore.set(k, filtered);
+        }
+      }
+
       return true;
     } catch (e) {
       console.warn('[Pharmacy DB] Delete allergy error:', e);
@@ -322,13 +381,14 @@ export class PharmacyDbService {
     if (!patientId) return [];
 
     try {
+      const variants = this.getPatientIdVariants(patientId);
       const { data, error } = await supabase
         .from('prescription_scans')
         .select('*')
-        .eq('patient_id', patientId)
+        .in('patient_id', variants)
         .order('created_at', { ascending: false });
 
-      if (!error && Array.isArray(data) && data.length > 0) {
+      if (!error && Array.isArray(data)) {
         return data.map(row => ({
           id: row.id,
           patientId: row.patient_id,
@@ -345,7 +405,8 @@ export class PharmacyDbService {
       console.warn(`[Pharmacy DB] Supabase scans lookup failed for patient ${patientId}:`, err);
     }
 
-    return Array.from(this._scansStore.values()).filter(s => s.patientId === patientId);
+    const variants = this.getPatientIdVariants(patientId);
+    return Array.from(this._scansStore.values()).filter(s => variants.includes(s.patientId || ''));
   }
 
   /**

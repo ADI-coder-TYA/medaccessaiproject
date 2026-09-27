@@ -814,20 +814,100 @@ class _PharmacyHubScreenState extends State<PharmacyHubScreen> {
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0D9488).withOpacity(0.12),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              med['status'] ?? 'ACTIVE',
-              style: const TextStyle(color: Color(0xFF0D9488), fontSize: 10, fontWeight: FontWeight.bold),
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0D9488).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  med['status'] ?? 'ACTIVE',
+                  style: const TextStyle(color: Color(0xFF0D9488), fontSize: 10, fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(height: 6),
+              InkWell(
+                onTap: () => _confirmDeleteMedication(med),
+                borderRadius: BorderRadius.circular(6),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.delete_outline, size: 18, color: Color(0xFFEF4444)),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _confirmDeleteMedication(Map<String, dynamic> med) async {
+    final brand = med['brand'] ?? 'Medication';
+    final id = med['id']?.toString() ?? '';
+    final target = id.isNotEmpty ? id : brand;
+    final patientId = _getPatientId(context);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Medication'),
+        content: Text('Remove $brand from your active medications roster and database record?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() {
+      _activeMeds.removeWhere((m) =>
+          (id.isNotEmpty && m['id'] == id) || (brand.isNotEmpty && m['brand'] == brand));
+    });
+
+    try {
+      final encodedTarget = Uri.encodeComponent(target);
+      final encodedPid = Uri.encodeComponent(patientId);
+      final uri = Uri.parse('${ApiConfig.baseUrl}/pharmacy/medications/$encodedTarget?patientId=$encodedPid');
+      debugPrint('[PharmacyHubScreen] Deleting medication: $uri');
+      final res = await http.delete(uri, headers: ApiConfig.patientHeaders).timeout(const Duration(seconds: 5));
+      debugPrint('[PharmacyHubScreen] Delete response code: ${res.statusCode}');
+
+      if (res.statusCode == 200) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Removed $brand from active records')),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to delete $brand (${res.statusCode})')),
+          );
+        }
+        _fetchPatientMedicationsAndAllergies();
+      }
+    } catch (e) {
+      debugPrint('[PharmacyHubScreen] Error deleting medication: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete $brand: $e')),
+        );
+      }
+      _fetchPatientMedicationsAndAllergies();
+    }
   }
 
   Widget _buildSafetyGuidelinesCard() {

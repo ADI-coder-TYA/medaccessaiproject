@@ -135,8 +135,10 @@ class _PatientAllergyProfileScreenState extends State<PatientAllergyProfileScree
                   isActive: true,
                 );
                 Navigator.of(ctx).pop();
-                setState(() => _medications.add(med));
-                await _service.addPatientMedication(med);
+                final savedMed = await _service.addPatientMedication(med);
+                if (mounted) {
+                  setState(() => _medications.add(savedMed ?? med));
+                }
               }
             },
             child: const Text('Save'),
@@ -300,14 +302,23 @@ class _PatientAllergyProfileScreenState extends State<PatientAllergyProfileScree
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.delete_outline, size: 18, color: Colors.grey),
+                            icon: const Icon(Icons.delete_outline, size: 20, color: Color(0xFFEF4444)),
+                            tooltip: 'Delete Medication',
                             onPressed: () async {
                               final nameToDelete = m.medicationName;
-                              final idToDelete = m.id ?? nameToDelete;
+                              final idToDelete = (m.id != null && m.id!.isNotEmpty) ? m.id! : nameToDelete;
                               setState(() {
-                                _medications.removeWhere((item) => item.medicationName == nameToDelete);
+                                _medications.removeWhere((item) =>
+                                    (m.id != null && m.id!.isNotEmpty && item.id == m.id) ||
+                                    item.medicationName == nameToDelete);
                               });
-                              await _service.deletePatientMedication(idToDelete, patientId: widget.patientId);
+                              final ok = await _service.deletePatientMedication(idToDelete, patientId: widget.patientId);
+                              if (!ok && mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Failed to delete $nameToDelete from database')),
+                                );
+                                _loadProfileData();
+                              }
                             },
                           ),
                         ],

@@ -997,7 +997,8 @@ class _AdminPatientPharmacyModalState extends State<AdminPatientPharmacyModal> {
                         _medications.removeWhere((item) => item.id == m.id || (item.medicationName == m.medicationName && item.activeIngredient == m.activeIngredient));
                         _reevaluateSafety();
                       });
-                      if (m.id != null) _service.deletePatientMedication(m.id!, patientId: widget.patientId);
+                      final idToDelete = (m.id != null && m.id!.isNotEmpty) ? m.id! : m.medicationName;
+                      _service.deletePatientMedication(idToDelete, patientId: widget.patientId);
                     },
                   ),
                 ],

@@ -163,20 +163,32 @@ export class CoughClassifier {
           raw[15] = Math.max(0.14, gaussianRandom(0.220, 0.030)); // Very high ZCR
         }
 
-        // Z-score standardization
+        // Z-score standardization with realistic acoustic ambient noise & sensor jitter
         const stdVector = new Array<number>(AUDIO_FEATURE_DIM);
         for (let i = 0; i < AUDIO_FEATURE_DIM; i++) {
           const z = (raw[i] - ACOUSTIC_MEANS[i]) / (ACOUSTIC_STDS[i] || 1.0);
-          stdVector[i] = Math.max(-4.0, Math.min(4.0, z));
+          const noise = gaussianRandom(0, 0.10); // Ambient room noise & microphone variation
+          stdVector[i] = Math.max(-4.0, Math.min(4.0, z + noise));
         }
 
-        // Label smoothing: 0.97 for target, 0.01 for others
-        const label = [0.01, 0.01, 0.01, 0.01];
-        label[c] = 0.97;
+        // Calibrated label smoothing: 0.94 for target, 0.02 for others
+        const label = [0.02, 0.02, 0.02, 0.02];
+        label[c] = 0.94;
 
         xs.push(stdVector);
         ys.push(label);
       }
+    }
+
+    // Fisher-Yates pre-shuffle for I.I.D. stratified validation split across all 4 categories
+    for (let i = xs.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tempX = xs[i];
+      xs[i] = xs[j];
+      xs[j] = tempX;
+      const tempY = ys[i];
+      ys[i] = ys[j];
+      ys[j] = tempY;
     }
 
     const xTensor = tf.tensor2d(xs);

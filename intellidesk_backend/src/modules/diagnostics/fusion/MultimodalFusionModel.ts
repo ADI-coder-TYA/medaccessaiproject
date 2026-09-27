@@ -44,11 +44,12 @@ export class MultimodalFusionModel {
   public static buildModel(): tf.LayersModel {
     const input = tf.input({ shape: [FUSION_INPUT_DIM], name: 'multimodal_feature_input' });
 
-    // Layer 1: Dense(128, relu) + BatchNormalization + Dropout(0.3)
+    // Layer 1: Dense(128, relu, L2) + BatchNormalization + Dropout(0.3)
     let x = tf.layers.dense({
       units: 128,
       activation: 'relu',
       kernelInitializer: 'glorotNormal',
+      kernelRegularizer: tf.regularizers.l2({ l2: 1e-4 }),
       name: 'fusion_dense_1'
     }).apply(input) as tf.SymbolicTensor;
 
@@ -71,16 +72,17 @@ export class MultimodalFusionModel {
     }).apply(x) as tf.SymbolicTensor;
 
 
-    // Layer 2: Dense(64, relu) + Dropout(0.2)
+    // Layer 2: Dense(64, relu, L2) + Dropout(0.25)
     x = tf.layers.dense({
       units: 64,
       activation: 'relu',
       kernelInitializer: 'glorotNormal',
+      kernelRegularizer: tf.regularizers.l2({ l2: 1e-4 }),
       name: 'fusion_dense_2'
     }).apply(x) as tf.SymbolicTensor;
 
     x = tf.layers.dropout({
-      rate: 0.2,
+      rate: 0.25,
       name: 'fusion_dropout_2'
     }).apply(x) as tf.SymbolicTensor;
 
@@ -258,6 +260,20 @@ export class MultimodalFusionModel {
       const tierOneHot = [0.01, 0.01, 0.01];
       tierOneHot[targetTier] = 0.98;
       ysTier.push(tierOneHot);
+    }
+
+    // Fisher-Yates pre-shuffle for I.I.D. train/validation split
+    for (let i = xs.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tempX = xs[i];
+      xs[i] = xs[j];
+      xs[j] = tempX;
+      const tempScore = ysScore[i];
+      ysScore[i] = ysScore[j];
+      ysScore[j] = tempScore;
+      const tempTier = ysTier[i];
+      ysTier[i] = ysTier[j];
+      ysTier[j] = tempTier;
     }
 
     const xTensor = tf.tensor2d(xs);

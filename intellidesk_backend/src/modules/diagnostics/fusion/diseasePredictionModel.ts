@@ -98,20 +98,22 @@ export class DiseasePredictionModel {
       units: 128,
       activation: 'relu',
       kernelInitializer: 'glorotNormal',
+      kernelRegularizer: tf.regularizers.l2({ l2: 1e-4 }),
       name: 'disease_dense_1'
     }).apply(input) as tf.SymbolicTensor;
 
     x = tf.layers.batchNormalization({ name: 'disease_bn_1' }).apply(x) as tf.SymbolicTensor;
-    x = tf.layers.dropout({ rate: 0.25, name: 'disease_drop_1' }).apply(x) as tf.SymbolicTensor;
+    x = tf.layers.dropout({ rate: 0.30, name: 'disease_drop_1' }).apply(x) as tf.SymbolicTensor;
 
     x = tf.layers.dense({
       units: 64,
       activation: 'relu',
       kernelInitializer: 'heNormal',
+      kernelRegularizer: tf.regularizers.l2({ l2: 1e-4 }),
       name: 'disease_dense_2'
     }).apply(x) as tf.SymbolicTensor;
 
-    x = tf.layers.dropout({ rate: 0.2, name: 'disease_drop_2' }).apply(x) as tf.SymbolicTensor;
+    x = tf.layers.dropout({ rate: 0.25, name: 'disease_drop_2' }).apply(x) as tf.SymbolicTensor;
 
     const output = tf.layers.dense({
       units: NUM_DISEASE_CLASSES,
@@ -121,7 +123,7 @@ export class DiseasePredictionModel {
 
     const model = tf.model({ inputs: input, outputs: output });
     model.compile({
-      optimizer: tf.train.adam(0.003),
+      optimizer: tf.train.adam(0.001),
       loss: 'categoricalCrossentropy',
       metrics: ['accuracy']
     });
@@ -285,6 +287,17 @@ export class DiseasePredictionModel {
         xs.push(x);
         ys.push(y);
       }
+    }
+
+    // Fisher-Yates pre-shuffle for I.I.D. train/validation split across all 23 classes
+    for (let i = xs.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tempX = xs[i];
+      xs[i] = xs[j];
+      xs[j] = tempX;
+      const tempY = ys[i];
+      ys[i] = ys[j];
+      ys[j] = tempY;
     }
 
     const xTensor = tf.tensor2d(xs);

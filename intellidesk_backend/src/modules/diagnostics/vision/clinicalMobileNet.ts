@@ -168,68 +168,77 @@ export class ClinicalMobileNetBuilder {
       for (let s = 0; s < samplesPerClass; s++) {
         const imgOffset = sampleIdx * totalPixels;
 
+        // Realistic clinical data augmentation: spatial center jitter, illumination scaling, skin phototypes
+        const skinTone = Math.random();
+        const baseSkinR = skinTone < 0.33 ? 0.30 : (skinTone < 0.66 ? 0.15 : -0.15);
+        const baseSkinG = skinTone < 0.33 ? 0.10 : (skinTone < 0.66 ? 0.00 : -0.30);
+        const baseSkinB = skinTone < 0.33 ? -0.10 : (skinTone < 0.66 ? -0.20 : -0.40);
+        const centerX = INPUT_IMAGE_SIZE / 2 + (Math.random() - 0.5) * 24;
+        const centerY = INPUT_IMAGE_SIZE / 2 + (Math.random() - 0.5) * 24;
+        const illumination = 0.92 + Math.random() * 0.16;
+
         // Generate synthetic lesion patterns per class
         for (let y = 0; y < INPUT_IMAGE_SIZE; y++) {
           for (let x = 0; x < INPUT_IMAGE_SIZE; x++) {
             const pixelIdx = imgOffset + (y * INPUT_IMAGE_SIZE + x) * 3;
-            const dx = (x - INPUT_IMAGE_SIZE / 2) / (INPUT_IMAGE_SIZE / 2);
-            const dy = (y - INPUT_IMAGE_SIZE / 2) / (INPUT_IMAGE_SIZE / 2);
+            const dx = (x - centerX) / (INPUT_IMAGE_SIZE / 2);
+            const dy = (y - centerY) / (INPUT_IMAGE_SIZE / 2);
             const distFromCenter = Math.sqrt(dx * dx + dy * dy);
-            const noise = (Math.random() - 0.5) * 0.08;
+            const noise = (Math.random() - 0.5) * 0.10;
 
             let r: number, g: number, b: number;
             if (c === 0) {
-              // Normal/Benign: Healthy soft peachy/tan skin tone
-              r = 0.25 + noise;
-              g = 0.05 + noise;
-              b = -0.15 + noise;
+              // Normal/Benign: Healthy skin tone across diverse phototypes
+              r = baseSkinR + noise;
+              g = baseSkinG + noise;
+              b = baseSkinB + noise;
             } else if (c === 1) {
               // Mild Inflammation: Erythematous flush, diffuse redness
-              r = 0.60 + noise;
-              g = -0.10 + noise;
-              b = -0.20 + noise;
+              r = Math.min(0.85, baseSkinR + 0.40) + noise;
+              g = baseSkinG - 0.10 + noise;
+              b = baseSkinB - 0.10 + noise;
             } else if (c === 2) {
               // Acute Infection/Lesion: Center yellowish purulent exudate + hot erythematous rim
               if (distFromCenter < 0.35) {
-                r = 0.70 + noise;
-                g = 0.40 + noise;
+                r = 0.65 + noise;
+                g = 0.35 + noise;
                 b = -0.30 + noise;
               } else if (distFromCenter < 0.65) {
-                r = 0.80 + noise;
-                g = -0.30 + noise;
-                b = -0.30 + noise;
+                r = Math.min(0.90, baseSkinR + 0.55) + noise;
+                g = baseSkinG - 0.20 + noise;
+                b = baseSkinB - 0.20 + noise;
               } else {
-                r = 0.30 + noise;
-                g = 0.05 + noise;
-                b = -0.10 + noise;
+                r = baseSkinR + noise;
+                g = baseSkinG + noise;
+                b = baseSkinB + noise;
               }
             } else {
               // Severe/Emergency: Necrotic dark violaceous ulceration / ischemic eschar
               if (distFromCenter < 0.45) {
-                r = -0.50 + noise;
+                r = -0.55 + noise;
                 g = -0.70 + noise;
                 b = -0.60 + noise;
               } else if (distFromCenter < 0.75) {
-                r = 0.70 + noise;
-                g = -0.40 + noise;
-                b = -0.10 + noise; // Violaceous purpura rim
+                r = 0.65 + noise;
+                g = -0.35 + noise;
+                b = -0.15 + noise; // Violaceous purpura rim
               } else {
-                r = 0.20 + noise;
-                g = 0.0 + noise;
-                b = -0.15 + noise;
+                r = baseSkinR + noise;
+                g = baseSkinG + noise;
+                b = baseSkinB + noise;
               }
             }
 
-            xData[pixelIdx] = Math.max(-1.0, Math.min(1.0, r));
-            xData[pixelIdx + 1] = Math.max(-1.0, Math.min(1.0, g));
-            xData[pixelIdx + 2] = Math.max(-1.0, Math.min(1.0, b));
+            xData[pixelIdx] = Math.max(-1.0, Math.min(1.0, r * illumination));
+            xData[pixelIdx + 1] = Math.max(-1.0, Math.min(1.0, g * illumination));
+            xData[pixelIdx + 2] = Math.max(-1.0, Math.min(1.0, b * illumination));
           }
         }
 
-        // Label smoothing: 0.97 for target, 0.01 for others
+        // Calibrated label smoothing: 0.94 for target, 0.02 for others
         const clfOffset = sampleIdx * CLINICAL_VISION_CLASSES.length;
         for (let k = 0; k < CLINICAL_VISION_CLASSES.length; k++) {
-          yClfData[clfOffset + k] = k === c ? 0.97 : 0.01;
+          yClfData[clfOffset + k] = k === c ? 0.94 : 0.02;
         }
 
         // Target bottleneck embedding (128-D) with intra-class variance
@@ -237,7 +246,7 @@ export class ClinicalMobileNetBuilder {
         const segmentStart = c * 32;
         let sumSq = 0;
         for (let dim = 0; dim < BOTTLENECK_EMBEDDING_DIM; dim++) {
-          let val = (Math.random() - 0.5) * 0.05;
+          let val = (Math.random() - 0.5) * 0.08;
           if (dim >= segmentStart && dim < segmentStart + 32) {
             val += 0.5 + Math.random() * 0.3;
           }
@@ -253,16 +262,35 @@ export class ClinicalMobileNetBuilder {
       }
     }
 
-    const xTensor = tf.tensor4d(xData, [sampleCount, INPUT_IMAGE_SIZE, INPUT_IMAGE_SIZE, 3]);
-    const yClfTensor = tf.tensor2d(yClfData, [sampleCount, CLINICAL_VISION_CLASSES.length]);
-    const yEmbedTensor = tf.tensor2d(yEmbedData, [sampleCount, BOTTLENECK_EMBEDDING_DIM]);
+    // Fisher-Yates pre-shuffle for I.I.D. train/validation split across all 4 visual classes
+    const indices = Array.from({ length: sampleCount }, (_, i) => i);
+    for (let i = sampleCount - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const temp = indices[i];
+      indices[i] = indices[j];
+      indices[j] = temp;
+    }
+
+    const shuffledX = new Float32Array(sampleCount * totalPixels);
+    const shuffledClf = new Float32Array(sampleCount * CLINICAL_VISION_CLASSES.length);
+    const shuffledEmbed = new Float32Array(sampleCount * BOTTLENECK_EMBEDDING_DIM);
+    for (let i = 0; i < sampleCount; i++) {
+      const orig = indices[i];
+      shuffledX.set(xData.subarray(orig * totalPixels, (orig + 1) * totalPixels), i * totalPixels);
+      shuffledClf.set(yClfData.subarray(orig * CLINICAL_VISION_CLASSES.length, (orig + 1) * CLINICAL_VISION_CLASSES.length), i * CLINICAL_VISION_CLASSES.length);
+      shuffledEmbed.set(yEmbedData.subarray(orig * BOTTLENECK_EMBEDDING_DIM, (orig + 1) * BOTTLENECK_EMBEDDING_DIM), i * BOTTLENECK_EMBEDDING_DIM);
+    }
+
+    const xTensor = tf.tensor4d(shuffledX, [sampleCount, INPUT_IMAGE_SIZE, INPUT_IMAGE_SIZE, 3]);
+    const yClfTensor = tf.tensor2d(shuffledClf, [sampleCount, CLINICAL_VISION_CLASSES.length]);
+    const yEmbedTensor = tf.tensor2d(shuffledEmbed, [sampleCount, BOTTLENECK_EMBEDDING_DIM]);
 
     console.log(`🩺 [ClinicalMobileNet] Fitting MobileNetV3 multi-head graph (${sampleCount} images, 15 epochs)...`);
     await model.fit(xTensor, [yClfTensor, yEmbedTensor], {
       epochs: 15,
       batchSize: 16,
       shuffle: true,
-      validationSplit: 0.1,
+      validationSplit: 0.15,
       verbose: 0,
       callbacks: {
         onEpochEnd: (epoch: number, logs?: tf.Logs) => {

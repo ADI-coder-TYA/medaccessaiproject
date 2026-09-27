@@ -311,19 +311,43 @@ class _AdminWarRoomScreenState extends State<AdminWarRoomScreen> with SingleTick
                   onPressed: () async {
                     Navigator.pop(context);
                     final screeningId = claim['screening_id']?.toString() ?? claim['id']?.toString() ?? 'SCR-CLAIM';
-                    final eval = await CDSSService().evaluateScreening(
-                      screeningId: screeningId,
-                      patientId: claim['patient_id']?.toString() ?? 'PATIENT-ANON',
-                      riskScore: 0.85,
-                      symptoms: {
-                        'symptomList': claim['symptoms'] is List ? List<String>.from(claim['symptoms']) : ['Acute respiratory distress', 'Fever'],
-                        'heartRate': claim['heart_rate'] ?? 98,
-                        'spo2': claim['spo2'] ?? 94,
-                        'respirationRate': claim['respiration_rate'] ?? 20,
-                        'temperature': 38.5,
-                        'clinicalSummary': claim['notes']?.toString() ?? claim['description']?.toString() ?? 'Multimodal triage evaluation for claim review',
-                      },
-                    );
+                    CDSSEvaluationResult? eval;
+
+                    // 1. Check if claim already has an evaluation
+                    final rawCdss = claim['cdss_evaluation'] ?? claim['cdssEvaluation'];
+                    if (rawCdss is Map) {
+                      try {
+                        eval = CDSSEvaluationResult.fromJson(Map<String, dynamic>.from(rawCdss));
+                      } catch (_) {}
+                    }
+
+                    // 2. Fetch existing evaluation from backend by screening ID
+                    if (eval == null && screeningId.isNotEmpty) {
+                      try {
+                        eval = await CDSSService().getEvaluationByScreeningId(screeningId);
+                        if (eval != null) {
+                          claim['cdss_evaluation'] = eval.toJson();
+                        }
+                      } catch (_) {}
+                    }
+
+                    // 3. Fallback evaluate once
+                    if (eval == null) {
+                      eval = await CDSSService().evaluateScreening(
+                        screeningId: screeningId,
+                        patientId: claim['patient_id']?.toString() ?? 'PATIENT-ANON',
+                        riskScore: 0.85,
+                        symptoms: {
+                          'symptomList': claim['symptoms'] is List ? List<String>.from(claim['symptoms']) : ['Acute respiratory distress', 'Fever'],
+                          'heartRate': claim['heart_rate'] ?? 98,
+                          'spo2': claim['spo2'] ?? 94,
+                          'respirationRate': claim['respiration_rate'] ?? 20,
+                          'temperature': 38.5,
+                          'clinicalSummary': claim['notes']?.toString() ?? claim['description']?.toString() ?? 'Multimodal triage evaluation for claim review',
+                        },
+                      );
+                      claim['cdss_evaluation'] = eval.toJson();
+                    }
                     if (context.mounted) {
                       CDSSDecisionDrawer.show(
                         context,

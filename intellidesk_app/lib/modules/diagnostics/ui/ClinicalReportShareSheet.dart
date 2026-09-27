@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../config/api_config.dart';
 import '../../../theme/app_theme.dart';
@@ -198,71 +200,77 @@ class _ClinicalReportShareSheetState extends State<ClinicalReportShareSheet> {
     });
 
     try {
-      final sessionId = widget.session?.id;
-      Uri targetPdfUri;
-
-      if (sessionId != null && sessionId.isNotEmpty) {
-        // Direct stream endpoint
-        targetPdfUri = ApiConfig.resolveUri('/diagnostics/screenings/$sessionId/referral');
-      } else {
-        // Fallback: Generate via POST endpoint
-        targetPdfUri = ApiConfig.resolveUri('/diagnostics/referral-letter');
-      }
-
-      // Try opening external browser/PDF viewer
-      if (sessionId != null && sessionId.isNotEmpty) {
-        final canLaunch = await canLaunchUrl(targetPdfUri);
-        if (canLaunch) {
-          await launchUrl(targetPdfUri, mode: LaunchMode.externalApplication);
-          if (mounted) {
-            setState(() => _isGeneratingPdf = false);
-          }
-          return;
-        }
-      }
-
-      // If cannot launch directly, trigger POST compilation to verify backend PDF generation
+      // 1. POST to backend to generate the PDF bytes
       final postUri = ApiConfig.resolveUri('/diagnostics/referral-letter');
-      final res = await http.post(
-        postUri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'assessment': widget.assessment.toMap(),
-          'symptomVector': {
-            'bodyLocation': widget.stateProvider.selectedBodyLocation,
-            'painSeverity': widget.stateProvider.painSeverity,
-            'durationDays': widget.stateProvider.symptomDurationDays,
-            'temperatureCelsius': widget.stateProvider.temperatureCelsius,
-            'symptoms': widget.stateProvider.selectedSecondarySymptoms.toList(),
-          },
-          'patientId': widget.session?.patientId ?? 'pt_local',
-          'institutionId': widget.session?.institutionId ?? 'default_inst',
-        }),
-      );
+      final res = await http
+          .post(
+            postUri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'assessment': widget.assessment.toMap(),
+              'symptomVector': {
+                'bodyLocation': widget.stateProvider.selectedBodyLocation,
+                'painSeverity': widget.stateProvider.painSeverity,
+                'durationDays': widget.stateProvider.symptomDurationDays,
+                'temperatureCelsius': widget.stateProvider.temperatureCelsius,
+                'symptoms': widget.stateProvider.selectedSecondarySymptoms.toList(),
+              },
+              'patientId': widget.session?.patientId ?? 'pt_local',
+              'institutionId': widget.session?.institutionId ?? 'default_inst',
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
 
-      if (res.statusCode == 200) {
-        // PDF generated successfully
-        final canLaunch = await canLaunchUrl(targetPdfUri);
-        if (canLaunch) {
-          await launchUrl(targetPdfUri, mode: LaunchMode.externalApplication);
-        } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  '✅ Referral PDF compiled successfully (${res.bodyBytes.length} bytes).',
+      if (res.statusCode != 200) {
+        throw Exception('Backend returned HTTP ${res.statusCode}: ${res.body.substring(0, res.body.length.clamp(0, 200))}');
+      }
+
+      final pdfBytes = res.bodyBytes;
+      if (pdfBytes.isEmpty) {
+        throw Exception('Backend returned empty PDF body.');
+      }
+
+      // 2. Save to device temp directory
+      final tempDir = await getTemporaryDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'intellidesk_referral_$timestamp.pdf';
+      final file = File('${tempDir.path}/$fileName');
+      await file.writeAsBytes(pdfBytes);
+
+      debugPrint('📄 [PDF] Saved ${pdfBytes.length} bytes → ${file.path}');
+
+      // 3. Open with native viewer via file:// URI
+      final fileUri = Uri.file(file.path);
+      final opened = await launchUrl(fileUri, mode: LaunchMode.externalApplication);
+
+      if (!opened && mounted) {
+        // Fallback snackbar with path info if viewer cannot open
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF1E293B),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            duration: const Duration(seconds: 5),
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '✅ PDF saved (${(pdfBytes.length / 1024).toStringAsFixed(1)} KB). No PDF viewer installed — check Downloads.',
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
                 ),
-              ),
-            );
-          }
-        }
-      } else {
-        throw Exception('Server responded with HTTP ${res.statusCode}');
+              ],
+            ),
+          ),
+        );
       }
     } catch (e) {
+      debugPrint('❌ [PDF] Download failed: $e');
       if (mounted) {
         setState(() {
-          _pdfErrorMessage = 'Could not open PDF: $e';
+          _pdfErrorMessage = 'PDF generation failed: ${e.toString().replaceAll('Exception: ', '')}';
         });
       }
     } finally {

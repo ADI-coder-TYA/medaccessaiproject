@@ -6,8 +6,49 @@ import '../models/cdss_evaluation.dart';
 
 class CDSSService {
   final String _baseUrl;
+  static final Map<String, CDSSEvaluationResult> _screeningCache = {};
 
   CDSSService({String? baseUrl}) : _baseUrl = baseUrl ?? ApiConfig.host;
+
+  /**
+   * Clears the in-memory screening cache (useful for testing).
+   */
+  static void clearCache() {
+    _screeningCache.clear();
+  }
+
+  /**
+   * Retrieves an existing, saved CDSS evaluation for a specific screening ID.
+   * Returns cached report if already fetched, or calls backend GET /api/v1/cdss/screening/:screeningId.
+   */
+  Future<CDSSEvaluationResult?> getEvaluationByScreeningId(String screeningId) async {
+    if (screeningId.isEmpty) return null;
+
+    if (_screeningCache.containsKey(screeningId)) {
+      debugPrint('ℹ️ [CDSSService] Returning in-memory cached evaluation for screening $screeningId');
+      return _screeningCache[screeningId];
+    }
+
+    final endpoint = Uri.parse('$_baseUrl/api/v1/cdss/screening/$screeningId');
+    try {
+      final res = await http.get(endpoint, headers: ApiConfig.patientHeaders).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final evalMap = data['evaluation'] as Map<String, dynamic>?;
+        if (evalMap != null) {
+          final eval = CDSSEvaluationResult.fromJson(evalMap);
+          _screeningCache[screeningId] = eval;
+          _screeningCache[eval.id] = eval;
+          debugPrint('✅ [CDSSService] Loaded persisted CDSS evaluation for screening $screeningId: ${eval.primaryICD11Code}');
+          return eval;
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ [CDSSService] Could not fetch saved CDSS evaluation for screening $screeningId: $e');
+    }
+
+    return null;
+  }
 
   /**
    * Evaluates patient screening data against WHO ICD-11 knowledge base.
@@ -24,6 +65,20 @@ class CDSSService {
     Map<String, dynamic>? audioClassification,
     double temperature = 1.25,
   }) async {
+    // 0. Cache check: if already evaluated for this screening ID, return saved report
+    if (screeningId != null && _screeningCache.containsKey(screeningId)) {
+      debugPrint('ℹ️ [CDSSService] Returning in-memory cached CDSS evaluation for screening $screeningId');
+      return _screeningCache[screeningId]!;
+    }
+
+    // Try fetching existing report from backend first before re-generating
+    if (screeningId != null && screeningId.isNotEmpty) {
+      final existing = await getEvaluationByScreeningId(screeningId);
+      if (existing != null) {
+        return existing;
+      }
+    }
+
     final endpoint = Uri.parse('$_baseUrl/api/v1/cdss/evaluate');
     final effectiveInstId = (institutionId != null && institutionId.isNotEmpty)
         ? institutionId
@@ -56,6 +111,10 @@ class CDSSService {
         final evalMap = data['evaluation'] as Map<String, dynamic>;
         final result = CDSSEvaluationResult.fromJson(evalMap);
         debugPrint('✅ [CDSSService] Cloud evaluation complete: "${result.primaryICD11Code} - ${result.primaryICD11Title}" (${result.differentialDiagnoses.length} candidates) in ${stopwatch.elapsedMilliseconds}ms [Model: ${result.modelUsed ?? "neural-ensemble"}]');
+        if (screeningId != null) {
+          _screeningCache[screeningId] = result;
+        }
+        _screeningCache[result.id] = result;
         return result;
       } else {
         debugPrint('⚠️ [CDSSService] Backend returned HTTP ${response.statusCode}: ${response.body}. Engaging offline fallback.');
@@ -65,7 +124,7 @@ class CDSSService {
     }
 
     // Technical Guardrail 4: Offline Fallback Generation
-    return _generateOfflineFallback(
+    final fallback = _generateOfflineFallback(
       screeningId: screeningId,
       patientId: patientId,
       institutionId: effectiveInstId,
@@ -73,6 +132,11 @@ class CDSSService {
       riskScore: riskScore,
       symptoms: symptoms,
     );
+    if (screeningId != null) {
+      _screeningCache[screeningId] = fallback;
+    }
+    _screeningCache[fallback.id] = fallback;
+    return fallback;
   }
 
   /**
@@ -110,7 +174,11 @@ class CDSSService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
-        return CDSSEvaluationResult.fromJson(data['evaluation'] as Map<String, dynamic>);
+        final res = CDSSEvaluationResult.fromJson(data['evaluation'] as Map<String, dynamic>);
+        _screeningCache[evaluationId] = res;
+        _screeningCache[res.id] = res;
+        if (res.screeningId != null) _screeningCache[res.screeningId!] = res;
+        return res;
       } else {
         debugPrint('⚠️ [CDSSService] Approval API returned ${response.statusCode}: ${response.body}. Updating offline locally.');
       }
@@ -131,7 +199,7 @@ class CDSSService {
         signatureHash: 'offline-local-sig-${DateTime.now().millisecondsSinceEpoch}',
       );
 
-      return CDSSEvaluationResult(
+      final updated = CDSSEvaluationResult(
         id: currentEvaluation.id,
         screeningId: currentEvaluation.screeningId,
         patientId: currentEvaluation.patientId,
@@ -146,6 +214,11 @@ class CDSSService {
         createdAt: currentEvaluation.createdAt,
         updatedAt: DateTime.now().toIso8601String(),
       );
+
+      _screeningCache[evaluationId] = updated;
+      _screeningCache[updated.id] = updated;
+      if (updated.screeningId != null) _screeningCache[updated.screeningId!] = updated;
+      return updated;
     }
 
     throw Exception('Failed to record clinician sign-off');

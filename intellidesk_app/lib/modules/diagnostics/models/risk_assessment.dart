@@ -152,6 +152,8 @@ class RiskAssessment {
   final String? visualDescription;
   final String? visualEngine;
   final String? visualRecommendedAction;
+  final String? screeningId;
+  final Map<String, dynamic>? cdssEvaluationPayload;
 
   const RiskAssessment({
     required this.riskScore,
@@ -173,6 +175,8 @@ class RiskAssessment {
     this.visualDescription,
     this.visualEngine,
     this.visualRecommendedAction,
+    this.screeningId,
+    this.cdssEvaluationPayload,
   });
 
   Map<String, dynamic> toMap() {
@@ -196,6 +200,8 @@ class RiskAssessment {
       'visualDescription': visualDescription,
       'visualEngine': visualEngine,
       'visualRecommendedAction': visualRecommendedAction,
+      'screeningId': screeningId,
+      'cdssEvaluationPayload': cdssEvaluationPayload,
     };
   }
 
@@ -220,6 +226,9 @@ class RiskAssessment {
             .toList() ??
         [];
 
+    final rawCdss = map['cdssEvaluation'] ?? map['cdssEvaluationPayload'] ?? map['cdss_evaluation'];
+    final cdssMap = (rawCdss is Map) ? Map<String, dynamic>.from(rawCdss) : null;
+
     return RiskAssessment(
       riskScore: (map['riskScore'] as num?)?.toDouble() ?? 0.0,
       riskLevel: ClinicalRiskLevel.fromString(rawLevel),
@@ -242,6 +251,8 @@ class RiskAssessment {
       visualDescription: map['visualDescription'] as String?,
       visualEngine: map['visualEngine'] as String?,
       visualRecommendedAction: map['visualRecommendedAction'] as String?,
+      screeningId: map['screeningId'] as String? ?? map['screening_id'] as String?,
+      cdssEvaluationPayload: cdssMap,
     );
   }
 

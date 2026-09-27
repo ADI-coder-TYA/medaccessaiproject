@@ -7,6 +7,7 @@ import '../../../theme/app_theme.dart';
 import '../models/risk_assessment.dart';
 import '../models/longitudinal_progression.dart';
 import '../services/diagnostics_service.dart';
+import '../../../config/api_config.dart';
 
 class LongitudinalHistoryScreen extends StatefulWidget {
   final String? patientId;
@@ -64,7 +65,9 @@ class _LongitudinalHistoryScreenState extends State<LongitudinalHistoryScreen> {
     });
 
     try {
-      final patientId = widget.patientId ?? 'demo-patient-001';
+      final patientId = (widget.patientId != null && widget.patientId!.isNotEmpty && widget.patientId != 'demo-patient-001')
+          ? widget.patientId!
+          : (ApiConfig.userId ?? 'PAT-2026-001');
       final history = await _diagnosticsService.fetchLongitudinalHistory(patientId);
 
       setState(() {

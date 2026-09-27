@@ -534,9 +534,10 @@ class _PatientClinicalDashboardState extends State<PatientClinicalDashboard> wit
           icon: Icons.show_chart,
           gradient: const [Color(0xFF0284C7), Color(0xFF38BDF8)],
           onTap: () {
+            final effectivePatientId = auth.user?.patientId ?? auth.user?.id ?? ApiConfig.userId;
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const LongitudinalHistoryScreen()),
+              MaterialPageRoute(builder: (_) => LongitudinalHistoryScreen(patientId: effectivePatientId)),
             );
           },
         ),

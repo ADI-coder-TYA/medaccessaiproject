@@ -8,8 +8,10 @@ import '../services/inference_engine_interface.dart';
 import 'diagnostic_chat_screen.dart';
 import 'EmergencyFacilitySheet.dart';
 import '../../cdss/services/cdss_service.dart';
+import '../../cdss/models/cdss_evaluation.dart';
 import '../../cdss/ui/cdss_decision_drawer.dart';
 import 'ClinicalReportShareSheet.dart';
+import 'LongitudinalHistoryScreen.dart';
 import '../../../config/api_config.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../services/institution_service.dart';
@@ -31,6 +33,7 @@ class DiagnosticResultsScreen extends StatefulWidget {
 class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
   bool _hasAutoTriggeredEmergencySheet = false;
   bool _isLoadingCDSS = false;
+  CDSSEvaluationResult? _cachedCDSSResult;
 
   Color _getRiskColor(ClinicalRiskLevel level) {
     switch (level) {
@@ -90,6 +93,23 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
                 preloadedFacilities: widget.emergencyFacilitiesOverride,
               ),
             ),
+          IconButton(
+            icon: const Icon(Icons.show_chart),
+            tooltip: 'Longitudinal Recovery Curve',
+            onPressed: () {
+              final auth = context.read<AuthProvider>();
+              final pId = (session != null && session.patientId.isNotEmpty)
+                  ? session.patientId
+                  : (auth.user?.patientId ?? auth.user?.id ?? ApiConfig.userId);
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => LongitudinalHistoryScreen(
+                    patientId: pId,
+                  ),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.share_outlined),
             tooltip: 'Share Report',
@@ -810,8 +830,95 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
 
                         final instName = await InstitutionService.getInstitutionName(instId);
 
+                        // 1. Instant Cache Check: If already loaded in state, display immediately
+                        if (_cachedCDSSResult != null) {
+                          if (context.mounted) {
+                            CDSSDecisionDrawer.show(
+                              context,
+                              evaluation: _cachedCDSSResult!,
+                              isClinicianView: false,
+                              institutionId: instId,
+                              institutionName: instName,
+                            );
+                          }
+                          return;
+                        }
+
+                        // 2. Check if pre-evaluated CDSS report was returned with RiskAssessment
+                        if (assessment.cdssEvaluationPayload != null) {
+                          try {
+                            final preGenerated = CDSSEvaluationResult.fromJson(assessment.cdssEvaluationPayload!);
+                            _cachedCDSSResult = preGenerated;
+                            if (context.mounted) {
+                              CDSSDecisionDrawer.show(
+                                context,
+                                evaluation: preGenerated,
+                                isClinicianView: false,
+                                institutionId: instId,
+                                institutionName: instName,
+                              );
+                            }
+                            return;
+                          } catch (parseErr) {
+                            debugPrint('⚠️ [CDSS UI] Error parsing pre-generated CDSS payload: $parseErr');
+                          }
+                        }
+
+                        final targetScreeningId = session?.id ?? assessment.screeningId;
+
+                        // 3. Query saved report from backend database by screening ID
+                        if (targetScreeningId != null && targetScreeningId.isNotEmpty) {
+                          final savedEval = await CDSSService().getEvaluationByScreeningId(targetScreeningId);
+                          if (savedEval != null) {
+                            _cachedCDSSResult = savedEval;
+                            if (context.mounted) {
+                              CDSSDecisionDrawer.show(
+                                context,
+                                evaluation: savedEval,
+                                isClinicianView: false,
+                                institutionId: instId,
+                                institutionName: instName,
+                              );
+                            }
+                            return;
+                          }
+                        }
+
+                        // 4. One-Time Fallback Evaluation (for legacy or offline records without pre-generated CDSS)
+                        // Build rich vision findings from the actual vision model outputs
+                        final List<Map<String, dynamic>> visionFindingsList = [];
+                        if (assessment.visualCondition != null && assessment.visualCondition!.isNotEmpty) {
+                          // Primary condition detected by the vision model
+                          visionFindingsList.add({
+                            'condition': assessment.visualCondition!,
+                            'confidence': 0.92,
+                            'anatomicalSite': assessment.visualAnatomicalSite ?? bodyLocation,
+                            'severity': assessment.visualSeverity ?? 'Moderate',
+                            'description': assessment.visualDescription ?? assessment.visualCondition!,
+                            'source': assessment.visualEngine ?? 'Qwen2.5-VL-72B-Instruct',
+                          });
+                          // Secondary differential visual findings
+                          for (final finding in assessment.visualFindings) {
+                            if (finding != assessment.visualCondition) {
+                              visionFindingsList.add({
+                                'condition': finding,
+                                'confidence': 0.65,
+                                'anatomicalSite': assessment.visualAnatomicalSite ?? bodyLocation,
+                                'source': assessment.visualEngine ?? 'Qwen2.5-VL-72B-Instruct',
+                              });
+                            }
+                          }
+                        } else {
+                          // Fallback: use the generic assessment primary diagnosis
+                          visionFindingsList.add({
+                            'condition': assessment.primaryDiagnosis,
+                            'confidence': 0.80,
+                            'anatomicalSite': bodyLocation,
+                          });
+                        }
+
                         final eval = await CDSSService().evaluateScreening(
-                          screeningId: session?.id ?? 'SCR-${DateTime.now().millisecondsSinceEpoch}',
+                          screeningId: targetScreeningId ?? 'SCR-${DateTime.now().millisecondsSinceEpoch}',
                           patientId: session?.patientId ?? user?.patientId ?? 'PATIENT-ANON',
                           institutionId: instId,
                           institutionName: instName,
@@ -820,25 +927,25 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
                             'bodyLocation': bodyLocation,
                             'anatomicalLocation': bodyLocation,
                             'symptoms': symptomsList,
-                            'primaryDiagnosis': assessment.primaryDiagnosis,
+                            // Pass the ACTUAL vision model primary condition to help Qwen reason
+                            'primaryDiagnosis': assessment.visualCondition ?? assessment.primaryDiagnosis,
+                            'clinicalImageDiagnosis': assessment.visualCondition,
+                            'clinicalImageAnatomicalSite': assessment.visualAnatomicalSite ?? bodyLocation,
+                            'clinicalImageSeverity': assessment.visualSeverity,
                             'recommendations': assessment.clinicalRecommendations,
                             'riskLevel': assessment.riskLevel.name,
                             'clinicalSummary':
-                                '${assessment.primaryDiagnosis}. ${assessment.clinicalRecommendations.join("; ")}',
+                                '${assessment.visualCondition ?? assessment.primaryDiagnosis}. ${assessment.clinicalRecommendations.join("; ")}',
                             if (session?.symptomVector.vitals != null)
                               'vitals': session!.symptomVector.vitals.toMap(),
                           },
-                          visionFindings: [
-                            {
-                              'condition': assessment.primaryDiagnosis,
-                              'confidence': 0.95,
-                              'anatomicalSite': bodyLocation,
-                            }
-                          ],
+                          visionFindings: visionFindingsList,
                           audioClassification: (diag.lastCoughClassification?['classification']
                                   as Map<String, dynamic>?) ??
                               diag.lastCoughClassification,
                         );
+
+                        _cachedCDSSResult = eval;
 
                         if (context.mounted) {
                           CDSSDecisionDrawer.show(

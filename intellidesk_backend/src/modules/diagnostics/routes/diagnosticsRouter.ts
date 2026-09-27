@@ -17,8 +17,8 @@ import {
   DiagnosticSummaryContext 
 } from '../../../services/crisisCounselorService.js';
 import { rPPGSignalProcessor } from '../vitals/rPPGSignalProcessor.js';
-import { BioSignalFrame } from '../vitals/types.js';
 import { cdssRouter } from '../../cdss/routes/cdssRouter.js';
+import { CDSSService } from '../../cdss/CDSSService.js';
 import { PharmacyDbService } from '../../pharmacy/pharmacyDbService.js';
 
 const router = Router();
@@ -40,10 +40,13 @@ router.post('/analyze', async (req: Request, res: Response) => {
       previousScreeningId,
       institutionId = (req.headers['x-institution-id'] as string) || 'nano123',
       imageUrl,
+      imageBase64,
       symptoms,
       audioBase64,
       audioFeatures
     } = req.body;
+
+    const effectiveImageUrl = imageUrl || (imageBase64 ? (imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`) : undefined);
 
     if (!symptoms || !symptoms.symptoms || !Array.isArray(symptoms.symptoms)) {
       return res.status(400).json({
@@ -66,13 +69,13 @@ router.post('/analyze', async (req: Request, res: Response) => {
     // 1. Clinical Computer Vision Pipeline (if image provided)
     let visionResult;
     let gradCamResult;
-    if (imageUrl) {
+    if (effectiveImageUrl) {
       console.log(`\n🩺 [Diagnostics API] Clinical Image Attached for patient: "${resolvedPatientName || 'Anonymous'}"`);
-      console.log(`   Image payload type: ${imageUrl.startsWith('data:') ? 'Base64 Data URI' : imageUrl.startsWith('http') ? 'Remote URL' : 'Raw string'}`);
+      console.log(`   Image payload type: ${effectiveImageUrl.startsWith('data:') ? 'Base64 Data URI' : effectiveImageUrl.startsWith('http') ? 'Remote URL' : 'Raw string'}`);
       console.log(`   Category hint: ${symptoms.categoryHint || 'None specified (Auto-detection enabled)'}`);
       const vStart = Date.now();
       visionResult = await ClinicalImageClassifier.extractEmbeddings({
-        imageUrl,
+        imageUrl: effectiveImageUrl,
         categoryHint: symptoms.categoryHint
       });
       console.log(`🩺 [Diagnostics API] Vision extraction completed in ${Date.now() - vStart}ms:`);
@@ -171,7 +174,7 @@ router.post('/analyze', async (req: Request, res: Response) => {
       patientId,
       previousScreeningId,
       institutionId,
-      imageUrl,
+      imageUrl: imageUrl || (effectiveImageUrl && !effectiveImageUrl.startsWith('data:') ? effectiveImageUrl : null),
       symptomPayload,
       multimodalRiskScore: riskResult.riskScore,
       uncertaintyBounds: riskResult.uncertaintyBounds as any,
@@ -183,7 +186,72 @@ router.post('/analyze', async (req: Request, res: Response) => {
       physiologicalAlerts
     });
 
-    // 5. Compute Longitudinal Progression Delta if previous screening is linked
+    // 5. Generate and Persist CDSS Report ONCE during health checkup with vision model findings
+    const cdssVisionFindings: any[] = [];
+    if (visionResult?.predictedCondition) {
+      cdssVisionFindings.push({
+        condition: visionResult.predictedCondition,
+        confidence: visionResult.confidence ?? 0.92,
+        anatomicalSite: visionResult.anatomicalSite || symptomPayload.bodyLocation,
+        severity: visionResult.severity || 'Moderate',
+        description: visionResult.clinicalDescription || visionResult.predictedCondition,
+        source: visionResult.source || 'Qwen2.5-VL-72B-Instruct',
+      });
+      if (Array.isArray(visionResult.findings)) {
+        for (const f of visionResult.findings) {
+          if (f && f !== visionResult.predictedCondition) {
+            cdssVisionFindings.push({
+              condition: f,
+              confidence: 0.65,
+              anatomicalSite: visionResult.anatomicalSite || symptomPayload.bodyLocation,
+              source: visionResult.source || 'Qwen2.5-VL-72B-Instruct',
+            });
+          }
+        }
+      }
+    } else {
+      cdssVisionFindings.push({
+        condition: riskResult.primaryDiagnosis || 'Multimodal Clinical Checkup',
+        confidence: 0.80,
+        anatomicalSite: symptomPayload.bodyLocation,
+      });
+    }
+
+    const cdssSymptoms: Record<string, any> = {
+      ...symptomPayload,
+      anatomicalLocation: symptomPayload.bodyLocation,
+      primaryDiagnosis: visionResult?.predictedCondition || riskResult.primaryDiagnosis,
+      clinicalImageDiagnosis: visionResult?.predictedCondition,
+      clinicalImageAnatomicalSite: visionResult?.anatomicalSite || symptomPayload.bodyLocation,
+      clinicalImageSeverity: visionResult?.severity,
+      recommendations: riskResult.clinicalRecommendations,
+      riskLevel: riskResult.riskLevel,
+      clinicalSummary: `${visionResult?.predictedCondition || riskResult.primaryDiagnosis}. ${(riskResult.clinicalRecommendations || []).join('; ')}`,
+    };
+    if (symptomPayload.vitals) {
+      cdssSymptoms.vitals = symptomPayload.vitals;
+    }
+
+    let cdssEvaluation = null;
+    try {
+      console.log(`🧠 [Diagnostics API] Automatically evaluating CDSS report for screening ${savedScreening.id} with vision output...`);
+      cdssEvaluation = await CDSSService.evaluateScreening({
+        screeningId: savedScreening.id,
+        patientId: patientId || 'PATIENT-ANON',
+        institutionId,
+        institutionName: symptoms.institutionName,
+        multimodalRiskScore: riskResult.riskScore,
+        symptoms: cdssSymptoms,
+        visionFindings: cdssVisionFindings,
+        temperature: 1.25,
+      });
+      console.log(`✅ [Diagnostics API] CDSS report generated: ${cdssEvaluation.primaryICD11Code} - ${cdssEvaluation.primaryICD11Title}`);
+      HealthScreeningsDbService.attachCdssEvaluation(savedScreening.id, cdssEvaluation);
+    } catch (cdssErr: any) {
+      console.error('⚠️ [Diagnostics API] Inline CDSS evaluation error:', cdssErr);
+    }
+
+    // 6. Compute Longitudinal Progression Delta if previous screening is linked
     let longitudinalDelta = null;
     if (savedScreening.previous_screening_id) {
       try {
@@ -201,6 +269,7 @@ router.post('/analyze', async (req: Request, res: Response) => {
       screeningId: savedScreening.id,
       riskAssessment: riskResult,
       visionAnalysis: visionResult,
+      cdssEvaluation,
       explainability: {
         gradCam: gradCamResult,
         shap: shapResult

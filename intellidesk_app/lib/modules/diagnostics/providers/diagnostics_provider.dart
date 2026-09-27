@@ -152,6 +152,7 @@ class DiagnosticsProvider extends ChangeNotifier {
       );
 
       _currentSession = _currentSession!.copyWith(
+        id: assessment.screeningId ?? _currentSession!.id,
         clinicalImageUrl: uploadedImageUrl ?? _capturedImagePath,
         riskAssessment: assessment,
         xaiHeatmapUrl: assessment.xaiHeatmapUrl,

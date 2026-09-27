@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import '../models/symptom_vector.dart';
 import '../providers/diagnostics_provider.dart';
 import 'diagnostic_results_screen.dart';
 
@@ -61,20 +62,21 @@ class _DiagnosticCameraScreenState extends State<DiagnosticCameraScreen> {
     setState(() => _isProcessing = true);
     final diag = context.read<DiagnosticsProvider>();
 
-    if (diag.currentSession?.symptomVector != null) {
-      final old = diag.currentSession!.symptomVector!;
+    final currentVector = diag.currentSession?.symptomVector;
+    if (currentVector != null) {
       diag.updateSymptomVector(SymptomVector(
-        bodyLocation: old.bodyLocation,
-        durationDays: old.durationDays,
-        painScale: old.painScale,
-        symptoms: old.symptoms,
-        vitals: old.vitals,
-        demographics: old.demographics,
-        additionalNotes: old.additionalNotes,
+        bodyLocation: currentVector.bodyLocation,
+        durationDays: currentVector.durationDays,
+        painScale: currentVector.painScale,
+        symptoms: currentVector.symptoms,
+        vitals: currentVector.vitals,
+        demographics: currentVector.demographics,
+        additionalNotes: currentVector.additionalNotes,
         categoryHint: _currentCategoryHint,
-        numericalVector: old.numericalVector,
+        numericalVector: currentVector.numericalVector,
       ));
     }
+
 
     final result = await diag.runAssessment();
     if (!mounted) return;

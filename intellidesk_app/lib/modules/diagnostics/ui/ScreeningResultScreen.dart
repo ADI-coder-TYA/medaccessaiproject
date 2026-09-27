@@ -105,9 +105,11 @@ class _ScreeningResultScreenState extends State<ScreeningResultScreen> {
             icon: const Icon(Icons.show_chart),
             tooltip: 'Longitudinal Progression',
             onPressed: () {
+              final pId = session.patientId.isNotEmpty ? session.patientId : (ApiConfig.userId ?? 'PAT-2026-001');
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (context) => LongitudinalHistoryScreen(
+                    patientId: pId,
                     diagnosticsService: widget.diagnosticsService,
                   ),
                 ),

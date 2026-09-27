@@ -40,6 +40,7 @@ abstract class InferenceEngineInterface {
     String? imageUrl,
     dynamic audioBytes,
     List<double>? audioFeatures,
+    List<int>? imageBytes,
   });
 
   /// Releases resources, native memory, or open handles.

@@ -177,6 +177,7 @@ class LocalInferenceService implements InferenceEngineInterface {
     String? imageUrl,
     dynamic audioBytes,
     List<double>? audioFeatures,
+    List<int>? imageBytes, // unused locally — backend handles raw bytes via base64
   }) async {
     await initialize();
 

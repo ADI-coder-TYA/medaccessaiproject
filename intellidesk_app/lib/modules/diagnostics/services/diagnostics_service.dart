@@ -44,6 +44,11 @@ class DiagnosticsService {
     dynamic audioBytes,
     List<double>? audioFeatures,
   }) async {
+    // Normalize imageFile to List<int> for base64 embedding
+    final List<int>? imageBytes = imageFile is List<int>
+        ? imageFile
+        : (imageFile is List ? imageFile.cast<int>() : null);
+
     // 1. Check network connectivity for automatic on-device routing
     final isDeviceOffline = await LocalInferenceService.isOffline();
 
@@ -58,6 +63,7 @@ class DiagnosticsService {
         imageUrl: imageUrl,
         audioBytes: audioBytes,
         audioFeatures: audioFeatures,
+        imageBytes: imageBytes,
       );
     }
 
@@ -68,6 +74,7 @@ class DiagnosticsService {
         imageUrl: imageUrl,
         audioBytes: audioBytes,
         audioFeatures: audioFeatures,
+        imageBytes: imageBytes,
       );
     } catch (e) {
       // Automatic edge fallback if cloud inference errors or connection fails
@@ -81,6 +88,7 @@ class DiagnosticsService {
         imageUrl: imageUrl,
         audioBytes: audioBytes,
         audioFeatures: audioFeatures,
+        imageBytes: imageBytes,
       );
     }
   }
@@ -116,6 +124,7 @@ class DiagnosticsService {
 
 
   /// Uploads symptom photo to the `clinical-diagnostics` Supabase storage bucket.
+  /// Returns the public URL on success, or null on any error/timeout.
   Future<String?> uploadSymptomPhoto(List<int> bytes, String filename) async {
     try {
       final uploadUri = Uri.parse('${ApiConfig.supabaseUrl}/storage/v1/object/clinical-diagnostics/$filename');
@@ -127,13 +136,14 @@ class DiagnosticsService {
           'x-upsert': 'true',
         },
         body: bytes,
-      );
+      ).timeout(const Duration(seconds: 10)); // Never hang — fail fast
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         return '${ApiConfig.supabaseUrl}/storage/v1/object/public/clinical-diagnostics/$filename';
       }
-    } catch (_) {
-      // Fallback
+      debugPrint('⚠️ [DiagnosticsService] Supabase upload returned HTTP ${response.statusCode}: ${response.body.substring(0, response.body.length.clamp(0, 200))}');
+    } catch (e) {
+      debugPrint('⚠️ [DiagnosticsService] Supabase upload failed/timed out: $e — will use inline base64 for vision analysis');
     }
     return null;
   }
@@ -307,9 +317,10 @@ class DiagnosticsService {
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
         if (body['success'] == true && body['screenings'] is List) {
-          return (body['screenings'] as List)
+          final list = (body['screenings'] as List)
               .map((e) => ScreeningHistoryPoint.fromJson(e as Map<String, dynamic>))
               .toList();
+          if (list.isNotEmpty) return list;
         }
       }
     } catch (_) {}
@@ -339,36 +350,6 @@ class DiagnosticsService {
     } catch (_) {}
 
     throw Exception('Could not retrieve delta comparison from server');
-  }
-
-  List<ScreeningHistoryPoint> _generateMockLongitudinalHistory(String patientId) {
-    final now = DateTime.now();
-    return [
-      ScreeningHistoryPoint(
-        id: 'scr-hist-001',
-        createdAt: now.subtract(const Duration(days: 4)),
-        riskScore: 0.76,
-        riskLevel: ClinicalRiskLevel.critical,
-        imageUrl: null,
-        symptomPayload: {'painScale': 8, 'vitals': {'pain_score': 8, 'temperature': 38.6}},
-      ),
-      ScreeningHistoryPoint(
-        id: 'scr-hist-002',
-        createdAt: now.subtract(const Duration(days: 2)),
-        riskScore: 0.52,
-        riskLevel: ClinicalRiskLevel.moderate,
-        imageUrl: null,
-        symptomPayload: {'painScale': 5, 'vitals': {'pain_score': 5, 'temperature': 37.4}},
-      ),
-      ScreeningHistoryPoint(
-        id: 'scr-hist-003',
-        createdAt: now,
-        riskScore: 0.28,
-        riskLevel: ClinicalRiskLevel.low,
-        imageUrl: null,
-        symptomPayload: {'painScale': 2, 'vitals': {'pain_score': 2, 'temperature': 36.8}},
-      ),
-    ];
   }
 
   void dispose() {

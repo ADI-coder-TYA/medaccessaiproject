@@ -50,6 +50,7 @@ class LocalEdgeInferenceEngine implements InferenceEngineInterface {
     String? imageUrl,
     dynamic audioBytes,
     List<double>? audioFeatures,
+    List<int>? imageBytes, // unused in edge engine
   }) async {
     await initialize();
 

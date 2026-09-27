@@ -337,12 +337,21 @@ export class AudioFeatureExtractor {
       }
 
       // Normalize features to [0.0, 1.0] for stable pooling
-      // Meyda spectralCentroid returns bin index: convert to normalized frequency in [0, 1]
-      const centroidNorm = Math.min(1.0, Math.max(0.0, (mFeatures.spectralCentroid * (nyquist / (frameSize / 2))) / nyquist));
-      // Meyda spectralRolloff returns frequency in Hz
-      const rolloffNorm = Math.min(1.0, Math.max(0.0, mFeatures.spectralRolloff / nyquist));
-      // Meyda zcr returns count of zero-crossings per bufferSize
-      const zcrNorm = Math.min(1.0, Math.max(0.0, mFeatures.zcr / frameSize));
+      // Meyda spectralCentroid returns a bin index in [0, frameSize/2]: normalize to [0, 1]
+      const rawCentroid = mFeatures.spectralCentroid;
+      const centroidNorm = (rawCentroid != null && isFinite(rawCentroid) && rawCentroid >= 0)
+        ? Math.min(1.0, rawCentroid / (frameSize / 2))
+        : 0.0;
+      // Meyda spectralRolloff returns frequency in Hz: normalize by Nyquist
+      const rawRolloff = mFeatures.spectralRolloff;
+      const rolloffNorm = (rawRolloff != null && isFinite(rawRolloff) && rawRolloff >= 0)
+        ? Math.min(1.0, Math.max(0.0, rawRolloff / nyquist))
+        : 0.0;
+      // Meyda zcr returns count of zero-crossings per bufferSize: normalize by frameSize
+      const rawZcr = mFeatures.zcr;
+      const zcrNorm = (rawZcr != null && isFinite(rawZcr) && rawZcr >= 0)
+        ? Math.min(1.0, Math.max(0.0, rawZcr / frameSize))
+        : 0.0;
 
       const rawMfccs: number[] = Array.isArray(mFeatures.mfcc) ? mFeatures.mfcc : [];
       const mfccs: number[] = rawMfccs.slice(0, MFCC_COUNT);

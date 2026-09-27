@@ -131,29 +131,16 @@ export class CloudAudioClassifier {
     const flux = features[14] ?? 0.05;
     const zcr = features[15] ?? 0.08;
 
-    const systemPrompt = `You are a clinical bioacoustic diagnostic model implementing Google HeAR and AudioSet foundation acoustic representations.
-Your role is to classify human respiratory sounds into 4 standard categories based on acoustic telemetry (spectral centroid, rolloff, flux, zero-crossing rate, MFCCs):
+    const systemPrompt = `You are a clinical bioacoustic diagnostic model. Classify respiratory audio features into exactly one of 4 categories.
 
 Categories:
-1. "Normal Respiratory" (Vesicular breathing, soft airflow, low centroid < 0.25, low flux)
-2. "Dry/Irritative Cough" (Explosive, broadband transient acoustic shock, sharp attack, non-productive)
-3. "Wet/Productive Cough" (Lower respiratory secretion bubbling, turbulent acoustic flux > 0.10, heavy low-to-mid resonance)
-4. "Wheeze/Stridor" (High-pitched musical tones, bronchial constriction, sustained high centroid > 0.45, dominant formant harmonics)
+1. Normal Respiratory - vesicular breathing, soft airflow, centroid < 0.25, low flux
+2. Dry/Irritative Cough - explosive broadband transient, sharp attack, non-productive, centroid 0.25-0.45
+3. Wet/Productive Cough - secretion bubbling, turbulent flux > 0.10, low-to-mid resonance
+4. Wheeze/Stridor - high-pitched musical tones, bronchospasm, sustained centroid > 0.45
 
-Output STRICT JSON:
-{
-  "predictedCategory": "Normal Respiratory" | "Dry/Irritative Cough" | "Wet/Productive Cough" | "Wheeze/Stridor",
-  "confidence": number, // [0.0 - 1.0]
-  "probabilities": {
-    "normalRespiratory": number,
-    "dryIrritativeCough": number,
-    "wetProductiveCough": number,
-    "wheezeStridor": number
-  },
-  "isRedFlagRespiratory": boolean,
-  "redFlagReason": string | null
-}
-All 4 probabilities must sum to 1.0. Do not wrap with markdown code blocks.`;
+Respond with ONLY a raw JSON object. No markdown, no explanation, no code blocks. Example:
+{"predictedCategory":"Dry/Irritative Cough","confidence":0.78,"probabilities":{"normalRespiratory":0.05,"dryIrritativeCough":0.78,"wetProductiveCough":0.10,"wheezeStridor":0.07},"isRedFlagRespiratory":false,"redFlagReason":null}`;
 
     const userPrompt = `Acoustic Telemetry:
 - Spectral Centroid (Normalized): ${centroid.toFixed(4)}
@@ -176,9 +163,8 @@ Classify respiratory sound and detect red flags.`;
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        temperature: 0.1,
-        max_tokens: 500,
-        response_format: { type: 'json_object' }
+        temperature: 0.05,
+        max_tokens: 300
       })
     });
 

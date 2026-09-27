@@ -28,6 +28,15 @@ export class CDSSService {
    * Evaluates patient screening findings against WHO ICD-11 knowledge base.
    */
   public static async evaluateScreening(payload: CDSSInputPayload): Promise<CDSSEvaluationResult> {
+    // 0. Idempotency Check: Return existing evaluation if already evaluated for this screening ID
+    if (payload.screeningId) {
+      const existing = await this.getEvaluationByScreeningId(payload.screeningId);
+      if (existing) {
+        console.log(`ℹ️ [CDSSService] Returning existing saved CDSS evaluation for screening "${payload.screeningId}"`);
+        return existing;
+      }
+    }
+
     const temperature = payload.temperature ?? 1.25;
 
     // 1. Compute Differential Diagnosis Candidates with Guardrail 2 (T = 1.25, [-20, 20] logit clipping)
@@ -82,7 +91,7 @@ export class CDSSService {
     }
 
     const now = new Date().toISOString();
-    const evaluationId = `cdss-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const evaluationId = crypto.randomUUID();
 
     const result: CDSSEvaluationResult = {
       id: evaluationId,
@@ -106,12 +115,15 @@ export class CDSSService {
     };
 
     // 3. Persist to Supabase with local memory fallback (Guardrail 4)
+    const isUuid = (str?: string | null) => Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str));
+    const validScreeningUuid = isUuid(result.screeningId) ? result.screeningId : null;
+
     try {
       const { data, error } = await supabase
         .from('cdss_evaluations')
         .insert({
           id: result.id,
-          screening_id: result.screeningId || null,
+          screening_id: validScreeningUuid,
           patient_id: result.patientId,
           primary_icd11_code: result.primaryICD11Code,
           differential_diagnoses: result.differentialDiagnoses,
@@ -133,6 +145,9 @@ export class CDSSService {
     }
 
     this._inMemoryStore.set(result.id, result);
+    if (result.screeningId) {
+      this._inMemoryStore.set(result.screeningId, result);
+    }
     return result;
   }
 
@@ -451,17 +466,36 @@ export class CDSSService {
    * Retrieves CDSS evaluation associated with a specific screening ID.
    */
   public static async getEvaluationByScreeningId(screeningId: string): Promise<CDSSEvaluationResult | null> {
+    if (!screeningId) return null;
+
+    if (this._inMemoryStore.has(screeningId)) {
+      return this._inMemoryStore.get(screeningId)!;
+    }
+
+    const strippedId = screeningId.startsWith('cdss-') ? screeningId.substring(5) : screeningId;
+    if (this._inMemoryStore.has(strippedId)) {
+      return this._inMemoryStore.get(strippedId)!;
+    }
+
     for (const ev of this._inMemoryStore.values()) {
-      if (ev.screeningId === screeningId) {
+      if (ev.screeningId === screeningId || ev.id === screeningId || ev.screeningId === strippedId) {
         return ev;
       }
     }
 
+    const isUuid = (str?: string | null) => Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str));
+
     try {
-      const { data, error } = await supabase
-        .from('cdss_evaluations')
-        .select('*')
-        .eq('screening_id', screeningId)
+      let query = supabase.from('cdss_evaluations').select('*');
+      if (isUuid(screeningId)) {
+        query = query.or(`screening_id.eq.${screeningId},id.eq.${screeningId}`);
+      } else if (isUuid(strippedId)) {
+        query = query.or(`screening_id.eq.${strippedId},id.eq.${strippedId}`);
+      } else {
+        query = query.eq('patient_id', screeningId);
+      }
+
+      const { data, error } = await query
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();

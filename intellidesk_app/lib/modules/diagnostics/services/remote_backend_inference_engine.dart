@@ -42,6 +42,7 @@ class RemoteBackendInferenceEngine implements InferenceEngineInterface {
     String? imageUrl,
     dynamic audioBytes,
     List<double>? audioFeatures,
+    List<int>? imageBytes,
   }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/diagnostics/analyze');
     final Map<String, dynamic> payload = {
@@ -51,6 +52,12 @@ class RemoteBackendInferenceEngine implements InferenceEngineInterface {
       'imageUrl': imageUrl,
       'symptoms': symptoms.toMap(),
     };
+
+    // Embed raw image bytes as base64 — backend CloudVisionClassifier uses this
+    // even when Supabase upload failed and imageUrl is null
+    if (imageBytes != null && imageBytes.isNotEmpty) {
+      payload['imageBase64'] = base64Encode(imageBytes);
+    }
 
     if (audioBytes != null) {
       if (audioBytes is List<int>) {
@@ -67,7 +74,7 @@ class RemoteBackendInferenceEngine implements InferenceEngineInterface {
       uri,
       headers: ApiConfig.patientHeaders,
       body: body,
-    );
+    ).timeout(const Duration(seconds: 60)); // Safety timeout — vision inference can take ~15-30s
 
     if (response.statusCode != 200) {
       throw Exception('Diagnostic analysis failed (${response.statusCode}): ${response.body}');
@@ -115,6 +122,8 @@ class RemoteBackendInferenceEngine implements InferenceEngineInterface {
     final visualDescription = visionData?['clinicalDescription'] as String?;
     final visualEngine = visionData?['source'] as String?;
     final visualRecommendedAction = visionData?['recommendedAction'] as String?;
+    final screeningId = data['screeningId'] as String?;
+    final cdssEvaluation = data['cdssEvaluation'] as Map<String, dynamic>?;
 
     return RiskAssessment(
       riskScore: (riskData['riskScore'] as num?)?.toDouble() ?? 0.35,
@@ -133,6 +142,8 @@ class RemoteBackendInferenceEngine implements InferenceEngineInterface {
       visualDescription: visualDescription,
       visualEngine: visualEngine,
       visualRecommendedAction: visualRecommendedAction,
+      screeningId: screeningId,
+      cdssEvaluationPayload: cdssEvaluation,
     );
   }
 

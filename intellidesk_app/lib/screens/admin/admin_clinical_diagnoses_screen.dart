@@ -360,6 +360,46 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
     );
 
     CDSSEvaluationResult evaluation = fallbackEval;
+
+    // 1. Check if CDSS evaluation is already attached to this screening record
+    final rawCdss = screening['cdss_evaluation'] ?? screening['cdssEvaluation'];
+    if (rawCdss is Map) {
+      try {
+        final parsed = CDSSEvaluationResult.fromJson(Map<String, dynamic>.from(rawCdss));
+        if (context.mounted) {
+          CDSSDecisionDrawer.show(
+            context,
+            evaluation: parsed,
+            isClinicianView: true,
+            institutionId: instId,
+            institutionName: instName,
+          );
+        }
+        return;
+      } catch (_) {}
+    }
+
+    // 2. Fetch existing report from backend database by screeningId
+    if (screeningId.isNotEmpty) {
+      try {
+        final existing = await CDSSService().getEvaluationByScreeningId(screeningId);
+        if (existing != null) {
+          screening['cdss_evaluation'] = existing.toJson();
+          if (context.mounted) {
+            CDSSDecisionDrawer.show(
+              context,
+              evaluation: existing,
+              isClinicianView: true,
+              institutionId: instId,
+              institutionName: instName,
+            );
+          }
+          return;
+        }
+      } catch (_) {}
+    }
+
+    // 3. Fallback: evaluate once if no saved report exists
     try {
       final evaluated = await CDSSService().evaluateScreening(
         screeningId: screeningId,
@@ -371,6 +411,7 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
         visionFindings: findings.whereType<Map<String, dynamic>>().toList(),
       );
       evaluation = evaluated;
+      screening['cdss_evaluation'] = evaluated.toJson();
     } catch (_) {}
 
     if (!context.mounted) return;
@@ -876,9 +917,10 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
                               label: const Text('Recovery Curve', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                               onPressed: () {
                                 Navigator.pop(context);
+                                final pId = screening['patient_id']?.toString() ?? screening['patientId']?.toString();
                                 Navigator.push(
                                   context,
-                                  MaterialPageRoute(builder: (_) => const LongitudinalHistoryScreen()),
+                                  MaterialPageRoute(builder: (_) => LongitudinalHistoryScreen(patientId: pId)),
                                 );
                               },
                             ),

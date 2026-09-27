@@ -17,6 +17,7 @@ export interface DBHealthScreeningRow {
   physiological_alerts?: any[] | null;
   patient_name?: string | null;
   patientName?: string | null;
+  cdss_evaluation?: any;
   created_at: string;
   updated_at: string;
 }
@@ -24,6 +25,26 @@ export interface DBHealthScreeningRow {
 export class HealthScreeningsDbService {
   // In-memory cache to ensure zero-failure local testing and offline execution
   private static _localCache: Map<string, DBHealthScreeningRow> = new Map();
+  private static _localCdssMap: Map<string, any> = new Map();
+
+  /**
+   * Attaches an evaluated CDSS report to a screening for immediate caching and retrieval.
+   */
+  public static attachCdssEvaluation(screeningId: string, evaluation: any): void {
+    if (!screeningId || !evaluation) return;
+    this._localCdssMap.set(screeningId, evaluation);
+    const existing = this._localCache.get(screeningId);
+    if (existing) {
+      (existing as any).cdss_evaluation = evaluation;
+    }
+  }
+
+  /**
+   * Retrieves any cached CDSS evaluation for a given screening ID.
+   */
+  public static getCdssEvaluationForScreening(screeningId: string): any {
+    return this._localCdssMap.get(screeningId) || null;
+  }
 
   /**
    * Safe parser for fields stored as JSON strings or objects in Supabase.
@@ -53,6 +74,10 @@ export class HealthScreeningsDbService {
     const uncertaintyBounds = this.safeJsonParse<Record<string, any>>(raw.uncertainty_bounds, {});
     const physiologicalAlerts = this.safeJsonParse<any[]>(raw.physiological_alerts, []);
     let rppgVitals = this.safeJsonParse<Record<string, any> | null>(raw.rppg_vitals_payload, null);
+
+    const cdssEval = raw.cdss_evaluation ||
+      (Array.isArray(raw.cdss_evaluations) && raw.cdss_evaluations.length > 0 ? raw.cdss_evaluations[0] : null) ||
+      this._localCdssMap.get(raw.id) || null;
 
     const pid = raw.patient_id || '';
     const resolvedName =
@@ -148,6 +173,7 @@ export class HealthScreeningsDbService {
       uncertainty_bounds: uncertaintyBounds,
       physiological_alerts: physiologicalAlerts,
       rppg_vitals_payload: rppgVitals,
+      cdss_evaluation: cdssEval,
     };
 
     return normalizedRow;
@@ -315,24 +341,77 @@ export class HealthScreeningsDbService {
    */
   public static async getScreeningsByPatient(patientId: string): Promise<DBHealthScreeningRow[]> {
     try {
-      const { data, error } = await supabase
-        .from('health_screenings')
-        .select('*')
-        .eq('patient_id', patientId)
-        .order('created_at', { ascending: false });
+      const candidates = new Set<string>();
+      if (patientId && patientId.trim().length > 0) {
+        const raw = patientId.trim();
+        candidates.add(raw);
+        const stripped = raw.replace(/^usr_pat_/, '');
+        candidates.add(stripped);
+        candidates.add(`usr_pat_${stripped}`);
+
+        // Common demo aliases mapped to Alex Rivera canonical IDs
+        const demoSet = ['demo-patient-001', 'pat-demo-01', 'usr_pat_001', 'PAT-2026-001', 'usr_pat_PAT-2026-001', 'PATIENT-DEMO', 'PATIENT-ANON'];
+        if (demoSet.includes(raw) || demoSet.includes(stripped)) {
+          demoSet.forEach(d => candidates.add(d));
+        }
+      }
+
+      const candidateList = Array.from(candidates);
+      let data: any = null;
+      let error: any = null;
+
+      try {
+        const res = candidateList.length > 1
+          ? await supabase
+              .from('health_screenings')
+              .select('*, cdss_evaluations(*)')
+              .in('patient_id', candidateList)
+              .order('created_at', { ascending: false })
+          : await supabase
+              .from('health_screenings')
+              .select('*, cdss_evaluations(*)')
+              .eq('patient_id', candidateList[0] || patientId)
+              .order('created_at', { ascending: false });
+        data = res.data;
+        error = res.error;
+      } catch (_) {}
+
+      if (error || !data || data.length === 0) {
+        const fallback = candidateList.length > 1
+          ? await supabase
+              .from('health_screenings')
+              .select('*')
+              .in('patient_id', candidateList)
+              .order('created_at', { ascending: false })
+          : await supabase
+              .from('health_screenings')
+              .select('*')
+              .eq('patient_id', candidateList[0] || patientId)
+              .order('created_at', { ascending: false });
+        data = fallback.data;
+        error = fallback.error;
+      }
 
       if (!error && data && data.length > 0) {
-        const normalized = data.map((row) => this.normalizeScreeningRow(row));
-        normalized.forEach((row) => this._localCache.set(row.id, row));
+        const normalized = data.map((row: any) => this.normalizeScreeningRow(row));
+        normalized.forEach((row: any) => this._localCache.set(row.id, row));
         return normalized;
       }
     } catch (err: any) {
       console.warn(`⚠️ [Diagnostics DB] Failed to fetch screenings for patient ${patientId}: ${err.message}`);
     }
 
-    // Fallback to local cache
-    return Array.from(this._localCache.values())
-      .filter((s) => s.patient_id === patientId)
+    // Fallback to local cache for offline tests only if it actually belongs to this patient
+    const localMatches = Array.from(this._localCache.values())
+      .filter((s) => {
+        if (!s.patient_id) return false;
+        if (s.patient_id === patientId) return true;
+        const stripped = s.patient_id.replace(/^usr_pat_/, '');
+        const targetStripped = patientId.replace(/^usr_pat_/, '');
+        return stripped === targetStripped;
+      });
+
+    return localMatches
       .map((s) => this.normalizeScreeningRow(s))
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
@@ -383,11 +462,28 @@ export class HealthScreeningsDbService {
    */
   public static async getScreeningById(id: string): Promise<DBHealthScreeningRow | null> {
     try {
-      const { data, error } = await supabase
-        .from('health_screenings')
-        .select('*')
-        .eq('id', id)
-        .maybeSingle();
+      let data: any = null;
+      let error: any = null;
+
+      try {
+        const res = await supabase
+          .from('health_screenings')
+          .select('*, cdss_evaluations(*)')
+          .eq('id', id)
+          .maybeSingle();
+        data = res.data;
+        error = res.error;
+      } catch (_) {}
+
+      if (error || !data) {
+        const fallback = await supabase
+          .from('health_screenings')
+          .select('*')
+          .eq('id', id)
+          .maybeSingle();
+        data = fallback.data;
+        error = fallback.error;
+      }
 
       if (!error && data) {
         const normalized = this.normalizeScreeningRow(data);
@@ -490,24 +586,53 @@ export class HealthScreeningsDbService {
     const patientNameMap = await this._buildPatientNameMap(institutionId);
 
     try {
-      let query = supabase
-        .from('health_screenings')
-        .select('*')
-        .order('created_at', { ascending: false });
+      let data: any = null;
+      let error: any = null;
 
-      if (institutionId) {
-        query = query.eq('institution_id', institutionId);
-      }
-      if (options?.riskLevel && options.riskLevel !== 'ALL') {
-        query = query.eq('risk_level', options.riskLevel.toUpperCase());
-      }
-      if (options?.limit) {
-        query = query.limit(options.limit);
+      try {
+        let q = supabase
+          .from('health_screenings')
+          .select('*, cdss_evaluations(*)')
+          .order('created_at', { ascending: false });
+
+        if (institutionId) {
+          q = q.eq('institution_id', institutionId);
+        }
+        if (options?.riskLevel && options.riskLevel !== 'ALL') {
+          q = q.eq('risk_level', options.riskLevel.toUpperCase());
+        }
+        if (options?.limit) {
+          q = q.limit(options.limit);
+        }
+
+        const res = await q;
+        data = res.data;
+        error = res.error;
+      } catch (_) {}
+
+      if (error || !data) {
+        let qFallback = supabase
+          .from('health_screenings')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (institutionId) {
+          qFallback = qFallback.eq('institution_id', institutionId);
+        }
+        if (options?.riskLevel && options.riskLevel !== 'ALL') {
+          qFallback = qFallback.eq('risk_level', options.riskLevel.toUpperCase());
+        }
+        if (options?.limit) {
+          qFallback = qFallback.limit(options.limit);
+        }
+
+        const fallback = await qFallback;
+        data = fallback.data;
+        error = fallback.error;
       }
 
-      const { data, error } = await query;
       if (!error && data) {
-        const enriched = data.map((row) => {
+        const enriched = data.map((row: any) => {
           const updatedRow = this.normalizeScreeningRow(row, patientNameMap);
           this._localCache.set(updatedRow.id, updatedRow);
           return updatedRow;

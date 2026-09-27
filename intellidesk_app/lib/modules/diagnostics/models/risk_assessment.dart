@@ -145,6 +145,13 @@ class RiskAssessment {
   final bool requiresImmediatePhysicianReview;
   final bool isOffline;
   final String? executionEngine;
+  final String? visualCondition;
+  final String? visualAnatomicalSite;
+  final String? visualSeverity;
+  final List<String> visualFindings;
+  final String? visualDescription;
+  final String? visualEngine;
+  final String? visualRecommendedAction;
 
   const RiskAssessment({
     required this.riskScore,
@@ -159,6 +166,13 @@ class RiskAssessment {
     this.requiresImmediatePhysicianReview = false,
     this.isOffline = false,
     this.executionEngine,
+    this.visualCondition,
+    this.visualAnatomicalSite,
+    this.visualSeverity,
+    this.visualFindings = const [],
+    this.visualDescription,
+    this.visualEngine,
+    this.visualRecommendedAction,
   });
 
   Map<String, dynamic> toMap() {
@@ -175,6 +189,13 @@ class RiskAssessment {
       'requiresImmediatePhysicianReview': requiresImmediatePhysicianReview,
       'isOffline': isOffline,
       'executionEngine': executionEngine,
+      'visualCondition': visualCondition,
+      'visualAnatomicalSite': visualAnatomicalSite,
+      'visualSeverity': visualSeverity,
+      'visualFindings': visualFindings,
+      'visualDescription': visualDescription,
+      'visualEngine': visualEngine,
+      'visualRecommendedAction': visualRecommendedAction,
     };
   }
 
@@ -194,6 +215,10 @@ class RiskAssessment {
             ?.map((e) => e.toString())
             .toList() ??
         [];
+    final vFindings = (map['visualFindings'] as List<dynamic>?)
+            ?.map((e) => e.toString())
+            .toList() ??
+        [];
 
     return RiskAssessment(
       riskScore: (map['riskScore'] as num?)?.toDouble() ?? 0.0,
@@ -210,6 +235,13 @@ class RiskAssessment {
       requiresImmediatePhysicianReview: map['requiresImmediatePhysicianReview'] as bool? ?? false,
       isOffline: map['isOffline'] as bool? ?? false,
       executionEngine: map['executionEngine'] as String?,
+      visualCondition: map['visualCondition'] as String?,
+      visualAnatomicalSite: map['visualAnatomicalSite'] as String?,
+      visualSeverity: map['visualSeverity'] as String?,
+      visualFindings: vFindings,
+      visualDescription: map['visualDescription'] as String?,
+      visualEngine: map['visualEngine'] as String?,
+      visualRecommendedAction: map['visualRecommendedAction'] as String?,
     );
   }
 

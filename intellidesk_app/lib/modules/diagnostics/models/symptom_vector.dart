@@ -58,6 +58,7 @@ class SymptomVector {
   final ClinicalVitals vitals;
   final Map<String, dynamic> demographics;
   final String? additionalNotes;
+  final String? categoryHint;
   final List<double> numericalVector;
 
   const SymptomVector({
@@ -68,6 +69,7 @@ class SymptomVector {
     this.vitals = const ClinicalVitals(),
     this.demographics = const {},
     this.additionalNotes,
+    this.categoryHint,
     this.numericalVector = const [],
   });
 
@@ -100,6 +102,7 @@ class SymptomVector {
       'vitals': vitals.toMap(),
       'demographics': demographics,
       'additionalNotes': additionalNotes,
+      'categoryHint': categoryHint,
       'numericalVector': toNumericalEmbedding(),
     };
   }
@@ -115,6 +118,7 @@ class SymptomVector {
       vitals: map['vitals'] != null ? ClinicalVitals.fromMap(map['vitals'] as Map<String, dynamic>) : const ClinicalVitals(),
       demographics: (map['demographics'] as Map<String, dynamic>?) ?? {},
       additionalNotes: map['additionalNotes'] as String?,
+      categoryHint: map['categoryHint'] as String?,
       numericalVector: (map['numericalVector'] as List<dynamic>?)?.map((e) => (e as num).toDouble()).toList() ?? [],
     );
   }

@@ -44,9 +44,10 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
 
   final List<String> _bodyLocations = [
     'Skin / Epidermis',
-    'Face / Head',
-    'Throat / Oral Cavity',
     'Eyes / Periorbital',
+    'Wounds / Cuts / Burns',
+    'Throat / Oral Cavity',
+    'Face / Head',
     'Chest / Thorax',
     'Abdomen',
     'Arms / Hands',
@@ -59,14 +60,18 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
     'Swelling / Edema',
     'Localized Warmth',
     'Fever / Chills',
-    'Throat Irritation',
+    'Cut / Dermal Laceration',
+    'Burn / Thermal Blistering',
+    'Ocular Redness / Ciliary Injection',
     'Conjunctival Discharge',
+    'Throat Irritation',
     'Open Exudate / Crusting',
     'Fatigue / Malaise',
     'Acute Sharp Pain',
     'Wheezing / Stridor Sound',
     'Persistent Cough',
   ];
+
 
   @override
   void initState() {
@@ -118,6 +123,7 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
         rppgResult: _scannedVitals?.toJson(),
       );
 
+      final categoryHint = _mapLocationToCategoryHint(_selectedBodyLocation);
       final vector = SymptomVector(
         bodyLocation: _selectedBodyLocation,
         durationDays: _durationDays,
@@ -125,6 +131,7 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
         symptoms: _selectedSymptoms.toList(),
         vitals: vitals,
         additionalNotes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+        categoryHint: categoryHint,
       );
 
       context.read<DiagnosticsProvider>().updateSymptomVector(vector);
@@ -133,7 +140,7 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
         context,
         MaterialPageRoute(
           builder: (_) => DiagnosticCameraScreen(
-            symptomCategoryHint: _mapLocationToCategoryHint(_selectedBodyLocation),
+            symptomCategoryHint: categoryHint,
           ),
         ),
       );
@@ -151,11 +158,21 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
   }
 
   String _mapLocationToCategoryHint(String loc) {
-    if (loc.contains('Throat')) return 'ORAL_THROAT_INFECTION';
-    if (loc.contains('Eyes')) return 'CONJUNCTIVITIS_EYE';
-    if (loc.contains('Skin') || loc.contains('Arms') || loc.contains('Legs')) return 'DERMATOLOGY_RASH';
+    if (loc.contains('Throat') || loc.contains('Oral')) return 'ORAL_THROAT_INFECTION';
+    if (loc.contains('Eyes') || loc.contains('Periorbital')) return 'CONJUNCTIVITIS_EYE';
+    if (loc.contains('Wounds') || loc.contains('Cut') || loc.contains('Burn') ||
+        _selectedSymptoms.any((s) => s.contains('Cut') || s.contains('Burn') || s.contains('Laceration'))) {
+      return 'WOUND_HEALING';
+    }
+    if (loc.contains('Skin') || loc.contains('Arms') || loc.contains('Legs') || loc.contains('Face')) {
+      if (_selectedSymptoms.any((s) => s.contains('Lesion') || s.contains('Mole'))) {
+        return 'SKIN_LESION';
+      }
+      return 'DERMATOLOGY_RASH';
+    }
     return 'GENERAL_PHYSICAL_SYMPTOM';
   }
+
 
   void _openVitalsScanner() {
     showModalBottomSheet(

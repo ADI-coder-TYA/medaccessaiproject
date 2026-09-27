@@ -316,11 +316,97 @@ class _ScreeningResultScreenState extends State<ScreeningResultScreen> {
                       ],
                     ),
                     const SizedBox(height: 4),
+
                     const Text(
-                      'Original symptom photo compared with clinical visual focus map.',
+                      'Clinical photograph analyzed with multimodal computer vision alongside focus attention heatmap.',
                       style: TextStyle(fontSize: 12, color: Colors.grey),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 12),
+
+                    // Visual Biomarker Diagnosis Details
+                    if (assessment.visualCondition != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0D9488).withOpacity(0.06),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFF0D9488).withOpacity(0.25)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        assessment.visualCondition!,
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF0F766E),
+                                        ),
+                                      ),
+                                      if (assessment.visualAnatomicalSite != null)
+                                        Text(
+                                          'Site: ${assessment.visualAnatomicalSite!}',
+                                          style: TextStyle(fontSize: 11.5, color: Colors.grey[700]),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: assessment.visualEngine == 'QWEN_VL_72B'
+                                        ? const Color(0xFF0F766E).withOpacity(0.12)
+                                        : Colors.blue.withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    assessment.visualEngine == 'QWEN_VL_72B'
+                                        ? 'Qwen 2.5-VL 72B SOTA'
+                                        : 'MobileNet-V3 Edge',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: assessment.visualEngine == 'QWEN_VL_72B'
+                                          ? const Color(0xFF0F766E)
+                                          : Colors.blue[800],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (assessment.visualFindings.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              ...assessment.visualFindings.take(2).map(
+                                (f) => Padding(
+                                  padding: const EdgeInsets.only(top: 2.0),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Icon(Icons.check_circle_outline, size: 13, color: Color(0xFF0D9488)),
+                                      const SizedBox(width: 5),
+                                      Expanded(
+                                        child: Text(
+                                          f,
+                                          style: TextStyle(fontSize: 11, color: Colors.grey[800]),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
 
                     if (_showSideBySide)
                       // Side-by-Side View
@@ -397,9 +483,11 @@ class _ScreeningResultScreenState extends State<ScreeningResultScreen> {
                                               color: Colors.black87,
                                               borderRadius: BorderRadius.circular(4),
                                             ),
-                                            child: const Text(
-                                              'Active Hotspot',
-                                              style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                            child: Text(
+                                              assessment.visualCondition != null
+                                                  ? 'Pathology: ${assessment.visualCondition}'
+                                                  : 'Active Hotspot',
+                                              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                                             ),
                                           ),
                                         ),
@@ -457,9 +545,11 @@ class _ScreeningResultScreenState extends State<ScreeningResultScreen> {
                                     color: Colors.black87,
                                     borderRadius: BorderRadius.circular(6),
                                   ),
-                                  child: const Text(
-                                    'Clinical Region Highlight',
-                                    style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                  child: Text(
+                                    assessment.visualCondition != null
+                                        ? 'Pathology Focus: ${assessment.visualCondition}'
+                                        : 'Clinical Region Highlight',
+                                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                                   ),
                                 ),
                               ),
@@ -467,6 +557,7 @@ class _ScreeningResultScreenState extends State<ScreeningResultScreen> {
                           ),
                         ),
                       ),
+
                   ],
                 ),
               ),

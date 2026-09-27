@@ -61,6 +61,21 @@ class _DiagnosticCameraScreenState extends State<DiagnosticCameraScreen> {
     setState(() => _isProcessing = true);
     final diag = context.read<DiagnosticsProvider>();
 
+    if (diag.currentSession?.symptomVector != null) {
+      final old = diag.currentSession!.symptomVector!;
+      diag.updateSymptomVector(SymptomVector(
+        bodyLocation: old.bodyLocation,
+        durationDays: old.durationDays,
+        painScale: old.painScale,
+        symptoms: old.symptoms,
+        vitals: old.vitals,
+        demographics: old.demographics,
+        additionalNotes: old.additionalNotes,
+        categoryHint: _currentCategoryHint,
+        numericalVector: old.numericalVector,
+      ));
+    }
+
     final result = await diag.runAssessment();
     if (!mounted) return;
 
@@ -80,6 +95,24 @@ class _DiagnosticCameraScreenState extends State<DiagnosticCameraScreen> {
     }
   }
 
+  Widget _buildCategoryChip(String label, String category) {
+    final isSelected = _currentCategoryHint == category;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6.0),
+      child: ChoiceChip(
+        label: Text(label, style: TextStyle(fontSize: 11, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+        selected: isSelected,
+        selectedColor: const Color(0xFF0D9488).withOpacity(0.2),
+        onSelected: (val) {
+          if (val) {
+            setState(() => _currentCategoryHint = category);
+          }
+        },
+      ),
+    );
+  }
+
+
   @override
   Widget build(BuildContext context) {
     final diag = context.watch<DiagnosticsProvider>();
@@ -93,7 +126,7 @@ class _DiagnosticCameraScreenState extends State<DiagnosticCameraScreen> {
           children: [
             // Clinical instructions header
             Container(
-              margin: const EdgeInsets.all(12),
+              margin: const EdgeInsets.fromLTRB(12, 10, 12, 6),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: Colors.blueGrey.withOpacity(0.08),
@@ -105,13 +138,30 @@ class _DiagnosticCameraScreenState extends State<DiagnosticCameraScreen> {
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Position the lesion/rash in bright, even lighting. Keep the camera ~15cm away and in sharp focus.',
+                      'Position the affected area (eye, rash, wound, burn, or throat) in bright, even lighting with sharp focus.',
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
                     ),
                   ),
                 ],
               ),
             ),
+
+            // Category Hint Selector Pills
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              child: Row(
+                children: [
+                  _buildCategoryChip('Skin / Rash', 'DERMATOLOGY_RASH'),
+                  _buildCategoryChip('Eyes / Ocular', 'CONJUNCTIVITIS_EYE'),
+                  _buildCategoryChip('Wounds / Cuts / Burns', 'WOUND_HEALING'),
+                  _buildCategoryChip('Throat / Mouth', 'ORAL_THROAT_INFECTION'),
+                  _buildCategoryChip('Skin Lesion / Mole', 'SKIN_LESION'),
+                  _buildCategoryChip('General', 'GENERAL_PHYSICAL_SYMPTOM'),
+                ],
+              ),
+            ),
+
 
             // Camera / Preview Area with Reticle
             Expanded(
@@ -187,9 +237,10 @@ class _DiagnosticCameraScreenState extends State<DiagnosticCameraScreen> {
                                 CircularProgressIndicator(color: Color(0xFF0D9488)),
                                 SizedBox(height: 16),
                                 Text(
-                                  'Extracting 128-d Visual Embeddings & Running Fusion...',
+                                  'Analyzing Visual Pathology with Qwen 2.5-VL & Fusing Risk...',
                                   style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                                 ),
+
                               ],
                             ),
                           ),

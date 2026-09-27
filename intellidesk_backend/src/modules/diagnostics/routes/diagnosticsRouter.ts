@@ -67,10 +67,16 @@ router.post('/analyze', async (req: Request, res: Response) => {
     let visionResult;
     let gradCamResult;
     if (imageUrl) {
+      console.log(`\n🩺 [Diagnostics API] Clinical Image Attached for patient: "${resolvedPatientName || 'Anonymous'}"`);
+      console.log(`   Image payload type: ${imageUrl.startsWith('data:') ? 'Base64 Data URI' : imageUrl.startsWith('http') ? 'Remote URL' : 'Raw string'}`);
+      console.log(`   Category hint: ${symptoms.categoryHint || 'None specified (Auto-detection enabled)'}`);
+      const vStart = Date.now();
       visionResult = await ClinicalImageClassifier.extractEmbeddings({
         imageUrl,
         categoryHint: symptoms.categoryHint
       });
+      console.log(`🩺 [Diagnostics API] Vision extraction completed in ${Date.now() - vStart}ms:`);
+      console.log(`   Condition: "${visionResult.predictedCondition}" | Severity: ${visionResult.severity || 'N/A'} | Source: ${visionResult.source || 'Local'}`);
 
       // Generate Grad-CAM Heatmap
       gradCamResult = GradCamGenerator.generateHeatmap(
@@ -78,7 +84,11 @@ router.post('/analyze', async (req: Request, res: Response) => {
         visionResult.featureVector,
         visionResult.featureMapDimensions
       );
+      console.log(`🔥 [Diagnostics API] Grad-CAM Visual Focus Heatmap generated for condition: "${visionResult.predictedCondition}"`);
+    } else {
+      console.log(`ℹ️ [Diagnostics API] No clinical photo attached -> Running screening with text/audio priors.`);
     }
+
 
     // 2. Audio Biomarker Buffer (if audio provided)
     let audioBuffer: Buffer | undefined;

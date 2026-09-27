@@ -373,8 +373,8 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
             ),
             const SizedBox(height: 16),
 
-            // 3. Grad-CAM Visual Heatmap Section
-            if (session?.clinicalImageUrl != null || assessment.xaiHeatmapUrl != null) ...[
+            // 3. Multimodal Clinical Vision Biomarker & Visual Focus Map
+            if (session?.clinicalImageUrl != null || assessment.xaiHeatmapUrl != null || assessment.visualCondition != null) ...[
               Card(
                 elevation: 0,
                 shape: RoundedRectangleBorder(
@@ -386,19 +386,174 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Row(
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Icon(Icons.remove_red_eye_outlined, color: Color(0xFF0D9488), size: 20),
-                          SizedBox(width: 8),
-                          Text('Clinical Visual Focus Map', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                          const Row(
+                            children: [
+                              Icon(Icons.remove_red_eye_outlined, color: Color(0xFF0D9488), size: 20),
+                              SizedBox(width: 8),
+                              Text('Clinical Vision Biomarker', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                            ],
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: assessment.visualEngine == 'QWEN_VL_72B'
+                                  ? const Color(0xFF0F766E).withOpacity(0.12)
+                                  : Colors.blue.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: assessment.visualEngine == 'QWEN_VL_72B'
+                                    ? const Color(0xFF0F766E)
+                                    : Colors.blue,
+                                width: 0.8,
+                              ),
+                            ),
+                            child: Text(
+                              assessment.visualEngine == 'QWEN_VL_72B'
+                                  ? 'Qwen 2.5-VL 72B SOTA'
+                                  : 'MobileNet-V3 Edge',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: assessment.visualEngine == 'QWEN_VL_72B'
+                                    ? const Color(0xFF0F766E)
+                                    : Colors.blue[800],
+                              ),
+                            ),
+                          ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Highlights spatial regions in your photo that contributed to the diagnostic evaluation.',
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
+
+                      // Diagnosed Condition & Anatomical Site Card
+                      if (assessment.visualCondition != null) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0D9488).withOpacity(0.06),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFF0D9488).withOpacity(0.25)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          assessment.visualCondition!,
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF0F766E),
+                                          ),
+                                        ),
+                                        if (assessment.visualAnatomicalSite != null)
+                                          Text(
+                                            'Site: ${assessment.visualAnatomicalSite!}',
+                                            style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (assessment.visualSeverity != null)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: assessment.visualSeverity == 'CRITICAL' || assessment.visualSeverity == 'SEVERE'
+                                            ? const Color(0xFFEF4444).withOpacity(0.15)
+                                            : assessment.visualSeverity == 'MODERATE'
+                                                ? const Color(0xFFF59E0B).withOpacity(0.15)
+                                                : const Color(0xFF10B981).withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        assessment.visualSeverity!,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: assessment.visualSeverity == 'CRITICAL' || assessment.visualSeverity == 'SEVERE'
+                                              ? const Color(0xFFEF4444)
+                                              : assessment.visualSeverity == 'MODERATE'
+                                                  ? const Color(0xFFD97706)
+                                                  : const Color(0xFF059669),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              if (assessment.visualDescription != null) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  assessment.visualDescription!,
+                                  style: TextStyle(fontSize: 12, color: Colors.grey[800], height: 1.3),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+
+                      // Objective Visual Findings
+                      if (assessment.visualFindings.isNotEmpty) ...[
+                        const Text(
+                          'Objective Clinical Findings:',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87),
+                        ),
+                        const SizedBox(height: 4),
+                        ...assessment.visualFindings.map(
+                          (finding) => Padding(
+                            padding: const EdgeInsets.only(bottom: 3.0),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.check_circle_outline, size: 14, color: Color(0xFF0D9488)),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    finding,
+                                    style: TextStyle(fontSize: 11.5, color: Colors.grey[800]),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+
+                      // Recommended Action
+                      if (assessment.visualRecommendedAction != null) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.blueGrey.withOpacity(0.06),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.medical_services_outlined, size: 15, color: Color(0xFF0284C7)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Action: ${assessment.visualRecommendedAction!}',
+                                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500, color: Color(0xFF0369A1)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+
+                      // Visual Focus Map Overlay
                       Container(
                         height: 200,
                         width: double.infinity,
@@ -434,9 +589,11 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
                                     color: Colors.black87,
                                     borderRadius: BorderRadius.circular(6),
                                   ),
-                                  child: const Text(
-                                    'Active Lesion Hotspot',
-                                    style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                  child: Text(
+                                    assessment.visualCondition != null
+                                        ? 'Pathology Focus: ${assessment.visualCondition}'
+                                        : 'Active Pathology Hotspot',
+                                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                                   ),
                                 ),
                               ),
@@ -450,6 +607,7 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
               ),
               const SizedBox(height: 16),
             ],
+
 
             // 4. SHAP Feature Importance Breakdown
             if (assessment.featureAttributions.isNotEmpty) ...[

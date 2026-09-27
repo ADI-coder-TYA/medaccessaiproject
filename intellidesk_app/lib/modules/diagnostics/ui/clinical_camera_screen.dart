@@ -192,7 +192,7 @@ class _ClinicalCameraScreenState extends State<ClinicalCameraScreen> {
                           style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textDark),
                         ),
                         Text(
-                          'Keep distance ~15 cm from skin/throat/lesion. Ensure bright daylight or direct lamp illumination without heavy glare.',
+                          'Keep distance ~15 cm from skin, eye, wound/cut, or throat. Ensure bright daylight or direct lamp illumination without heavy glare.',
                           style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textMuted),
                         ),
                       ],

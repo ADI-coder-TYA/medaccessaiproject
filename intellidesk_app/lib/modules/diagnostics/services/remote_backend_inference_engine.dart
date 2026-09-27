@@ -100,6 +100,22 @@ class RemoteBackendInferenceEngine implements InferenceEngineInterface {
         ? UncertaintyBounds.fromMap(riskData['uncertaintyBounds'] as Map<String, dynamic>)
         : const UncertaintyBounds(confidence: 0.85, ciLower: 0.1, ciUpper: 0.4, epistemicVariance: 0.005);
 
+    final visionData = data['visionAnalysis'] as Map<String, dynamic>?;
+    final visualCondition = visionData?['predictedCondition'] as String?;
+    final visualAnatomicalSite = visionData?['anatomicalSite'] as String?;
+    final visualSeverity = visionData?['severity'] as String?;
+    final visualFindings = (visionData?['findings'] as List<dynamic>?)
+            ?.map((e) => e.toString())
+            .toList() ??
+        ((visionData?['topFindings'] as List<dynamic>?)
+            ?.map((f) => (f as Map<String, dynamic>)['description']?.toString() ?? '')
+            .where((s) => s.isNotEmpty)
+            .toList() ??
+        []);
+    final visualDescription = visionData?['clinicalDescription'] as String?;
+    final visualEngine = visionData?['source'] as String?;
+    final visualRecommendedAction = visionData?['recommendedAction'] as String?;
+
     return RiskAssessment(
       riskScore: (riskData['riskScore'] as num?)?.toDouble() ?? 0.35,
       riskLevel: ClinicalRiskLevel.fromString(riskData['riskLevel'] as String?),
@@ -110,8 +126,16 @@ class RemoteBackendInferenceEngine implements InferenceEngineInterface {
       featureAttributions: attributions,
       xaiHeatmapUrl: gradCam?['overlaySvgDataUri'] as String? ?? imageUrl,
       requiresImmediatePhysicianReview: riskData['requiresImmediatePhysicianReview'] as bool? ?? false,
+      visualCondition: visualCondition,
+      visualAnatomicalSite: visualAnatomicalSite,
+      visualSeverity: visualSeverity,
+      visualFindings: visualFindings,
+      visualDescription: visualDescription,
+      visualEngine: visualEngine,
+      visualRecommendedAction: visualRecommendedAction,
     );
   }
+
 
   @override
   void dispose() {

@@ -29,28 +29,46 @@ export class CloudVisionClassifier {
     categoryHint?: ClinicalImageCategory
   ): Promise<CloudVisionClassificationResult> {
     const startTime = Date.now();
-    console.log(`👁️ [CloudVisionClassifier] Clinical image diagnostic analysis requested (${rawBuffer.length} bytes, categoryHint: ${categoryHint || 'auto'})...`);
+    console.log(`\n👁️ ════════════════════════════════════════════════════════════════`);
+    console.log(`👁️ [CloudVisionClassifier] INCOMING CLINICAL IMAGE INTAKE`);
+    console.log(`👁️   Raw buffer size: ${(rawBuffer.length / 1024).toFixed(1)} KB (${rawBuffer.length} bytes)`);
+    console.log(`👁️   Category Hint: ${categoryHint || 'AUTO_DETECT / GENERAL'}`);
+    console.log(`👁️   Cloud VLM Status: ${this.isCloudConfigured() ? 'CONFIGURED (HF_TOKEN present)' : 'OFFLINE (Local fallback only)'}`);
 
     // 1. Try Hugging Face SOTA Multimodal Vision Model (Qwen/Qwen2.5-VL-72B-Instruct)
     if (this.isCloudConfigured()) {
       try {
-        console.log(`🚀 [CloudVisionClassifier] Dispatching clinical photograph to [${this.CLOUD_MODEL_ID}]...`);
+        console.log(`🚀 [CloudVisionClassifier] Step 1: Preprocessing & dispatching to VLM [${this.CLOUD_MODEL_ID}]...`);
         const cloudResult = await this.callCloudVisionModel(rawBuffer, categoryHint);
         cloudResult.latencyMs = Date.now() - startTime;
-        console.log(`✅ [CloudVisionClassifier] SOTA VLM inference succeeded: "${cloudResult.condition}" (${(cloudResult.confidence * 100).toFixed(1)}%) [Severity: ${cloudResult.severity}] in ${cloudResult.latencyMs}ms`);
+        console.log(`✅ [CloudVisionClassifier] Step 1 Succeeded: High-fidelity clinical assessment received in ${cloudResult.latencyMs}ms:`);
+        console.log(`   ├─ Diagnosed Condition: "${cloudResult.condition}"`);
+        console.log(`   ├─ Anatomical Site:     "${cloudResult.anatomicalSite}"`);
+        console.log(`   ├─ Clinical Severity:   [${cloudResult.severity}]`);
+        console.log(`   ├─ Model Confidence:    ${(cloudResult.confidence * 100).toFixed(1)}%`);
+        console.log(`   ├─ Objective Findings:  ${cloudResult.findings.length} findings (${cloudResult.findings.slice(0, 2).join('; ')})`);
+        console.log(`   ├─ Differentials:       [${cloudResult.differentialDiagnoses.join(', ')}]`);
+        console.log(`   ├─ Emergency Override:  ${cloudResult.isEmergencyAlert ? '⚠️ CRITICAL ALERT TRIGGERED' : 'None'}`);
+        console.log(`   └─ Recommended Action:  ${cloudResult.recommendedAction}`);
+        console.log(`👁️ ════════════════════════════════════════════════════════════════\n`);
         return cloudResult;
       } catch (err: any) {
-        console.warn(`⚠️ [CloudVisionClassifier] Cloud VLM call failed (${err.message}). Engaging local MobileNet-V3 fallback...`);
+        console.warn(`⚠️ [CloudVisionClassifier] Cloud VLM call failed or timed out (${err.message}) after ${Date.now() - startTime}ms.`);
+        console.warn(`⚠️ [CloudVisionClassifier] Seamlessly activating local MobileNet-V3 on-device fallback...`);
       }
     } else {
-      console.log(`ℹ️ [CloudVisionClassifier] HF_TOKEN not configured -> routing to local MobileNet-V3.`);
+      console.log(`ℹ️ [CloudVisionClassifier] HF_TOKEN not configured -> Bypassing cloud, executing local MobileNet-V3.`);
     }
 
     // 2. Offline / Error Fallback: Local TensorFlow.js Clinical MobileNet-V3
     const localStart = Date.now();
     const localResult = await this.fallbackLocalMobileNet(rawBuffer, categoryHint);
     localResult.latencyMs = Date.now() - startTime;
-    console.log(`🩺 [CloudVisionClassifier] Local fallback completed: "${localResult.condition}" (${(localResult.confidence * 100).toFixed(1)}%) in ${Date.now() - localStart}ms (Total: ${localResult.latencyMs}ms)`);
+    console.log(`🩺 [CloudVisionClassifier] Step 2: Local MobileNet-V3 Fallback Completed:`);
+    console.log(`   ├─ Fallback Condition:  "${localResult.condition}"`);
+    console.log(`   ├─ Local Latency:       ${Date.now() - localStart}ms (Total: ${localResult.latencyMs}ms)`);
+    console.log(`   └─ Model Confidence:    ${(localResult.confidence * 100).toFixed(1)}%`);
+    console.log(`👁️ ════════════════════════════════════════════════════════════════\n`);
     return localResult;
   }
 
@@ -62,6 +80,7 @@ export class CloudVisionClassifier {
     categoryHint?: ClinicalImageCategory
   ): Promise<CloudVisionClassificationResult> {
     const token = process.env.HF_TOKEN!.trim();
+    const prepStart = Date.now();
 
     // Standardize & resize image to max 512x512 JPEG to reduce token usage and network latency
     const normalizedJpeg = await sharp(rawBuffer)
@@ -70,7 +89,10 @@ export class CloudVisionClassifier {
       .toBuffer();
 
     const base64Image = normalizedJpeg.toString('base64');
+    console.log(`🖼️ [CloudVisionClassifier] Normalized JPEG: ${(rawBuffer.length / 1024).toFixed(1)} KB -> ${(normalizedJpeg.length / 1024).toFixed(1)} KB (Prep: ${Date.now() - prepStart}ms)`);
+    console.log(`📡 [CloudVisionClassifier] Transmitting payload to ${this.HF_ROUTER_URL} with model "${this.CLOUD_MODEL_ID}"...`);
 
+    const networkStart = Date.now();
     const systemPrompt = `You are a senior clinical diagnostician and computer vision expert in tele-triage.
 Analyze this medical photograph with high clinical precision.
 The image may depict:
@@ -131,6 +153,9 @@ Do not include markdown or explanations. Output valid JSON only.`;
         response_format: { type: 'json_object' }
       })
     });
+
+    console.log(`📡 [CloudVisionClassifier] VLM network roundtrip: ${Date.now() - networkStart}ms (HTTP ${res.status})`);
+
 
     if (!res.ok) {
       const errText = await res.text();

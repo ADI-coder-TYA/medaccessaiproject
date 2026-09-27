@@ -6,9 +6,9 @@ import { CDSSInputPayload, WHO_ICD11_URI_STEM } from '../modules/cdss/types.js';
 let passed = 0;
 let total = 0;
 
-function assert(condition: boolean, testName: string, details?: string) {
+function assert(condition: any, testName: string, details?: string) {
   total++;
-  if (condition) {
+  if (Boolean(condition)) {
     passed++;
     console.log(`  ✅ [PASS] ${testName}`);
   } else {

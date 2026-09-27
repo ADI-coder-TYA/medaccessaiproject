@@ -46,6 +46,31 @@ export class ICD11ConceptStore {
   }
 
   /**
+   * Technical Guardrail 1: Fuzzy / Keyword search for ICD-11 concepts
+   */
+  public static findConceptByKeyword(keyword: string): ICD11Concept | undefined {
+    if (!keyword) return undefined;
+    const term = keyword.trim().toLowerCase();
+
+    // Direct code or title match
+    for (const concept of this._concepts.values()) {
+      if (concept.code.toLowerCase() === term || concept.title.toLowerCase().includes(term) || term.includes(concept.title.toLowerCase())) {
+        return concept;
+      }
+    }
+
+    // Keyword match in clinical criteria
+    for (const concept of this._concepts.values()) {
+      const match = concept.clinicalCriteria.requiredKeywords?.some((k) =>
+        k.toLowerCase().includes(term) || term.includes(k.toLowerCase())
+      );
+      if (match) return concept;
+    }
+
+    return undefined;
+  }
+
+  /**
    * Returns all embedded clinical concepts.
    */
   public static getAllConcepts(): ICD11Concept[] {

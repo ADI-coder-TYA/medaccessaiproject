@@ -100,7 +100,7 @@ export class CloudAudioClassifier {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'audio/wav'
       },
-      body: rawAudioBuffer
+      body: new Uint8Array(rawAudioBuffer)
     });
 
     if (!res.ok) {

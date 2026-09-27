@@ -505,6 +505,48 @@ class _ScreeningResultScreenState extends State<ScreeningResultScreen> {
                       ),
                       const SizedBox(height: 8),
                     ],
+                    if (assessment.differentialDiagnoses.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Differential Diagnosis Predictions (ML):',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 6),
+                      ...assessment.differentialDiagnoses.map((diff) => Container(
+                            margin: const EdgeInsets.only(bottom: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    diff.condition,
+                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0D9488).withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    '${(diff.probability * 100).round()}%',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF0D9488),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )),
+                      const SizedBox(height: 8),
+                    ],
                     if (assessment.clinicalRecommendations.isNotEmpty) ...[
                       const Text('Recommended Actions:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey)),
                       const SizedBox(height: 4),

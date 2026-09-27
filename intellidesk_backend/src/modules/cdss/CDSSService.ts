@@ -30,7 +30,7 @@ export class CDSSService {
     const temperature = payload.temperature ?? 1.25;
 
     // 1. Compute Differential Diagnosis Candidates with Guardrail 2 (T = 1.25, [-20, 20] logit clipping)
-    const candidates = DifferentialDiagnosisEngine.evaluateCandidates(payload, temperature);
+    const candidates = await DifferentialDiagnosisEngine.evaluateCandidatesAsync(payload, temperature);
     const primaryCandidate = candidates[0];
 
     // 2. Formulate Evidence-Based Treatment Pathway

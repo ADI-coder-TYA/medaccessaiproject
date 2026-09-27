@@ -211,14 +211,25 @@ export const CLINICAL_DISEASES: DiseaseProfile[] = [
   },
   {
     id: 'dermatitis',
-    name: 'Acute Contact Dermatitis',
-    icd11Code: 'EK02',
+    name: 'Allergic Contact Dermatitis',
+    icd11Code: 'FB80',
     category: 'Dermatology',
     urgency: 'ROUTINE',
-    symptoms: ['skin rash', 'itching', 'nodal skin eruptions', 'blister', 'red spots over body', 'skin peeling'],
+    symptoms: ['skin rash', 'itching', 'nodal skin eruptions', 'blister', 'red spots over body', 'skin peeling', 'rash'],
     bodyLocations: ['skin', 'epidermis', 'arms', 'hands', 'face', 'legs', 'torso'],
     clinicalRecommendation: 'Identify and remove triggering allergens. Mid-potency topical corticosteroid cream and oral non-sedating antihistamines.',
     semanticDescription: 'Type IV hypersensitivity skin eruption demonstrating erythematous papules, vesicles, intense pruritus, and localized edema.'
+  },
+  {
+    id: 'periorbital_dermatitis',
+    name: 'Periorbital Contact Dermatitis',
+    icd11Code: 'EK02',
+    category: 'Dermatology',
+    urgency: 'ROUTINE',
+    symptoms: ['skin rash', 'itching', 'redness of eyes', 'swelling', 'blister'],
+    bodyLocations: ['eye', 'eyelid', 'periorbital', 'face'],
+    clinicalRecommendation: 'Low-potency topical hydrocortisone or calcineurin inhibitor cream for delicate periorbital tissue.',
+    semanticDescription: 'Periorbital contact dermatitis characterized by erythematous eyelid scaling, pruritus, and mild localized edema.'
   },
   {
     id: 'gastroenteritis',

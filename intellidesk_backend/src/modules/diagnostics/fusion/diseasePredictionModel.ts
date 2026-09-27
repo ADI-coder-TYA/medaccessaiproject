@@ -341,4 +341,125 @@ export class DiseasePredictionModel {
 
     return differentials;
   }
+
+  /**
+   * Synchronous clinical disease prediction over all benchmark disease entities.
+   * Uses neural network forward pass (.dataSync()) if initialized, or normalized continuous feature projection.
+   */
+  public static predictAllDiseaseProbabilitiesSync(
+    symptomData?: Partial<SymptomInputPayload> | null,
+    visionFindings?: any[]
+  ): Map<string, { probability: number; logit: number; disease: DiseaseProfile }> {
+    const featureVector = this.assembleFeatureVector(symptomData, visionFindings);
+    let nnProbabilities = new Array<number>(NUM_DISEASE_CLASSES).fill(1 / NUM_DISEASE_CLASSES);
+
+    if (this.cachedModel) {
+      const inputTensor = tf.tensor2d([featureVector]);
+      try {
+        const predTensor = this.cachedModel.predict(inputTensor) as tf.Tensor;
+        const data = predTensor.dataSync();
+        nnProbabilities = Array.from(data);
+        predTensor.dispose();
+      } finally {
+        inputTensor.dispose();
+      }
+    } else {
+      const symptoms = (symptomData?.symptoms || []).map((s) => s.toLowerCase());
+      const body = ((symptomData as any)?.anatomicalLocation || symptomData?.bodyLocation || '').toLowerCase();
+
+      for (let i = 0; i < CLINICAL_DISEASES.length; i++) {
+        const d = CLINICAL_DISEASES[i];
+        let activation = 0.1;
+        for (const sym of d.symptoms) {
+          if (symptoms.some((s) => s.includes(sym.toLowerCase()) || sym.toLowerCase().includes(s))) {
+            activation += 1.5;
+          }
+        }
+        for (const loc of d.bodyLocations) {
+          if (body.length > 0 && (body.includes(loc.toLowerCase()) || loc.toLowerCase().includes(body))) {
+            activation += 2.0;
+          }
+        }
+        nnProbabilities[i] = Math.exp(activation);
+      }
+      const sum = nnProbabilities.reduce((a, b) => a + b, 0) || 1.0;
+      nnProbabilities = nnProbabilities.map((p) => p / sum);
+    }
+
+    const resultMap = new Map<string, { probability: number; logit: number; disease: DiseaseProfile }>();
+    for (let i = 0; i < CLINICAL_DISEASES.length; i++) {
+      const d = CLINICAL_DISEASES[i];
+      const prob = Math.max(1e-5, Math.min(1.0 - 1e-5, nnProbabilities[i]));
+      const logit = Math.log(prob / (1 - prob));
+      resultMap.set(d.icd11Code.toUpperCase(), { probability: prob, logit, disease: d });
+    }
+    return resultMap;
+  }
+
+  /**
+   * Asynchronous clinical disease prediction combining Neural Network + Hugging Face dense embeddings.
+   */
+  public static async predictAllDiseaseProbabilities(
+    symptomData?: Partial<SymptomInputPayload> | null,
+    visionFindings?: any[]
+  ): Promise<Map<string, { probability: number; logit: number; disease: DiseaseProfile }>> {
+    await this.initialize();
+
+    const featureVector = this.assembleFeatureVector(symptomData, visionFindings);
+
+    // 1. TensorFlow Neural Network Prediction
+    let nnProbabilities = new Array<number>(NUM_DISEASE_CLASSES).fill(1 / NUM_DISEASE_CLASSES);
+    if (this.cachedModel) {
+      const inputTensor = tf.tensor2d([featureVector]);
+      try {
+        const predTensor = this.cachedModel.predict(inputTensor) as tf.Tensor;
+        const data = await predTensor.data();
+        nnProbabilities = Array.from(data);
+        predTensor.dispose();
+      } finally {
+        inputTensor.dispose();
+      }
+    }
+
+    // 2. Hugging Face Dense Semantic Embedding Cosine Similarity
+    const hfScores = new Array<number>(NUM_DISEASE_CLASSES).fill(0.1);
+    if (this.hfPipeline) {
+      try {
+        const symptoms = (symptomData?.symptoms || []).join(', ');
+        const loc = (symptomData as any)?.anatomicalLocation || symptomData?.bodyLocation || 'systemic';
+        const notes = symptomData?.additionalNotes || '';
+        const patientText = `Patient presenting with ${symptoms} in anatomical location ${loc}. Clinical notes: ${notes}`;
+
+        const output = await this.hfPipeline(patientText, { pooling: 'mean', normalize: true });
+        const patientEmb = Array.from(output.data) as number[];
+
+        for (let i = 0; i < CLINICAL_DISEASES.length; i++) {
+          const disease = CLINICAL_DISEASES[i];
+          const protoEmb = this.prototypeEmbeddings.get(disease.id);
+          if (protoEmb) {
+            let dot = 0;
+            for (let k = 0; k < patientEmb.length; k++) {
+              dot += patientEmb[k] * protoEmb[k];
+            }
+            hfScores[i] = Math.max(0.01, (dot + 1) / 2);
+          }
+        }
+      } catch (embErr) {
+        console.warn('⚠️ [DiseasePredictionML] Hugging Face inference notice:', embErr);
+      }
+    }
+
+    const resultMap = new Map<string, { probability: number; logit: number; disease: DiseaseProfile }>();
+    for (let i = 0; i < CLINICAL_DISEASES.length; i++) {
+      const d = CLINICAL_DISEASES[i];
+      const nnP = nnProbabilities[i] || 0.01;
+      const hfS = hfScores[i] || 0.01;
+      const combined = 0.50 * nnP + 0.50 * hfS;
+      const safeProb = Math.max(1e-5, Math.min(1.0 - 1e-5, combined));
+      const logit = Math.log(safeProb / (1 - safeProb));
+      resultMap.set(d.icd11Code.toUpperCase(), { probability: safeProb, logit, disease: d });
+    }
+    return resultMap;
+  }
 }
+

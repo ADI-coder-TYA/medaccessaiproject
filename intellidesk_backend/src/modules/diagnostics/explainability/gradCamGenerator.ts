@@ -298,9 +298,19 @@ export class GradCamGenerator {
     const [height, width] = [dimensions[0], dimensions[1]];
     const grid: number[][] = [];
 
-    const hash = targetClass.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-    const centerX = 0.5 + Math.sin(hash * 0.2) * 0.15;
-    const centerY = 0.45 + Math.cos(hash * 0.3) * 0.15;
+    let sumX = 0;
+    let sumY = 0;
+    let totalWeight = 0;
+    for (let i = 0; i < featureVector.length; i++) {
+      const w = Math.abs(featureVector[i]);
+      const x = ((i % width) + 0.5) / width;
+      const y = ((Math.floor(i / width) % height) + 0.5) / height;
+      sumX += x * w;
+      sumY += y * w;
+      totalWeight += w;
+    }
+    const centerX = totalWeight > 0 ? Number((sumX / totalWeight).toFixed(3)) : 0.5;
+    const centerY = totalWeight > 0 ? Number((sumY / totalWeight).toFixed(3)) : 0.5;
 
     let maxVal = 0;
     const hotspots: HeatmapPoint[] = [];

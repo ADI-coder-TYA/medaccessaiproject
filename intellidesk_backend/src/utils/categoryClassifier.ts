@@ -87,35 +87,7 @@ export async function classifyCategoryDynamic(
   matchedPolicyContent?: string
 ): Promise<TicketCategory> {
   try {
-    const lower = rawMessage.toLowerCase();
-
-    // ── Tier 1: Deterministic Domain Intent Tokenizer ───────────
-    if (/\b(inpatient|emergency\s*room|er\s*bill|hospital|surgery|icu|ambulance|trauma|admission|physician\s*fee|critical\s*care)\b/i.test(lower)) {
-      console.log(`✅ [Category Classifier] High-precision match: "Medical Emergency & Inpatient Care"`);
-      return 'Medical Emergency & Inpatient Care';
-    }
-    if (/\b(prescription|pharmacy|medicine|medication|drug|rx|insulin|inhaler|refill|copay|dosage|tablets)\b/i.test(lower)) {
-      console.log(`✅ [Category Classifier] High-precision match: "Prescription & Pharmacy Copay"`);
-      return 'Prescription & Pharmacy Copay';
-    }
-    if (/\b(suicid|depress|anxiety|panic|counsel|therap|psycholog|trauma|burnout|mental\s*health|psychiat)\b/i.test(lower)) {
-      console.log(`✅ [Category Classifier] High-precision match: "Mental Health & Crisis Intervention"`);
-      return 'Mental Health & Crisis Intervention';
-    }
-    if (/\b(lab|blood\s*test|mri|ct\s*scan|x-ray|xray|imaging|pathology|ultrasound|biopsy|diagnostic)\b/i.test(lower)) {
-      console.log(`✅ [Category Classifier] High-precision match: "Diagnostic, Lab & Imaging Relief"`);
-      return 'Diagnostic, Lab & Imaging Relief';
-    }
-    if (/\b(dental|tooth|teeth|root\s*canal|abscess|extraction|orthodont|physical\s*therapy|physio|rehab|chiropractic)\b/i.test(lower)) {
-      console.log(`✅ [Category Classifier] High-precision match: "Physical Therapy & Dental Crisis"`);
-      return 'Physical Therapy & Dental Crisis';
-    }
-    if (/\b(doctor|clinic|health|wellness|checkup|consultation|copay|medical|welfare)\b/i.test(lower)) {
-      console.log(`✅ [Category Classifier] High-precision match: "General Health & Basic Welfare"`);
-      return 'General Health & Basic Welfare';
-    }
-
-    // ── Tier 2: Neural Dense Vector Semantic Matching ────────────
+    // ── Primary Pipeline: Neural Dense Vector Semantic Matching (Xenova/all-MiniLM-L6-v2) ──
     const cleanUserText = rawMessage.replace(/\[(Context|Confirmation):.*?\]/gi, '').trim() || rawMessage;
     const pipe = await getEmbeddingPipeline();
 
@@ -137,6 +109,24 @@ export async function classifyCategoryDynamic(
 
       console.log(`🧠 [Dense Transformer] Match: "${bestCategory}" | Cosine Similarity: ${(highestSimilarity * 100).toFixed(1)}% | Text: "${cleanUserText.slice(0, 60)}..."`);
       return bestCategory;
+    }
+
+    // ── Fallback (Only active if Transformer fails to load or offline cache missing) ──
+    const lower = rawMessage.toLowerCase();
+    if (/\b(inpatient|emergency\s*room|er\s*bill|hospital|surgery|icu|ambulance|trauma|admission|physician\s*fee|critical\s*care)\b/i.test(lower)) {
+      return 'Medical Emergency & Inpatient Care';
+    }
+    if (/\b(prescription|pharmacy|medicine|medication|drug|rx|insulin|inhaler|refill|copay|dosage|tablets)\b/i.test(lower)) {
+      return 'Prescription & Pharmacy Copay';
+    }
+    if (/\b(suicid|depress|anxiety|panic|counsel|therap|psycholog|trauma|burnout|mental\s*health|psychiat)\b/i.test(lower)) {
+      return 'Mental Health & Crisis Intervention';
+    }
+    if (/\b(lab|blood\s*test|mri|ct\s*scan|x-ray|xray|imaging|pathology|ultrasound|biopsy|diagnostic)\b/i.test(lower)) {
+      return 'Diagnostic, Lab & Imaging Relief';
+    }
+    if (/\b(dental|tooth|teeth|root\s*canal|abscess|extraction|orthodont|physical\s*therapy|physio|rehab|chiropractic)\b/i.test(lower)) {
+      return 'Physical Therapy & Dental Crisis';
     }
 
     return 'General Health & Basic Welfare';

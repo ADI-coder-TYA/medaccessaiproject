@@ -1,6 +1,7 @@
 import { VectorAssembler } from './vectorAssembler.js';
 import { MultimodalFusionModel, MultimodalPredictionOutput } from './MultimodalFusionModel.js';
 import { VisionDiagnosticService } from '../vision/VisionDiagnosticService.js';
+import { ClinicalImageClassifier } from '../vision/imageClassifier.js';
 import { AudioFeatureExtractor, CoughClassifier, CloudAudioClassifier, CoughClassificationResult } from '../audio/index.js';
 import { PhysiologicalRedFlagSentinel } from '../vitals/PhysiologicalRedFlagSentinel.js';
 import { DiseasePredictionModel } from './diseasePredictionModel.js';
@@ -214,16 +215,20 @@ export async function assessMultimodalRisk(
       }
 
       if (rawBuf.length > 0) {
-        const visionResult = await VisionDiagnosticService.analyzeImage(rawBuf);
-        visualEmbeddings = visionResult.bottleneckEmbedding;
-        visionFindings = [
-          {
-            className: visionResult.predictedCategory,
-            probability: visionResult.confidence
-          }
-        ];
+        const visionResult = await ClinicalImageClassifier.extractEmbeddings({
+          imageBuffer: rawBuf,
+          categoryHint: (symptomData as any)?.categoryHint
+        });
+        visualEmbeddings = visionResult.featureVector;
+        visionFindings = visionResult.topFindings.map((f) => ({
+          className: f.label,
+          probability: f.confidence,
+          clinicalSignificance: f.clinicalSignificance,
+          description: f.description
+        }));
         isTextOnlyScreening = false;
       }
+
     } catch (visionErr) {
       console.warn(`⚠️ [assessMultimodalRisk] Vision processing fallback to text-only prior: ${visionErr}`);
       visualEmbeddings = null;

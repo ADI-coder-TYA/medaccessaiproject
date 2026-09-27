@@ -1,7 +1,10 @@
+import 'dotenv/config';
 import * as tf from '@tensorflow/tfjs';
 import sharp from 'sharp';
 import { ClinicalMobileNetBuilder, CLINICAL_VISION_CLASSES } from '../modules/diagnostics/vision/clinicalMobileNet.js';
 import { VisionDiagnosticService } from '../modules/diagnostics/vision/VisionDiagnosticService.js';
+import { ClinicalImageClassifier } from '../modules/diagnostics/vision/imageClassifier.js';
+import { CloudVisionClassifier } from '../modules/diagnostics/vision/CloudVisionClassifier.js';
 
 async function runClinicalVisionTestSuite() {
   console.log('🧪 ========================================================');
@@ -112,8 +115,59 @@ async function runClinicalVisionTestSuite() {
     console.log('✅ Memory check passed: Zero dangling intermediate inference tensors (100% memory safe).');
   }
 
+  // Test 6: SOTA Multimodal Vision (Qwen 2.5-VL 72B & Fallback Pipeline)
+  console.log('\n--- Test 6: SOTA Multimodal Vision (Qwen 2.5-VL 72B & Fallback Pipeline) ---');
+  console.log(`Cloud inference configured: ${CloudVisionClassifier.isCloudConfigured()}`);
+
+  // Test with synthesized ocular image (conjunctivitis / scleral injection)
+  const ocularJpegBuffer = await sharp({
+    create: {
+      width: 400,
+      height: 400,
+      channels: 3,
+      background: { r: 220, g: 90, b: 95 }
+    }
+  }).jpeg({ quality: 85 }).toBuffer();
+
+  const eyeResult = await ClinicalImageClassifier.extractEmbeddings({
+    imageBuffer: ocularJpegBuffer,
+    categoryHint: 'CONJUNCTIVITIS_EYE'
+  });
+
+  console.log(`✓ Ocular Condition: "${eyeResult.predictedCondition}"`);
+  console.log(`✓ Anatomical Site: "${eyeResult.anatomicalSite}"`);
+  console.log(`✓ Severity: ${eyeResult.severity}`);
+  console.log(`✓ Confidence: ${(Number(eyeResult.confidence || 0) * 100).toFixed(1)}%`);
+  console.log(`✓ Source Engine: ${eyeResult.source}`);
+  console.log(`✓ Top Clinical Findings Count: ${eyeResult.topFindings.length}`);
+  console.log(`✓ Latent Embedding Vector Length: ${eyeResult.featureVector.length} (Expected: 128)`);
+  if (eyeResult.featureVector.length !== 128) {
+    throw new Error(`Embedding vector length mismatch: expected 128, got ${eyeResult.featureVector.length}`);
+  }
+
+  // Test with synthesized wound / cut image
+  const woundJpegBuffer = await sharp({
+    create: {
+      width: 400,
+      height: 400,
+      channels: 3,
+      background: { r: 160, g: 50, b: 50 }
+    }
+  }).jpeg({ quality: 85 }).toBuffer();
+
+  const woundResult = await ClinicalImageClassifier.extractEmbeddings({
+    imageBuffer: woundJpegBuffer,
+    categoryHint: 'WOUND_HEALING'
+  });
+
+  console.log(`✓ Wound Condition: "${woundResult.predictedCondition}"`);
+  console.log(`✓ Anatomical Site: "${woundResult.anatomicalSite}"`);
+  console.log(`✓ Severity: ${woundResult.severity}`);
+  console.log(`✓ Source Engine: ${woundResult.source}`);
+
   console.log('\n🎉 ALL CLINICAL COMPUTER VISION UNIT TESTS PASSED SUCCESSFULLY! 🩺✅\n');
 }
+
 
 runClinicalVisionTestSuite().catch(err => {
   console.error('❌ Clinical vision unit test failure:', err);

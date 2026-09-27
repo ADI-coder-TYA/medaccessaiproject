@@ -128,7 +128,10 @@ export interface CDSSInputPayload {
   audioClassification?: {
     predictedCategory: string;
     confidence: number;
+    semanticAcousticProfile?: string;
   };
+  acousticProfile?: string; // High-level semantic profile extracted via Meyda DSP
+  audioFeatures?: number[]; // Raw 16-D feature vector
   temperature?: number; // Defaults to 1.25
   useCloudModel?: boolean; // When true or default with HF_TOKEN, uses Qwen/Qwen2.5-72B-Instruct
 }

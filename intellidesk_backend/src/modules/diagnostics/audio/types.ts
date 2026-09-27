@@ -46,6 +46,7 @@ export interface AudioFeatureExtractionResult {
   isResampled: boolean;
   spectralMetrics: SpectralMetrics;
   mfccCoefficients: number[]; // 12-d normalized
+  semanticAcousticProfile?: string; // Rich semantic clinical interpretation formatted for LLM reasoning
 }
 
 export interface CoughClassificationResult {
@@ -61,4 +62,5 @@ export interface CoughClassificationResult {
   redFlagReason?: string;
   featureVector: number[]; // 16-d
   latencyMs?: number;
+  semanticAcousticProfile?: string; // Rich semantic clinical interpretation formatted for LLM reasoning
 }

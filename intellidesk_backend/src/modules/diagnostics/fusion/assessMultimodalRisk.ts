@@ -251,6 +251,9 @@ export async function assessMultimodalRisk(
         if (!audioClassification) {
           audioClassification = await CloudAudioClassifier.classify(audioFeatures, rawAudioBuf);
         }
+        if (audioClassification) {
+          audioClassification.semanticAcousticProfile = AudioFeatureExtractor.formatAcousticProfileForLLM(audioResult, audioClassification);
+        }
         console.log(`🩺 [assessMultimodalRisk] Fused acoustic biomarker: "${audioClassification?.predictedCategory}" (${((audioClassification?.confidence || 0) * 100).toFixed(1)}%) | RedFlag: ${audioClassification?.isRedFlagRespiratory}`);
       }
     } catch (audioErr) {

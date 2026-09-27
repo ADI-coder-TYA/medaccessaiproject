@@ -176,6 +176,12 @@ Available Core ICD-11 Catalog:
 ${conceptCatalog}
 
 Analyze patient presenting signs, symptoms, anatomical location, vital signs, cough acoustic classification, vision findings, and multimodal risk score.
+When a Bioacoustic Biomarker Profile (extracted via Meyda DSP) is present:
+- Synthesize the acoustic sound phenotype, spectral frequency centroid (pitch/brightness), rolloff, onset flux, airway turbulence (ZCR), and cepstral timbre (MFCC) into your differential diagnostic reasoning.
+- High spectral centroid (>1500 Hz) + high turbulence/ZCR strongly points to airway obstruction, bronchospasm, or wheeze (e.g. Asthma, Bronchospasm).
+- Mid-frequency centroid (700-1400 Hz) + productive cough + rapid explosive flux strongly points to lower respiratory tract secretions (e.g. Pneumonia CA40, Acute Bronchitis CA00).
+- Normal or absent acoustic sounds with ocular/skin presentations should confirm non-respiratory primary pathology.
+
 Diagnose the most accurate primary disease condition and generate 3 to 6 differential diagnosis candidates ranked by probability.
 
 Output STRICT JSON conforming to this schema without any markdown formatting or commentary:
@@ -234,6 +240,14 @@ Output STRICT JSON conforming to this schema without any markdown formatting or 
     const audioConfidence = audio?.confidence ? Math.round(Number(audio.confidence) * 100) : null;
     const audioStr = audioCategory ? `${audioCategory} (${audioConfidence ?? 0}%)` : 'None';
 
+    const semanticProfile = payload.acousticProfile || audio?.semanticAcousticProfile;
+    let acousticFormattedSection = `- Acoustic Audio Classification: ${audioStr}`;
+    if (semanticProfile) {
+      acousticFormattedSection = `- Bioacoustic Biomarker Profile (Meyda DSP Audio Feature Extraction):\n  * ${semanticProfile.split('\n').join('\n  * ')}`;
+    } else if (audioCategory) {
+      acousticFormattedSection = `- Bioacoustic Biomarker Profile (Meyda DSP Audio Feature Extraction):\n  * Auscultation Sound: ${audioCategory} (${audioConfidence ?? 0}% confidence)\n  * Acoustic Phenotype: ${audioCategory.includes('Wheeze') ? 'High-frequency wheezing / bronchospasm harmonics' : audioCategory.includes('Wet') ? 'Productive lower respiratory secretions' : audioCategory.includes('Dry') ? 'Irritative non-productive cough' : 'Normal laminar breath sound'}`;
+    }
+
     return `PATIENT PRESENTATION:
 - Presenting Symptoms: ${symptomsList.join(', ') || 'General malaise'}
 - Anatomical Location: ${anatomical}
@@ -246,7 +260,7 @@ Output STRICT JSON conforming to this schema without any markdown formatting or 
   * SpO2: ${vitals.oxygenSaturation ?? 'N/A'} %
   * Respiratory Rate: ${vitals.respirationRate ?? 'N/A'} breaths/min
 - Vision Findings: ${vision.length > 0 ? vision.map((v) => `${v.condition} (${Math.round(v.confidence * 100)}%)`).join(', ') : 'None'}
-- Acoustic Audio Classification: ${audioStr}
+${acousticFormattedSection}
 - Multimodal Risk Score: ${payload.multimodalRiskScore}
 
 Generate differential diagnoses and evidence-based treatment pathway.`;

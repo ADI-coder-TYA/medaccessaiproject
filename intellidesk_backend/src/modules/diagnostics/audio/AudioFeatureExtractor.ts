@@ -1,4 +1,5 @@
 import WavDecoder from 'wav-decoder';
+import Meyda from 'meyda';
 import {
   TARGET_SAMPLE_RATE,
   AUDIO_FEATURE_DIM,
@@ -7,6 +8,7 @@ import {
   HOP_SIZE,
   AudioFeatureExtractionResult,
   SpectralMetrics,
+  CoughClassificationResult,
   ACOUSTIC_MEANS,
   ACOUSTIC_STDS
 } from './types.js';
@@ -97,9 +99,9 @@ export class AudioFeatureExtractor {
     const featureVector = this.assembleAndScaleFeatureVector(mfccAverages, spectralMetrics);
 
     console.log(`🎙️ [AudioFeatureExtractor] Decoded acoustic sample: ${durationSeconds.toFixed(2)}s | SampleRate: ${sampleRate}Hz -> ${TARGET_SAMPLE_RATE}Hz (Resampled: ${isResampled})`);
-    console.log(`📊 [AudioFeatureExtractor] Computed 16-D Acoustic Vector: Centroid=${spectralMetrics.centroid.toFixed(4)} | Rolloff=${spectralMetrics.rolloff.toFixed(4)} | Flux=${spectralMetrics.flux.toFixed(4)} | ZCR=${spectralMetrics.zcr.toFixed(4)}`);
+    console.log(`📊 [AudioFeatureExtractor] Meyda 16-D Acoustic Vector: Centroid=${spectralMetrics.centroid.toFixed(4)} | Rolloff=${spectralMetrics.rolloff.toFixed(4)} | Flux=${spectralMetrics.flux.toFixed(4)} | ZCR=${spectralMetrics.zcr.toFixed(4)}`);
 
-    return {
+    const partialResult = {
       featureVector,
       originalSampleRate: sampleRate,
       resampledRate: TARGET_SAMPLE_RATE,
@@ -108,6 +110,13 @@ export class AudioFeatureExtractor {
       isResampled,
       spectralMetrics,
       mfccCoefficients: mfccAverages
+    };
+
+    const semanticAcousticProfile = this.formatAcousticProfileForLLM(partialResult);
+
+    return {
+      ...partialResult,
+      semanticAcousticProfile
     };
   }
 
@@ -140,8 +149,127 @@ export class AudioFeatureExtractor {
   }
 
   /**
+   * Formats raw Meyda DSP acoustic features into rich, clinical semantic text
+   * structured specifically for LLMs (Qwen 2.5 Instruct) to perform medical reasoning.
+   */
+  public static formatAcousticProfileForLLM(
+    result: {
+      spectralMetrics: SpectralMetrics;
+      mfccCoefficients: number[];
+      durationSeconds: number;
+    },
+    classification?: CoughClassificationResult | null
+  ): string {
+    const { spectralMetrics, mfccCoefficients, durationSeconds } = result;
+
+    const category = classification?.predictedCategory || 'Respiratory Sound Captured';
+    const confidenceStr = classification?.confidence
+      ? `${(classification.confidence * 100).toFixed(1)}%`
+      : 'Measured';
+    const isRedFlag = classification?.isRedFlagRespiratory
+      ? '⚠️ RESPIRATORY RED-FLAG DETECTED'
+      : 'Standard Respiratory Acoustic Pattern';
+
+    // 1. Spectral Centroid (Pitch / Brightness in Hz)
+    const centroidHz = Math.round(spectralMetrics.centroid * (TARGET_SAMPLE_RATE / 2));
+    let centroidDesc = '';
+    if (centroidHz > 1500) {
+      centroidDesc = `${centroidHz} Hz (High-Frequency / Bright — typical of upper airway constriction, stridor, or expiratory wheeze harmonics)`;
+    } else if (centroidHz > 700) {
+      centroidDesc = `${centroidHz} Hz (Mid-Frequency — characteristic of active bronchial cough with mucus/fluid mobilization)`;
+    } else {
+      centroidDesc = `${centroidHz} Hz (Low-Frequency / Deep — characteristic of deep bronchial rhonchi or lower tracheal resonance)`;
+    }
+
+    // 2. High-Frequency Spectral Rolloff (85% energy boundary)
+    const rolloffHz = Math.round(spectralMetrics.rolloff * (TARGET_SAMPLE_RATE / 2));
+    let rolloffDesc = '';
+    if (rolloffHz > 3200) {
+      rolloffDesc = `${rolloffHz} Hz (Broadband Dispersion — significant high-frequency acoustic harmonics present)`;
+    } else {
+      rolloffDesc = `${rolloffHz} Hz (Band-Limited Energy — acoustic power concentrated in lower pulmonary frequencies)`;
+    }
+
+    // 3. Spectral Flux (Attack Dynamicity)
+    let fluxDesc = '';
+    if (spectralMetrics.flux > 0.035) {
+      fluxDesc = `${spectralMetrics.flux.toFixed(4)} (Rapid Paroxysmal Attack — sudden explosive cough burst characteristic of acute coughing bouts)`;
+    } else {
+      fluxDesc = `${spectralMetrics.flux.toFixed(4)} (Smooth / Continuous Onset — steady acoustic energy flow)`;
+    }
+
+    // 4. Airway Turbulence & Friction (Zero-Crossing Rate)
+    let zcrDesc = '';
+    if (spectralMetrics.zcr > 0.10) {
+      zcrDesc = `${spectralMetrics.zcr.toFixed(4)} (High Airflow Turbulence — high breathiness and airway friction, typical of narrowed bronchi)`;
+    } else if (spectralMetrics.zcr > 0.045) {
+      zcrDesc = `${spectralMetrics.zcr.toFixed(4)} (Moderate Airflow Friction — characteristic of active expiratory cough phase)`;
+    } else {
+      zcrDesc = `${spectralMetrics.zcr.toFixed(4)} (Low Noise Component — predominantly laminar or tonal sound)`;
+    }
+
+    // 5. Cepstral Timbre (MFCC Resonances)
+    const mfccResonance = (mfccCoefficients[0] ?? 0) > 0
+      ? 'Strong lower-frequency pulmonary resonance (MFCC 1-3 elevation), consistent with lower respiratory airway vibration'
+      : 'Balanced harmonic timbre across speech and respiratory spectrum';
+
+    // 6. Clinical Takeaway for LLM reasoning
+    let clinicalTakeaway = '';
+    if (category.includes('Wheeze') || category.includes('Stridor')) {
+      clinicalTakeaway = 'Bioacoustic signs indicate obstructive airway narrowing, bronchospasm, or asthma/bronchiolitis exacerbation.';
+    } else if (category.includes('Wet') || category.includes('Productive')) {
+      clinicalTakeaway = 'Bioacoustic signs indicate active secretions in the lower respiratory tract (e.g., Acute Bronchitis, Pneumonia).';
+    } else if (category.includes('Dry')) {
+      clinicalTakeaway = 'Bioacoustic signs indicate irritative, non-productive inflammation (e.g., Acute URTI, viral tracheitis).';
+    } else {
+      clinicalTakeaway = 'Bioacoustic signs show normal laminar respiratory sounds without pathological adventitious components.';
+    }
+
+    return [
+      `Auscultation Sound Phenotype: ${category} (Confidence: ${confidenceStr}) [${isRedFlag}]`,
+      `Recording Duration: ${durationSeconds}s`,
+      `Spectral Frequency Centroid: ${centroidDesc}`,
+      `High-Frequency Rolloff (85% energy boundary): ${rolloffDesc}`,
+      `Spectral Flux (Attack Dynamicity): ${fluxDesc}`,
+      `Airway Turbulence (Zero-Crossing Rate): ${zcrDesc}`,
+      `Cepstral Timbre (MFCC Resonances): ${mfccResonance}`,
+      `Clinical Diagnostic Takeaway: ${clinicalTakeaway}`
+    ].join('\n');
+  }
+
+  /**
+   * Helper to format an LLM acoustic section from a CoughClassificationResult alone
+   */
+  public static formatAcousticProfileFromClassification(
+    classification: CoughClassificationResult
+  ): string {
+    const category = classification.predictedCategory;
+    const confidenceStr = `${(classification.confidence * 100).toFixed(1)}%`;
+    const isRedFlag = classification.isRedFlagRespiratory
+      ? '⚠️ RESPIRATORY RED-FLAG DETECTED'
+      : 'Standard Respiratory Pattern';
+
+    let takeaway = '';
+    if (category.includes('Wheeze') || category.includes('Stridor')) {
+      takeaway = 'Acoustic signs strongly correlate with obstructive bronchospasm, asthma flare, or acute bronchiolitis.';
+    } else if (category.includes('Wet') || category.includes('Productive')) {
+      takeaway = 'Acoustic signs strongly correlate with active fluid/phlegm secretion in lower respiratory tract (e.g. Acute Bronchitis, Pneumonia).';
+    } else if (category.includes('Dry')) {
+      takeaway = 'Acoustic signs indicate irritative, non-productive inflammation (e.g. Acute URTI, early viral tracheitis).';
+    } else {
+      takeaway = 'Acoustic pattern shows normal laminar respiratory sounds.';
+    }
+
+    return [
+      `Auscultation Sound Phenotype: ${category} (Confidence: ${confidenceStr}) [${isRedFlag}]`,
+      `Class Probabilities: Normal=${(classification.probabilities.normalRespiratory * 100).toFixed(1)}%, Dry=${(classification.probabilities.dryIrritativeCough * 100).toFixed(1)}%, Wet=${(classification.probabilities.wetProductiveCough * 100).toFixed(1)}%, Wheeze=${(classification.probabilities.wheezeStridor * 100).toFixed(1)}%`,
+      `Clinical Diagnostic Takeaway: ${takeaway}`
+    ].join('\n');
+  }
+
+  /**
    * Computes 12 MFCC coefficients + Spectral Metrics (Centroid, Rolloff, Flux, ZCR)
-   * with energy-weighted frame pooling.
+   * with Meyda DSP native audio extraction and energy-weighted frame pooling.
    */
   private static computeAcousticMetrics(
     pcm: Float32Array,
@@ -150,12 +278,14 @@ export class AudioFeatureExtractor {
     const frameSize = FRAME_SIZE;
     const hopSize = HOP_SIZE;
     const numFrames = Math.max(1, Math.floor((pcm.length - frameSize) / hopSize) + 1);
-
-    const hamming = this.createHammingWindow(frameSize);
-    const melFilters = this.createMelFilterbanks(16, frameSize, sampleRate, 100, sampleRate / 2);
-
-    const halfSize = Math.floor(frameSize / 2);
     const nyquist = sampleRate / 2;
+
+    // Configure Meyda DSP session parameters
+    const meyda: any = Meyda;
+    meyda.sampleRate = sampleRate;
+    meyda.bufferSize = frameSize;
+    meyda.numberOfMFCCCoefficients = MFCC_COUNT;
+    meyda.windowingFunction = 'hamming';
 
     interface FrameData {
       energy: number;
@@ -171,94 +301,66 @@ export class AudioFeatureExtractor {
 
     for (let f = 0; f < numFrames; f++) {
       const start = f * hopSize;
-      const frame = new Float32Array(frameSize);
-
-      // Windowing & ZCR
-      let frameZcr = 0;
-      for (let i = 0; i < frameSize; i++) {
-        const sample = pcm[start + i] || 0;
-        frame[i] = sample * hamming[i];
-        if (i > 0 && ((sample >= 0 && (pcm[start + i - 1] || 0) < 0) || (sample < 0 && (pcm[start + i - 1] || 0) >= 0))) {
-          frameZcr++;
-        }
+      const slice = pcm.subarray(start, start + frameSize);
+      let frame: Float32Array;
+      if (slice.length < frameSize) {
+        frame = new Float32Array(frameSize);
+        frame.set(slice);
+      } else {
+        frame = slice;
       }
-      const zcr = frameZcr / frameSize;
 
-      // Power Spectrum via Real DFT
-      const powerSpectrum = this.computePowerSpectrum(frame);
+      // Extract native DSP acoustic features via Meyda
+      const mFeatures = meyda.extract(
+        ['mfcc', 'spectralCentroid', 'spectralRolloff', 'zcr', 'energy', 'amplitudeSpectrum'],
+        frame
+      );
 
-      // Spectral Centroid & Energy
-      let totalEnergy = 0;
-      let weightedFreqSum = 0;
-      for (let k = 0; k < halfSize; k++) {
-        const mag = Math.sqrt(powerSpectrum[k]);
-        const freq = (k * sampleRate) / frameSize;
-        totalEnergy += mag;
-        weightedFreqSum += freq * mag;
-      }
-      if (totalEnergy > maxEnergy) maxEnergy = totalEnergy;
+      if (!mFeatures) continue;
 
-      const centroid = totalEnergy > 0 ? (weightedFreqSum / totalEnergy) / nyquist : 0;
+      const energy = Number(mFeatures.energy || 0);
+      if (energy > maxEnergy) maxEnergy = energy;
 
-      // 85% Spectral Rolloff
-      const rolloffThreshold = totalEnergy * 0.85;
-      let cumEnergy = 0;
-      let rolloffFreq = nyquist;
-      for (let k = 0; k < halfSize; k++) {
-        cumEnergy += Math.sqrt(powerSpectrum[k]);
-        if (cumEnergy >= rolloffThreshold) {
-          rolloffFreq = (k * sampleRate) / frameSize;
-          break;
-        }
-      }
-      const rolloff = rolloffFreq / nyquist;
-
-      // Spectral Flux
+      // Robust spectral flux calculation across consecutive amplitude spectra
       let flux = 0;
-      if (previousSpectrum) {
+      const currentSpectrum = mFeatures.amplitudeSpectrum;
+      if (previousSpectrum && currentSpectrum && currentSpectrum.length === previousSpectrum.length) {
         let diffSum = 0;
-        for (let k = 0; k < halfSize; k++) {
-          const diff = Math.sqrt(powerSpectrum[k]) - Math.sqrt(previousSpectrum[k]);
+        for (let k = 0; k < currentSpectrum.length; k++) {
+          const diff = currentSpectrum[k] - previousSpectrum[k];
           diffSum += diff * diff;
         }
-        flux = Math.sqrt(diffSum) / (totalEnergy || 1.0);
+        flux = Math.sqrt(diffSum) / (energy || 1.0);
       }
-      previousSpectrum = powerSpectrum;
-
-      // Mel Filterbank Energies
-      const melEnergies = new Array<number>(melFilters.length).fill(0);
-      for (let m = 0; m < melFilters.length; m++) {
-        let bandEnergy = 0;
-        const filter = melFilters[m];
-        for (let k = 0; k < halfSize; k++) {
-          bandEnergy += powerSpectrum[k] * filter[k];
-        }
-        melEnergies[m] = Math.log(Math.max(1e-6, bandEnergy));
+      if (currentSpectrum) {
+        previousSpectrum = new Float32Array(currentSpectrum);
       }
 
-      // DCT-II for MFCCs (12 coefficients, excluding c0 energy)
-      const mfccs = new Array<number>(MFCC_COUNT).fill(0);
-      for (let n = 1; n <= MFCC_COUNT; n++) {
-        let sum = 0;
-        const M = melEnergies.length;
-        for (let m = 0; m < M; m++) {
-          sum += melEnergies[m] * Math.cos((Math.PI * n * (m + 0.5)) / M);
-        }
-        mfccs[n - 1] = sum;
+      // Normalize features to [0.0, 1.0] for stable pooling
+      // Meyda spectralCentroid returns bin index: convert to normalized frequency in [0, 1]
+      const centroidNorm = Math.min(1.0, Math.max(0.0, (mFeatures.spectralCentroid * (nyquist / (frameSize / 2))) / nyquist));
+      // Meyda spectralRolloff returns frequency in Hz
+      const rolloffNorm = Math.min(1.0, Math.max(0.0, mFeatures.spectralRolloff / nyquist));
+      // Meyda zcr returns count of zero-crossings per bufferSize
+      const zcrNorm = Math.min(1.0, Math.max(0.0, mFeatures.zcr / frameSize));
+
+      const rawMfccs: number[] = Array.isArray(mFeatures.mfcc) ? mFeatures.mfcc : [];
+      const mfccs: number[] = rawMfccs.slice(0, MFCC_COUNT);
+      while (mfccs.length < MFCC_COUNT) {
+        mfccs.push(0);
       }
 
       frames.push({
-        energy: totalEnergy,
-        centroid: Math.min(1.0, Math.max(0.0, centroid)),
-        rolloff: Math.min(1.0, Math.max(0.0, rolloff)),
+        energy,
+        centroid: centroidNorm,
+        rolloff: rolloffNorm,
         flux: Math.min(1.0, Math.max(0.0, flux)),
-        zcr: Math.min(1.0, Math.max(0.0, zcr)),
+        zcr: zcrNorm,
         mfccs
       });
     }
 
     // Energy-Weighted Acoustic Frame Accumulation (VAD Weighting)
-    // Prevents ambient silence frames from diluting brief cough / wheeze bursts
     let weightSum = 0;
     let centroidW = 0;
     let rolloffW = 0;
@@ -278,13 +380,13 @@ export class AudioFeatureExtractor {
       }
     }
 
-    const mfccAverages = mfccW.map(val => Number((val / weightSum).toFixed(6)));
+    const mfccAverages = mfccW.map(val => Number((val / (weightSum || 1.0)).toFixed(6)));
 
     const spectralMetrics: SpectralMetrics = {
-      centroid: Number((centroidW / weightSum).toFixed(6)),
-      rolloff: Number((rolloffW / weightSum).toFixed(6)),
-      flux: Number((fluxW / weightSum).toFixed(6)),
-      zcr: Number((zcrW / weightSum).toFixed(6))
+      centroid: Number((centroidW / (weightSum || 1.0)).toFixed(6)),
+      rolloff: Number((rolloffW / (weightSum || 1.0)).toFixed(6)),
+      flux: Number((fluxW / (weightSum || 1.0)).toFixed(6)),
+      zcr: Number((zcrW / (weightSum || 1.0)).toFixed(6))
     };
 
     return { mfccAverages, spectralMetrics };

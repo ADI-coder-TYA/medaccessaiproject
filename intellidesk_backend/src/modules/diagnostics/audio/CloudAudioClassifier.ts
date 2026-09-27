@@ -272,7 +272,7 @@ Classify respiratory sound and detect red flags.`;
 
     const isWheezeRedFlag = probs.wheezeStridor >= WHEEZE_RED_FLAG_CONFIDENCE_THRESHOLD;
 
-    return {
+    const result: CoughClassificationResult = {
       predictedCategory,
       confidence: Math.max(...Object.values(probs)),
       probabilities: probs,
@@ -280,6 +280,8 @@ Classify respiratory sound and detect red flags.`;
       redFlagReason: isWheezeRedFlag ? `Wheeze/Stridor detected via Hugging Face Cloud` : undefined,
       featureVector: features
     };
+    result.semanticAcousticProfile = AudioFeatureExtractor.formatAcousticProfileFromClassification(result);
+    return result;
   }
 
   private static cleanAndParseJSON(text: string): any {

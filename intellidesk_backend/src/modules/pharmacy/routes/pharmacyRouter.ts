@@ -226,7 +226,7 @@ pharmacyRouter.get('/scans/:id', async (req: Request, res: Response) => {
  * DELETE /api/v1/pharmacy/medications
  * Removes a medication from the patient active roster.
  */
-pharmacyRouter.delete('/medications/:id?', async (req: Request, res: Response) => {
+const handleDeleteMedication = async (req: Request, res: Response) => {
   try {
     const rawId = req.params.id || req.query.id || req.body?.id || '';
     const id = decodeURIComponent(String(rawId)).trim();
@@ -251,7 +251,10 @@ pharmacyRouter.delete('/medications/:id?', async (req: Request, res: Response) =
       details: err?.message || String(err)
     });
   }
-});
+};
+
+pharmacyRouter.delete('/medications', handleDeleteMedication);
+pharmacyRouter.delete('/medications/:id', handleDeleteMedication);
 
 /**
  * DELETE /api/v1/pharmacy/allergies/:patientId/:allergenGroup

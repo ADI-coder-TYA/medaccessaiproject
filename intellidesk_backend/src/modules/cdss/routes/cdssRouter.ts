@@ -202,7 +202,7 @@ cdssRouter.get('/concepts', (_req: Request, res: Response) => {
  * POST /api/v1/cdss/dispatch/:screeningId
  * Dispatches screening and evaluation to institutional medical board review queue.
  */
-cdssRouter.post('/dispatch/:screeningId?', async (req: Request, res: Response) => {
+const handleDispatchToMedicalBoard = async (req: Request, res: Response) => {
   try {
     const rawScreeningId = req.params.screeningId || req.body?.screeningId || req.body?.screening_id;
     const screeningId = rawScreeningId ? String(rawScreeningId) : null;
@@ -233,4 +233,7 @@ cdssRouter.post('/dispatch/:screeningId?', async (req: Request, res: Response) =
       error: err.message || 'Medical board dispatch failed'
     });
   }
-});
+};
+
+cdssRouter.post('/dispatch', handleDispatchToMedicalBoard);
+cdssRouter.post('/dispatch/:screeningId', handleDispatchToMedicalBoard);

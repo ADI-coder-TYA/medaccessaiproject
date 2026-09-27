@@ -40,21 +40,28 @@ class CDSSService {
     };
 
     try {
+      debugPrint('🩺 [CDSSService] Evaluating CDSS screening via $endpoint (patient: $patientId, inst: $effectiveInstId)...');
+      final stopwatch = Stopwatch()..start();
       final response = await http
           .post(
             endpoint,
             headers: ApiConfig.patientHeaders,
             body: jsonEncode(payload),
           )
-          .timeout(const Duration(seconds: 4));
+          .timeout(const Duration(seconds: 60)); // Up to 60s for Cloud Qwen 2.5 72B DDx
 
+      stopwatch.stop();
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         final evalMap = data['evaluation'] as Map<String, dynamic>;
-        return CDSSEvaluationResult.fromJson(evalMap);
+        final result = CDSSEvaluationResult.fromJson(evalMap);
+        debugPrint('✅ [CDSSService] Cloud evaluation complete: "${result.primaryICD11Code} - ${result.primaryICD11Title}" (${result.differentialDiagnoses.length} candidates) in ${stopwatch.elapsedMilliseconds}ms [Model: ${result.modelUsed ?? "neural-ensemble"}]');
+        return result;
+      } else {
+        debugPrint('⚠️ [CDSSService] Backend returned HTTP ${response.statusCode}: ${response.body}. Engaging offline fallback.');
       }
     } catch (e) {
-      debugPrint('⚠️ [CDSSService] Network call failed or offline: $e. Using local offline fallback.');
+      debugPrint('⚠️ [CDSSService] Cloud CDSS network call failed or timed out: $e. Using local offline fallback.');
     }
 
     // Technical Guardrail 4: Offline Fallback Generation
@@ -99,7 +106,7 @@ class CDSSService {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(payload),
           )
-          .timeout(const Duration(seconds: 4));
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;

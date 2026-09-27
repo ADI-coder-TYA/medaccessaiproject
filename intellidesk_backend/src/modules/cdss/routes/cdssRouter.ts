@@ -1,16 +1,30 @@
 import { Router, Request, Response } from 'express';
 import { CDSSService } from '../CDSSService.js';
 import { ICD11ConceptStore } from '../ICD11ConceptStore.js';
+import { QwenInferenceService } from '../QwenInferenceService.js';
 import { CDSSInputPayload } from '../types.js';
 
 export const cdssRouter = Router();
 
 /**
- * POST /api/v1/cdss/evaluate
- * Ingests multimodal screening payload, performs ICD-11 coding,
- * computes DDx probabilities with temperature scaling, and returns recommended pathway.
+ * GET /api/v1/cdss/status
+ * Returns health and configuration status of CDSS inference engine & Qwen-72B cloud service.
  */
-cdssRouter.post('/evaluate', async (req: Request, res: Response) => {
+cdssRouter.get('/status', (_req: Request, res: Response) => {
+  return res.status(200).json({
+    success: true,
+    model: 'Qwen/Qwen2.5-72B-Instruct',
+    provider: 'Hugging Face Cloud Inference',
+    isCloudInferenceConfigured: QwenInferenceService.isConfigured(),
+    offlineFallbackReady: true
+  });
+});
+
+/**
+ * POST /api/v1/cdss/predict-qwen
+ * Direct Cloud Inference endpoint for Qwen/Qwen2.5-72B-Instruct disease prediction.
+ */
+cdssRouter.post('/predict-qwen', async (req: Request, res: Response) => {
   try {
     const {
       screeningId,
@@ -31,7 +45,54 @@ cdssRouter.post('/evaluate', async (req: Request, res: Response) => {
       symptoms,
       visionFindings,
       audioClassification,
-      temperature: Number(temperature) || 1.25
+      temperature: Number(temperature) || 1.25,
+      useCloudModel: true
+    };
+
+    const qwenResult = await QwenInferenceService.predictDisease(payload, payload.temperature);
+
+    return res.status(200).json({
+      success: true,
+      ...qwenResult
+    });
+  } catch (err: any) {
+    console.error('❌ [CDSS Router] Error running Qwen disease prediction:', err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || 'Qwen disease prediction failed'
+    });
+  }
+});
+
+/**
+ * POST /api/v1/cdss/evaluate
+ * Ingests multimodal screening payload, performs ICD-11 coding,
+ * computes DDx probabilities with temperature scaling, and returns recommended pathway.
+ */
+cdssRouter.post('/evaluate', async (req: Request, res: Response) => {
+  try {
+    const {
+      screeningId,
+      patientId = 'anonymous',
+      institutionId,
+      multimodalRiskScore = 0.5,
+      symptoms,
+      visionFindings,
+      audioClassification,
+      temperature = 1.25,
+      useCloudModel
+    } = req.body;
+
+    const payload: CDSSInputPayload = {
+      screeningId,
+      patientId,
+      institutionId: institutionId || (symptoms as any)?.institutionId,
+      multimodalRiskScore: Number(multimodalRiskScore) || 0.5,
+      symptoms,
+      visionFindings,
+      audioClassification,
+      temperature: Number(temperature) || 1.25,
+      useCloudModel
     };
 
     const evaluation = await CDSSService.evaluateScreening(payload);

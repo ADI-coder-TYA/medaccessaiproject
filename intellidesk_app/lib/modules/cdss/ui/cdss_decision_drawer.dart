@@ -343,6 +343,51 @@ class _CDSSDecisionDrawerState extends State<CDSSDecisionDrawer> {
               ],
             ),
           ),
+
+          // Clinical Model Engine Provenance Chip
+          if (_evaluation.modelUsed != null && _evaluation.modelUsed!.isNotEmpty)
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F172A),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF334155)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.hub_outlined, color: Color(0xFF38BDF8), size: 15),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Inference Engine: ${_evaluation.modelUsed}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF38BDF8),
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.2,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF38BDF8).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      _evaluation.modelUsed!.contains('Qwen') ? 'CLOUD 72B' : 'LOCAL ML',
+                      style: const TextStyle(
+                        fontSize: 9,
+                        color: Color(0xFF38BDF8),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           const Divider(color: Colors.white12, height: 20),
 
           // Scrollable Clinical Content

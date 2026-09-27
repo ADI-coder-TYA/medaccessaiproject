@@ -647,7 +647,8 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
                       'anatomicalSite': bodyLocation,
                     }
                   ],
-                  audioClassification: diag.lastCoughClassification,
+                  audioClassification: (diag.lastCoughClassification?['classification'] as Map<String, dynamic>?) ??
+                      diag.lastCoughClassification,
                 );
 
                 if (context.mounted) {

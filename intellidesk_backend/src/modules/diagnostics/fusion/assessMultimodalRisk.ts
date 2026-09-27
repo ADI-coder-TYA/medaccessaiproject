@@ -1,7 +1,7 @@
 import { VectorAssembler } from './vectorAssembler.js';
 import { MultimodalFusionModel, MultimodalPredictionOutput } from './MultimodalFusionModel.js';
 import { VisionDiagnosticService } from '../vision/VisionDiagnosticService.js';
-import { AudioFeatureExtractor, CoughClassifier, CoughClassificationResult } from '../audio/index.js';
+import { AudioFeatureExtractor, CoughClassifier, CloudAudioClassifier, CoughClassificationResult } from '../audio/index.js';
 import { PhysiologicalRedFlagSentinel } from '../vitals/PhysiologicalRedFlagSentinel.js';
 import { DiseasePredictionModel } from './diseasePredictionModel.js';
 import {
@@ -249,7 +249,7 @@ export async function assessMultimodalRisk(
         const audioResult = await AudioFeatureExtractor.extractFeatures(rawAudioBuf);
         audioFeatures = audioResult.featureVector;
         if (!audioClassification) {
-          audioClassification = await CoughClassifier.classify(audioFeatures);
+          audioClassification = await CloudAudioClassifier.classify(audioFeatures, rawAudioBuf);
         }
         console.log(`🩺 [assessMultimodalRisk] Fused acoustic biomarker: "${audioClassification?.predictedCategory}" (${((audioClassification?.confidence || 0) * 100).toFixed(1)}%) | RedFlag: ${audioClassification?.isRedFlagRespiratory}`);
       }
@@ -259,7 +259,7 @@ export async function assessMultimodalRisk(
     }
   } else if (audioFeatures && !audioClassification) {
     try {
-      audioClassification = await CoughClassifier.classify(audioFeatures);
+      audioClassification = await CloudAudioClassifier.classify(audioFeatures);
     } catch (clfErr) {
       console.warn(`⚠️ [assessMultimodalRisk] Cough classification error: ${clfErr}`);
     }

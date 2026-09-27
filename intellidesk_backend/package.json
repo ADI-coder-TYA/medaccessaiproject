@@ -14,7 +14,10 @@
     "seed:all": "tsx scripts/seed_policies.ts && tsx scripts/seed_funds.ts && tsx scripts/seed_audit_logs.ts",
     "test:workflows": "tsx scripts/testMedAccessSuite.ts",
     "test:advanced": "tsx scripts/testMedAccessAdvancedSuite.ts",
-    "test:diagnostics": "tsx scripts/testDiagnosticsSuite.ts"
+    "test:diagnostics": "tsx scripts/testDiagnosticsSuite.ts",
+    "test:cdss": "tsx src/scripts/testCDSS.ts",
+    "test:qwen": "tsx src/scripts/testQwenCDSS.ts",
+    "test:audio": "tsx src/scripts/testCloudAudio.ts"
   },
   "keywords": [],
   "author": "",

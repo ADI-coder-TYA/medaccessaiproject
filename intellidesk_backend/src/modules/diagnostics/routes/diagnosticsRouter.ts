@@ -5,7 +5,7 @@ import { GradCamGenerator } from '../explainability/gradCamGenerator.js';
 import { FeatureImportanceEngine } from '../explainability/featureImportance.js';
 import { HealthScreeningsDbService, DBHealthScreeningRow } from '../db/healthScreeningsDbService.js';
 import { SymptomInputPayload } from '../fusion/types.js';
-import { AudioFeatureExtractor, CoughClassifier } from '../audio/index.js';
+import { AudioFeatureExtractor, CoughClassifier, CloudAudioClassifier } from '../audio/index.js';
 import { FHIRConverterService } from '../fhir/FHIRConverterService.js';
 import { ReferralLetterGenerator } from '../fhir/ReferralLetterGenerator.js';
 import { ScreeningDeltaAnalyzer } from '../progression/ScreeningDeltaAnalyzer.js';
@@ -387,16 +387,18 @@ router.post('/audio/classify', async (req: Request, res: Response) => {
 
     let features = audioFeatures;
     let extractionResult = null;
+    let rawBuf: Buffer | null = null;
 
-    if (!features && audioBase64) {
-      let rawBuf: Buffer;
+    if (audioBase64) {
       if (typeof audioBase64 === 'string' && audioBase64.startsWith('data:')) {
         const base64Data = audioBase64.split(',')[1];
         rawBuf = Buffer.from(base64Data, 'base64');
-      } else {
+      } else if (typeof audioBase64 === 'string') {
         rawBuf = Buffer.from(audioBase64, 'base64');
       }
+    }
 
+    if (!features && rawBuf) {
       console.log(`🎙️ [Diagnostics API] Decoding raw audio buffer: ${rawBuf.length} bytes`);
       extractionResult = await AudioFeatureExtractor.extractFeatures(rawBuf);
       features = extractionResult.featureVector;
@@ -410,8 +412,8 @@ router.post('/audio/classify', async (req: Request, res: Response) => {
       });
     }
 
-    const classification = await CoughClassifier.classify(features);
-    console.log(`🩺 [Diagnostics API] ✅ Cough classification completed: "${classification.predictedCategory}" (${(classification.confidence * 100).toFixed(1)}%) | RedFlag: ${classification.isRedFlagRespiratory}`);
+    const classification = await CloudAudioClassifier.classify(features, rawBuf);
+    console.log(`🩺 [Diagnostics API] ✅ Audio classification completed: "${classification.predictedCategory}" (${(classification.confidence * 100).toFixed(1)}%) | RedFlag: ${classification.isRedFlagRespiratory}`);
 
     return res.status(200).json({
       success: true,

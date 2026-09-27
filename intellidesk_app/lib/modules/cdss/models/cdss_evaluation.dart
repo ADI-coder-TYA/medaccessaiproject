@@ -219,6 +219,7 @@ class CDSSEvaluationResult {
   final TreatmentPathway treatmentPathway;
   final double temperatureScaling;
   final String regulatoryDisclaimer;
+  final String? modelUsed;
   final ClinicianApproval? attendingClinicianApproval;
   final String createdAt;
   final String updatedAt;
@@ -236,6 +237,7 @@ class CDSSEvaluationResult {
     required this.treatmentPathway,
     required this.temperatureScaling,
     required this.regulatoryDisclaimer,
+    this.modelUsed,
     this.attendingClinicianApproval,
     required this.createdAt,
     required this.updatedAt,
@@ -283,6 +285,7 @@ class CDSSEvaluationResult {
       temperatureScaling: (json['temperatureScaling'] as num?)?.toDouble() ?? 1.25,
       regulatoryDisclaimer: json['regulatoryDisclaimer'] as String? ??
           'AI Clinical Decision Support Tool — For Licensed Practitioner Reference Only. Requires Attending Physician Validation.',
+      modelUsed: json['modelUsed'] as String?,
       attendingClinicianApproval: approval,
       createdAt: json['createdAt'] as String? ?? DateTime.now().toIso8601String(),
       updatedAt: json['updatedAt'] as String? ?? DateTime.now().toIso8601String(),
@@ -303,6 +306,7 @@ class CDSSEvaluationResult {
       'treatmentPathway': treatmentPathway.toJson(),
       'temperatureScaling': temperatureScaling,
       'regulatoryDisclaimer': regulatoryDisclaimer,
+      if (modelUsed != null) 'modelUsed': modelUsed,
       if (attendingClinicianApproval != null) 'attendingClinicianApproval': attendingClinicianApproval!.toJson(),
       'createdAt': createdAt,
       'updatedAt': updatedAt,

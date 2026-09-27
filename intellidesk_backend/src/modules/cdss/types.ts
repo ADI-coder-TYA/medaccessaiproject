@@ -97,6 +97,7 @@ export interface CDSSEvaluationResult {
   treatmentPathway: TreatmentPathway;
   temperatureScaling: number;
   regulatoryDisclaimer: string;
+  modelUsed?: string;
   attendingClinicianApproval?: ClinicianApproval | null;
   createdAt: string;
   updatedAt: string;
@@ -129,4 +130,5 @@ export interface CDSSInputPayload {
     confidence: number;
   };
   temperature?: number; // Defaults to 1.25
+  useCloudModel?: boolean; // When true or default with HF_TOKEN, uses Qwen/Qwen2.5-72B-Instruct
 }

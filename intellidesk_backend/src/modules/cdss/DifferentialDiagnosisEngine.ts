@@ -6,19 +6,32 @@ import {
 import { ICD11ConceptStore } from './ICD11ConceptStore.js';
 import { DiseasePredictionModel } from '../diagnostics/fusion/diseasePredictionModel.js';
 import { DiseaseProfile } from '../diagnostics/fusion/diseaseBenchmarkData.js';
+import { QwenInferenceService } from './QwenInferenceService.js';
 
 export class DifferentialDiagnosisEngine {
   // Purely respiratory ICD-11 categories that must receive strict 0% probability when non-respiratory
   private static readonly PURELY_RESPIRATORY_CODES = new Set(['1B10.0', '1B10', 'CA00', 'CA01', 'CA0B', 'CA40']);
 
   /**
-   * Evaluates candidates asynchronously using TensorFlow.js Deep Neural Classifier
-   * and Hugging Face dense semantic embeddings (all-MiniLM-L6-v2).
+   * Evaluates candidates asynchronously using Hugging Face Qwen/Qwen2.5-72B-Instruct Cloud Inference
+   * with fallback to TensorFlow.js Deep Neural Classifier & dense semantic embeddings.
    */
   public static async evaluateCandidatesAsync(
     payload: CDSSInputPayload,
     temperature = 1.25
   ): Promise<DifferentialDiagnosisCandidate[]> {
+    if (payload.useCloudModel !== false && QwenInferenceService.isConfigured()) {
+      try {
+        const qwenResult = await QwenInferenceService.predictDisease(payload, temperature);
+        if (qwenResult.differentialDiagnoses && qwenResult.differentialDiagnoses.length > 0) {
+          console.log(`🤖 [DifferentialDiagnosisEngine] Qwen/Qwen2.5-72B-Instruct disease prediction completed (${qwenResult.latencyMs}ms).`);
+          return qwenResult.differentialDiagnoses;
+        }
+      } catch (err: any) {
+        console.warn(`⚠️ [DifferentialDiagnosisEngine] Qwen Cloud Inference error, falling back to local ML ensemble: ${err.message}`);
+      }
+    }
+
     const mlPredictions = await DiseasePredictionModel.predictAllDiseaseProbabilities(
       payload.symptoms,
       payload.visionFindings

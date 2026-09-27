@@ -48,6 +48,8 @@ class LocalEdgeInferenceEngine implements InferenceEngineInterface {
     SymptomVector symptoms, {
     List<double>? visionEmbeddings,
     String? imageUrl,
+    dynamic audioBytes,
+    List<double>? audioFeatures,
   }) async {
     await initialize();
 

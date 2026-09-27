@@ -11,6 +11,7 @@ import {
 import { ICD11ConceptStore } from './ICD11ConceptStore.js';
 import { DifferentialDiagnosisEngine } from './DifferentialDiagnosisEngine.js';
 import { TreatmentPathwayAdvisor } from './TreatmentPathwayAdvisor.js';
+import { QwenInferenceService } from './QwenInferenceService.js';
 
 export class CDSSService {
   // In-memory store for air-gapped / offline fallback and automated unit testing (Guardrail 4)
@@ -96,6 +97,9 @@ export class CDSSService {
       treatmentPathway,
       temperatureScaling: temperature,
       regulatoryDisclaimer: MANDATORY_CDSS_DISCLAIMER,
+      modelUsed: (payload.useCloudModel !== false && QwenInferenceService.isConfigured())
+        ? 'Qwen/Qwen2.5-72B-Instruct'
+        : 'Neural-Ensemble-all-MiniLM-L6-v2',
       attendingClinicianApproval: null,
       createdAt: now,
       updatedAt: now

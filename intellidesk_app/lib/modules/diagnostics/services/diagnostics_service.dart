@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../../../config/api_config.dart';
 import 'inference_engine_interface.dart';
@@ -88,22 +89,27 @@ class DiagnosticsService {
   Future<Map<String, dynamic>?> classifyAudio(List<int> audioWavBytes) async {
     try {
       final uri = ApiConfig.resolveUri('diagnostics/audio/classify');
+      debugPrint('🎙️ [DiagnosticsService] Sending audio for classification to $uri (${audioWavBytes.length} bytes)...');
+      final stopwatch = Stopwatch()..start();
       final res = await http.post(
         uri,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'audioBase64': base64Encode(audioWavBytes),
         }),
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 45)); // Up to 45s for Cloud Bioacoustic Transformer
+      stopwatch.stop();
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final clf = data['classification'] as Map<String, dynamic>?;
+        debugPrint('✅ [DiagnosticsService] Audio classification completed in ${stopwatch.elapsedMilliseconds}ms: "${clf?['predictedCategory']}" (${(((clf?['confidence'] ?? 0) as num) * 100).toStringAsFixed(1)}%)');
         return data;
       } else {
-        // Non-200 response
+        debugPrint('⚠️ [DiagnosticsService] Audio classification returned HTTP ${res.statusCode}: ${res.body}');
       }
     } catch (e) {
-      // Audio classification failed
+      debugPrint('❌ [DiagnosticsService] Audio classification error/timeout: $e');
     }
     return null;
   }

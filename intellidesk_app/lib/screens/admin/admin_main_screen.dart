@@ -134,11 +134,6 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
                                           selectedIcon: Icon(Icons.menu_book),
                                           label: Text('Clinical Policies'),
                                         ),
-                                        NavigationRailDestination(
-                                          icon: Icon(Icons.person_outline),
-                                          selectedIcon: Icon(Icons.person),
-                                          label: Text('Staff Profile'),
-                                        ),
                                       ],
                                     ),
                                   ),
@@ -170,8 +165,6 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
         return const AdminWarRoomScreen();
       case 4:
         return const AdminKnowledgeBaseScreen();
-      case 5:
-        return const UserProfileScreen();
       default:
         return const KanbanBoard();
     }
@@ -218,11 +211,6 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
             selectedIcon: Icon(Icons.menu_book, color: Color(0xFF0D9488)),
             label: 'Policies',
           ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person, color: Color(0xFF0D9488)),
-            label: 'Profile',
-          ),
         ],
       ),
     );
@@ -251,7 +239,6 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
       'Health Funds & Pool Reserves',
       'Clinical Crisis War Room',
       'Institutional Clinical Policies',
-      'Medical Administrator Profile',
     ];
     final currentTitle = _selectedIndex < titles.length ? titles[_selectedIndex] : 'Dashboard';
 
@@ -266,9 +253,10 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
           Expanded(
             child: InkWell(
               onTap: () {
-                setState(() {
-                  _selectedIndex = 5; // Switch to Profile tab
-                });
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const UserProfileScreen()),
+                );
               },
               borderRadius: BorderRadius.circular(12),
               child: Row(
@@ -339,6 +327,27 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
                 ],
               ),
             ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            tooltip: 'Staff Profile',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            icon: Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F172A).withValues(alpha: 0.05),
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0x1A0F172A)),
+              ),
+              child: const Icon(Icons.person_outline, color: Color(0xFF0F172A), size: 18),
+            ),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const UserProfileScreen()),
+              );
+            },
           ),
           const SizedBox(width: 8),
           Container(

@@ -4,7 +4,16 @@ import 'package:provider/provider.dart';
 import 'package:intellidesk_app/screens/profile/user_profile_screen.dart';
 import 'package:intellidesk_app/providers/auth_provider.dart';
 
+import 'package:intellidesk_app/screens/auth/login_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   Widget createWidgetUnderTest({required AuthProvider auth}) {
     return MultiProvider(
       providers: [
@@ -67,6 +76,10 @@ void main() {
       expect(find.text('Production API Gateway'), findsOneWidget);
       expect(find.text('Advanced Endpoint Diagnostics'), findsOneWidget);
 
+      // Ensure visibility before tapping
+      await tester.ensureVisible(find.text('Advanced Endpoint Diagnostics'));
+      await tester.pump(const Duration(milliseconds: 100));
+
       // Tap to expand diagnostics
       await tester.tap(find.text('Advanced Endpoint Diagnostics'));
       await tester.pump(const Duration(milliseconds: 300));
@@ -76,7 +89,7 @@ void main() {
       expect(find.text('Institution ID'), findsOneWidget);
     });
 
-    testWidgets('renders Sign Out button and opens confirmation dialog', (tester) async {
+    testWidgets('renders Sign Out button, confirms and redirects to LoginScreen', (tester) async {
       final auth = AuthProvider();
       await auth.loginAsPatient();
 
@@ -93,6 +106,16 @@ void main() {
 
       expect(find.text('Are you sure you want to end your current session?'), findsOneWidget);
       expect(find.text('Cancel'), findsOneWidget);
+
+      // Tap Confirm Sign Out
+      final confirmBtn = find.widgetWithText(ElevatedButton, 'Sign Out');
+      expect(confirmBtn, findsOneWidget);
+      await tester.tap(confirmBtn);
+      await tester.pumpAndSettle();
+
+      // Verified redirect to LoginScreen
+      expect(auth.user, isNull);
+      expect(find.byType(LoginScreen), findsOneWidget);
     });
   });
 }

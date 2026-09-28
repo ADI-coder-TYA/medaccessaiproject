@@ -4,10 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/diagnostics_provider.dart';
 import '../models/symptom_vector.dart';
 import '../services/audio_recorder_service.dart';
-import '../../pharmacy/models/medication_entity.dart';
-import '../../pharmacy/services/rx_sentinel_service.dart';
-import '../../pharmacy/ui/prescription_review_modal.dart';
-import '../../pharmacy/ui/patient_allergy_profile_screen.dart';
+
 import '../vitals/models/vitals_result.dart';
 import '../vitals/ui/vitals_scanner_modal.dart';
 import 'diagnostic_camera_screen.dart';
@@ -24,9 +21,7 @@ class DiagnosticIntakeScreen extends StatefulWidget {
 class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _notesController = TextEditingController();
-  final RxSentinelService _sentinelService = RxSentinelService();
-  RxScanSummary? _rxScanSummary;
-  bool _isScanningRx = false;
+
   final TextEditingController _tempController = TextEditingController();
   final TextEditingController _hrController = TextEditingController();
   final TextEditingController _bpController = TextEditingController();
@@ -595,9 +590,7 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
               ),
               const SizedBox(height: 20),
 
-              // 6. RxSentinel Medication & Allergy Shield
-              _buildRxSentinelSection(context, isDark),
-              const SizedBox(height: 28),
+              const SizedBox(height: 12),
 
               // Next: Camera Capture Button
               ElevatedButton.icon(
@@ -994,103 +987,5 @@ class _DiagnosticIntakeScreenState extends State<DiagnosticIntakeScreen> {
     });
   }
 
-  Widget _buildRxSentinelSection(BuildContext context, bool isDark) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E293B) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF0D9488).withOpacity(0.3)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0D9488).withOpacity(0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.shield_outlined, color: Color(0xFF0D9488), size: 22),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '6. Medication Safety Review',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      'Scan doctor prescription or check drug allergies',
-                      style: TextStyle(fontSize: 12, color: Colors.blueGrey),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  icon: const Icon(Icons.medication_outlined, size: 18),
-                  label: const Text('My Allergies & Meds', style: TextStyle(fontSize: 12.5)),
-                  onPressed: () {
-                    final diag = context.read<DiagnosticsProvider>();
-                    final patientId = diag.currentSession?.patientId ?? 'guest-patient';
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PatientAllergyProfileScreen(patientId: patientId),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              if (_rxScanSummary != null) ...[
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _rxScanSummary!.hasSafetyConflict
-                          ? const Color(0xFFEF4444)
-                          : const Color(0xFF10B981),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    icon: Icon(
-                      _rxScanSummary!.hasSafetyConflict ? Icons.warning_amber_rounded : Icons.check_circle_outline,
-                      size: 18,
-                    ),
-                    label: Text(
-                      _rxScanSummary!.hasSafetyConflict ? 'Alerts (DDI)' : 'Verified Safe',
-                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
-                    ),
-                    onPressed: () => PrescriptionReviewModal.show(context, summary: _rxScanSummary!),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+
 }

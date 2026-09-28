@@ -98,8 +98,9 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
             tooltip: 'Longitudinal Recovery Curve',
             onPressed: () {
               final auth = context.read<AuthProvider>();
-              final pId = (session != null && session.patientId.isNotEmpty)
-                  ? session.patientId
+              final sessionPid = session?.patientId;
+              final pId = (sessionPid != null && sessionPid.isNotEmpty)
+                  ? sessionPid
                   : (auth.user?.patientId ?? auth.user?.id ?? ApiConfig.userId);
               Navigator.of(context).push(
                 MaterialPageRoute(

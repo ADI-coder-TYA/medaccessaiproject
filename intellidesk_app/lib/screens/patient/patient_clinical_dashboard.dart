@@ -164,22 +164,18 @@ class _PatientClinicalDashboardState extends State<PatientClinicalDashboard> wit
             const SizedBox(height: 18),
 
             // 4. Clinical AI Core Suites (Interactive Grid)
-            _buildSectionHeader('Clinical Health Suites', 'Tap to launch clinical evaluations and health tools'),
+            _buildSectionHeader('Clinical Health Suites', 'Health evaluations & tools'),
             const SizedBox(height: 12),
             _buildSuitesGrid(),
             const SizedBox(height: 20),
 
-            // 4. Latest Screening & Triage Summary
+            // 5. Latest Screening & Triage Summary
             if (assessment != null || _backendOverview?['latestScreening'] != null) ...[
-              _buildSectionHeader('Active Triage & Diagnostic Assessment', 'Evidence-based risk stratification'),
+              _buildSectionHeader('Active Triage & Diagnostic Assessment', 'Recent clinical assessment'),
               const SizedBox(height: 10),
               _buildLatestScreeningCard(assessment, isDark),
               const SizedBox(height: 20),
             ],
-
-            // 5. Active Safety Sentinel & Pharmacy Strip
-            _buildSafetySentinelStrip(isDark),
-            const SizedBox(height: 20),
 
             // 6. Comprehensive Medical Passport & Care Plan
             _buildMedicalPassportSummaryCard(isDark),
@@ -192,7 +188,7 @@ class _PatientClinicalDashboardState extends State<PatientClinicalDashboard> wit
 
   Widget _buildExecutiveHeader(String name, String institution) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -206,99 +202,52 @@ class _PatientClinicalDashboardState extends State<PatientClinicalDashboard> wit
         ],
       ),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Container(
-            padding: const EdgeInsets.all(3),
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [Color(0xFF0D9488), Color(0xFF38BDF8)],
-              ),
-            ),
-            child: CircleAvatar(
-              radius: 24,
-              backgroundColor: const Color(0xFFF1F5F9),
-              child: Text(
-                name.isNotEmpty ? name[0].toUpperCase() : 'P',
-                style: GoogleFonts.outfit(
-                  color: const Color(0xFF0D9488),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 14),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.outfit(
-                    color: const Color(0xFF0F172A),
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 3),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0D9488).withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: const Color(0xFF0D9488).withOpacity(0.4), width: 0.8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color(0xFF0D9488),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      const Flexible(
-                        child: Text(
-                          'Clinical Monitoring Active',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: Color(0xFF0F766E), fontSize: 10, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ],
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0xFF0D9488),
                   ),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  institution,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                const SizedBox(width: 8),
+                const Flexible(
+                  child: Text(
+                    'Clinical Monitoring Active',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Color(0xFF0F766E),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
+          const SizedBox(width: 8),
           // 1-Tap Emergency Call SOS Button
           InkWell(
             onTap: _callEmergency,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFFEF4444).withOpacity(0.18),
-                borderRadius: BorderRadius.circular(14),
+                color: const Color(0xFFEF4444).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: const Color(0xFFEF4444), width: 1.2),
               ),
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.phone_in_talk, color: Color(0xFFEF4444), size: 16),
+                  Icon(Icons.phone_in_talk, color: Color(0xFFEF4444), size: 14),
                   SizedBox(width: 4),
                   Text(
                     'SOS 911',
@@ -534,6 +483,7 @@ class _PatientClinicalDashboardState extends State<PatientClinicalDashboard> wit
           icon: Icons.show_chart,
           gradient: const [Color(0xFF0284C7), Color(0xFF38BDF8)],
           onTap: () {
+            final auth = context.read<AuthProvider>();
             final effectivePatientId = auth.user?.patientId ?? auth.user?.id ?? ApiConfig.userId;
             Navigator.push(
               context,
@@ -725,8 +675,6 @@ class _PatientClinicalDashboardState extends State<PatientClinicalDashboard> wit
                 'Multimodal Risk Score: ${(riskScore * 100).toStringAsFixed(1)}%',
                 style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
               ),
-              const Text('•', style: TextStyle(color: Color(0xFF94A3B8))),
-              const Text('MC Dropout ± 0.04', style: TextStyle(color: Color(0xFF0284C7), fontSize: 11.5, fontWeight: FontWeight.w600)),
             ],
           ),
           const SizedBox(height: 14),
@@ -748,63 +696,6 @@ class _PatientClinicalDashboardState extends State<PatientClinicalDashboard> wit
                 );
               },
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSafetySentinelStrip(bool isDark) {
-    final medCount = _backendOverview?['activeMedicationsCount'] ?? 1;
-    final allergyCount = _backendOverview?['allergiesCount'] ?? 2;
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF6366F1).withOpacity(0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.shield_outlined, color: Color(0xFF6366F1), size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Medication Safety Monitoring',
-                  style: TextStyle(color: Color(0xFF0F172A), fontSize: 13, fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  '$medCount Active Medication • $allergyCount Known Allergies Profiled',
-                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              if (widget.onNavigateTab != null) {
-                widget.onNavigateTab!(2);
-              }
-            },
-            child: const Text('View Meds', style: TextStyle(color: Color(0xFF0D9488), fontSize: 12, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -841,20 +732,10 @@ class _PatientClinicalDashboardState extends State<PatientClinicalDashboard> wit
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Emergency Medical Passport & Care Plan',
-                      style: TextStyle(color: Color(0xFF0F172A), fontSize: 13.5, fontWeight: FontWeight.bold),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const Text(
-                      'Instantly accessible clinical care profile',
-                      style: TextStyle(color: Color(0xFF64748B), fontSize: 11),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
+                child: Text(
+                  'Emergency Medical Passport & Care Plan',
+                  style: GoogleFonts.outfit(color: const Color(0xFF0F172A), fontSize: 14, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               const SizedBox(width: 8),
@@ -1101,7 +982,7 @@ class _PatientClinicalDashboardState extends State<PatientClinicalDashboard> wit
           ),
           const SizedBox(height: 6),
           Text(
-            'Comprehensive clinical triage fusing optical lesion imaging, 5s acoustic cough analysis, camera rPPG vitals, and symptom distress modeling.',
+            'Check your symptoms, scan vitals, and record cough audio for an instant AI health assessment.',
             style: TextStyle(
               color: Colors.white.withOpacity(0.9),
               fontSize: 12.5,

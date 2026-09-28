@@ -314,13 +314,13 @@ class _MedicalPassportEhrViewState extends State<_MedicalPassportEhrView> {
                 ),
               ),
 
-            // 2. Active Clinical Allergy Profile (from Supabase patient_allergies)
+            // 2. Active Clinical Allergy Profile
             _buildExpandableCard(
               icon: Icons.shield_outlined,
               title: 'Clinical Allergy Safeguards',
               subtitle: _isLoading
-                  ? 'Syncing with Supabase...'
-                  : '${_allergies.length} documented allergy contraindications',
+                  ? 'Updating records...'
+                  : '${_allergies.length} documented allergies',
               action: TextButton.icon(
                 onPressed: () {
                   Navigator.push(
@@ -342,7 +342,7 @@ class _MedicalPassportEhrViewState extends State<_MedicalPassportEhrView> {
                       ? const Padding(
                           padding: EdgeInsets.symmetric(vertical: 8),
                           child: Text(
-                            'No documented allergies in database. Patient clear for standard formulary.',
+                            'No documented allergies on record.',
                             style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
                           ),
                         )
@@ -367,13 +367,13 @@ class _MedicalPassportEhrViewState extends State<_MedicalPassportEhrView> {
             ),
             const SizedBox(height: 16),
 
-            // 3. Active Medication Schedule (from Supabase patient_medications)
+            // 3. Active Medication Schedule
             _buildExpandableCard(
               icon: Icons.medication_outlined,
               title: 'Current Prescribed Regimen',
               subtitle: _isLoading
-                  ? 'Syncing with Supabase...'
-                  : '${_medications.length} active medications verified in database',
+                  ? 'Updating records...'
+                  : '${_medications.length} active medications',
               child: _isLoading
                   ? const Center(
                       child: Padding(
@@ -385,7 +385,7 @@ class _MedicalPassportEhrViewState extends State<_MedicalPassportEhrView> {
                       ? const Padding(
                           padding: EdgeInsets.symmetric(vertical: 8),
                           child: Text(
-                            'No active prescribed medications in database.',
+                            'No active medications on record.',
                             style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
                           ),
                         )
@@ -405,10 +405,10 @@ class _MedicalPassportEhrViewState extends State<_MedicalPassportEhrView> {
                               children: [
                                 if (idx > 0) const Divider(color: Color(0xFFE2E8F0)),
                                 _buildMedicationRow(
-                                  name: displayName,
-                                  dosage: dosage.toString(),
-                                  instructions: instructions.toString(),
-                                  status: isActive ? 'Active' : 'Inactive',
+                                   name: displayName,
+                                   dosage: dosage.toString(),
+                                   instructions: instructions.toString(),
+                                   status: isActive ? 'Active' : 'Inactive',
                                 ),
                               ],
                             );
@@ -417,13 +417,13 @@ class _MedicalPassportEhrViewState extends State<_MedicalPassportEhrView> {
             ),
             const SizedBox(height: 16),
 
-            // 4. Diagnostic & ICD-11 History (from Supabase health_screenings)
+            // 4. Diagnostic & Checkup History
             _buildExpandableCard(
               icon: Icons.biotech_outlined,
               title: 'Recent Diagnostic Checkups',
               subtitle: _isLoading
-                  ? 'Syncing with Supabase...'
-                  : '${_screenings.length} WHO ICD-11 multimodal checkups recorded',
+                  ? 'Updating records...'
+                  : '${_screenings.length} completed checkups',
               child: _isLoading
                   ? const Center(
                       child: Padding(
@@ -435,7 +435,7 @@ class _MedicalPassportEhrViewState extends State<_MedicalPassportEhrView> {
                       ? const Padding(
                           padding: EdgeInsets.symmetric(vertical: 8),
                           child: Text(
-                            'No clinical diagnostic checkups on file yet.',
+                            'No diagnostic checkups on file yet.',
                             style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
                           ),
                         )

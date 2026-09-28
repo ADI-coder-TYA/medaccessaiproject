@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../../config/api_config.dart';
 import '../../theme/app_theme.dart';
+import '../../modules/cdss/models/cdss_evaluation.dart';
 import '../../modules/cdss/services/cdss_service.dart';
 import '../../modules/cdss/ui/cdss_decision_drawer.dart';
 

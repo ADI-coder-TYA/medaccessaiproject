@@ -380,7 +380,7 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
     }
 
     // 2. Fetch existing report from backend database by screeningId
-    if (screeningId.isNotEmpty) {
+    if (screeningId != null && screeningId.isNotEmpty) {
       try {
         final existing = await CDSSService().getEvaluationByScreeningId(screeningId);
         if (existing != null) {

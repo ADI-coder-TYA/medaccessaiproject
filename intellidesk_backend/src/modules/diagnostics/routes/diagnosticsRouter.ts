@@ -17,6 +17,7 @@ import {
   DiagnosticSummaryContext 
 } from '../../../services/crisisCounselorService.js';
 import { rPPGSignalProcessor } from '../vitals/rPPGSignalProcessor.js';
+import { BioSignalFrame } from '../vitals/types.js';
 import { cdssRouter } from '../../cdss/routes/cdssRouter.js';
 import { CDSSService } from '../../cdss/CDSSService.js';
 import { PharmacyDbService } from '../../pharmacy/pharmacyDbService.js';

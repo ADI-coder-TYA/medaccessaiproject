@@ -50,6 +50,7 @@ export interface VisionEmbeddingResult {
   anatomicalSite?: string;
   severity?: 'BENIGN' | 'MILD' | 'MODERATE' | 'SEVERE' | 'CRITICAL';
   confidence?: number;
+  findings?: string[];
   differentialDiagnoses?: string[];
   clinicalDescription?: string;
   isEmergencyAlert?: boolean;

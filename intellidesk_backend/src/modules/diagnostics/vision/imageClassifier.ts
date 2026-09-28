@@ -125,6 +125,7 @@ export class ClinicalImageClassifier {
       anatomicalSite: vlmResult.anatomicalSite,
       severity: vlmResult.severity,
       confidence: vlmResult.confidence,
+      findings: vlmResult.findings,
       differentialDiagnoses: vlmResult.differentialDiagnoses,
       clinicalDescription: vlmResult.clinicalDescription,
       isEmergencyAlert: vlmResult.isEmergencyAlert,

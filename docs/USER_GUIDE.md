@@ -11,7 +11,6 @@
 |---|---|---|
 | **Patient / Student** | `STUDENT` | Camera dermatology scans, cough audio analysis, contactless rPPG vitals, prescription OCR & DDI checks, confidential PFA chat, emergency copay relief |
 | **Clinician / Triage Officer** | `ADMIN` | Real-time ESI emergency triage queue, Grad-CAM visual explainability reviews, WHO ICD-11 CDSS evaluation, prescription approval, copay disbursement |
-| **Medical Auditor / CMO** | `AUDITOR` | Read-only compliance review, immutable HIPAA audit trail analysis, cryptographic SHA-256 report verification |
 
 ---
 

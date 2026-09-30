@@ -359,7 +359,7 @@ export async function generateExecutiveReport(
     doc.fillColor('#64748B')
        .fontSize(6.5)
        .font('Helvetica')
-       .text('CONFIDENTIAL — FOR INSTITUTIONAL CLINICAL GOVERNANCE, HEALTH BOARDS & HIPAA AUDITORS ONLY', 40, footerY + 7);
+       .text('CONFIDENTIAL — FOR INSTITUTIONAL CLINICAL GOVERNANCE, HEALTH BOARDS & COMPLIANCE OFFICERS ONLY', 40, footerY + 7);
 
     doc.text(`Tamper-Evident Checksum (SHA-256): ${complianceHash} | Verified HIPAA Compliance Signature`, 40, footerY + 16);
     doc.text('Page 1 of 1', 500, footerY + 16, { align: 'right' });

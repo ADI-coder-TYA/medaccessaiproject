@@ -1,345 +1,255 @@
-# MedAccess AI — System Architecture
+# MedAccess AI — Complete System Architecture Specification
 
-> **Comprehensive technical reference:** topology, data models, background workers, API specification, and Flutter MVVM structure.
-
----
-
-## 1. System Topology
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                  MedAccess AI Client (Flutter)                    │
-│                                                                    │
-│   Patient Portal                  Admin Clinical War Room          │
-│   ─────────────                   ──────────────────────          │
-│   • Claim Intake (PDF / photo)    • Triage Queue (ESI sorted)     │
-│   • PFA Chat (Qwen AI)            • Health Fund Liquidity Panel   │
-│   • Copay Status Tracker          • One-tap Payout Modal          │
-│   • Emergency Helpline Directory  • Compliance Audit PDF          │
-└────────────────────────▲─────────────────────────────────────────┘
-                         │  REST + WebSocket (Socket.io)
-┌────────────────────────▼─────────────────────────────────────────┐
-│                 MedAccess Backend API (Express 5 / TypeScript)    │
-│                                                                    │
-│  /api/v1/auth             Auth + RBAC (JWT via Supabase)          │
-│  /api/v1/intake/web       Async claim submission → BullMQ         │
-│  /api/v1/claims           CRUD + ESI triage + status updates      │
-│  /api/v1/claims/:id/disburse  Multi-rail payout execution         │
-│  /api/v1/chat             Multi-turn PFA counselor (Qwen ONNX)    │
-│  /api/v1/admin            Clinical admin overrides, telemetry     │
-│  /api/v1/admin/reports    HIPAA audit PDF generation              │
-└──────────────┬──────────────────────────────┬────────────────────┘
-               │                              │
-    Job Events │ Redis (BullMQ)        Query  │ SQL / RLS
-               ▼                              ▼
-┌─────────────────────────────┐   ┌──────────────────────────────┐
-│  BullMQ Intake Worker        │   │  Supabase PostgreSQL          │
-│  ─────────────────           │   │  ─────────────────────        │
-│  • Poppler pdftotext -layout │   │  institutions                 │
-│  • Tesseract.js OCR fallback │   │  profiles (RBAC)              │
-│  • SHA-256 receipt hashing   │   │  students / student_rosters   │
-│  • Fraud Sentinel checks     │   │  tickets / claims             │
-│  • DeepRank CSI prediction   │   │  ticket_messages (PFA chat)   │
-│  • Socket.io event broadcast │   │  health_funds / vouchers      │
-│                              │   │  audit_logs                   │
-│  ML Retraining Worker        │   │  (RLS per institution_id)     │
-│  • Fine-tunes DeepRank on    │   └──────────────────────────────┘
-│    resolved historical tix   │
-│                              │
-│  Notification Worker         │
-│  • Email (Nodemailer/Resend) │
-│  • SMS (Twilio)              │
-└─────────────────────────────┘
-```
+> **Comprehensive engineering architecture reference:** Multi-tier topology, clinical diagnostics & vision pipelines, WHO ICD-11 CDSS framework, pharmacy safety, BullMQ background processing, database schema with Row-Level Security, and Flutter MVVM architecture.
 
 ---
 
-## 2. Database Schema (PostgreSQL / Supabase)
+## 1. System Topology & Tier Architecture
 
-All tables have **Row-Level Security (RLS)** enabled. The backend uses the `service_role` key to bypass RLS; the Flutter client uses the anon key with per-user JWT policies.
-
-### 2.1 `institutions` — Multi-Tenancy Root
-| Column | Type | Notes |
-|---|---|---|
-| `id` | TEXT (PK) | Slug e.g. `campus-health-001` |
-| `name` | TEXT | Display name |
-| `domain` | TEXT | Email domain whitelist |
-| `currency` | TEXT | `'INR'` or `'USD'` |
-| `created_at` | TIMESTAMPTZ | UTC |
-
-### 2.2 `profiles` — Auth & RBAC
-| Column | Type | Notes |
-|---|---|---|
-| `id` | UUID (PK) | References `auth.users.id` |
-| `email` | TEXT | Unique |
-| `role` | TEXT | `'STUDENT'` \| `'ADMIN'` \| `'AUDITOR'` |
-| `institution_id` | TEXT (FK) | Tenant scoping |
-| `phone` | TEXT | Optional |
-| `name` | TEXT | Display name |
-
-### 2.3 `tickets` — Core Clinical Claim Record
-| Column | Type | Notes |
-|---|---|---|
-| `id` | UUID (PK) | Auto-generated |
-| `institution_id` | TEXT (FK) | Tenant partition |
-| `student_id` | UUID (FK) | References `students` |
-| `raw_message` | TEXT | Original patient submission |
-| `media_url` | TEXT | Invoice PDF / image URL |
-| `parsed_category` | TEXT | Clinical category |
-| `urgency_level` | TEXT | ESI level assigned by DeepRank |
-| `status` | TEXT | `Pending` → `Processing` → `Approved` / `Rejected` / `Flagged` |
-| `calculated_amount` | NUMERIC | OCR-extracted bill total |
-| `currency` | TEXT | `'INR'` or `'USD'` |
-| `crisis_severity_index` | NUMERIC (0–1) | DeepRank output |
-| `dropout_risk_score` | NUMERIC (0–1) | LSTM attrition model output |
-| `recommended_grant_amount` | NUMERIC | Grant optimizer output |
-| `fraud_risk_score` | NUMERIC (0–1) | Fraud Sentinel score |
-| `fraud_flags` | TEXT | Comma-separated flag reasons |
-| `receipt_image_hash` | TEXT | SHA-256 for deduplication |
-| `anomaly_reconstruction_score` | NUMERIC | Autoencoder MSE |
-| `payout_reference` | TEXT | RazorpayX / Stripe txn ID |
-| `payout_method` | TEXT | UPI / BANK / VOUCHER |
-| `embedding` | vector(768) | Semantic embedding for policy match |
-
-### 2.4 `ticket_messages` — PFA Chat History
-| Column | Type | Notes |
-|---|---|---|
-| `id` | UUID (PK) | |
-| `ticket_id` | UUID (FK) | Parent claim |
-| `sender` | TEXT | `'STUDENT'` \| `'COUNSELOR_AI'` \| `'HUMAN_ADMIN'` |
-| `message` | TEXT | Message body |
-| `is_crisis_response` | BOOLEAN | True if self-harm keywords detected |
-| `suggested_resources` | JSONB | Emergency hotline cards array |
-
-### 2.5 `health_funds` / `funds`
-| Column | Type | Notes |
-|---|---|---|
-| `id` | UUID (PK) | |
-| `institution_id` | TEXT (FK) | |
-| `fund_name` | TEXT | e.g. "Emergency Medical Copay Fund" |
-| `total_budget` | NUMERIC | Allocated budget |
-| `allocated_amount` | NUMERIC | Amount disbursed to date |
-| `currency` | TEXT | |
-
-### 2.6 `audit_logs`
-| Column | Type | Notes |
-|---|---|---|
-| `id` | UUID (PK) | |
-| `institution_id` | TEXT | |
-| `ticket_id` | UUID (FK) | Optional |
-| `action_type` | TEXT | e.g. `DISBURSEMENT`, `ESI_OVERRIDE`, `FRAUD_FLAG` |
-| `actor_type` | TEXT | `SYSTEM` / `ADMIN` / `AI` |
-| `details` | JSONB | Structured audit payload |
-
-### 2.7 `vouchers`
-| Column | Type | Notes |
-|---|---|---|
-| `id` | UUID (PK) | |
-| `ticket_id` | UUID (FK) | |
-| `voucher_code` | TEXT | e.g. `EDU-GRANT-ABC123` |
-| `amount` | NUMERIC | |
-| `status` | TEXT | `Active` / `Redeemed` / `Expired` |
-
----
-
-## 3. Background Workers (BullMQ / Redis)
-
-### 3.1 Intake Worker (`intakeWorker.ts`)
-The primary processing pipeline for every submitted claim. Runs on the `clinical-intake-queue`.
+MedAccess AI is architected as an offline-resilient, hybrid edge-cloud medical platform:
 
 ```
-Job Received (claim_id, raw_message, media_url)
-         │
-         ├─ Step 1: Receipt Parsing
-         │    └── pdftotext -layout → Tesseract.js fallback → extractInvoiceTotal()
-         │
-         ├─ Step 2: NLP Feature Extraction
-         │    └── word_count, urgent_keyword_count, sentiment_score, historical_count
-         │
-         ├─ Step 3: Fraud Sentinel
-         │    ├── SHA-256 hash lookup in `tickets.receipt_image_hash`
-         │    ├── 7-day velocity check per patient_phone
-         │    └── Autoencoder anomaly score
-         │
-         ├─ Step 4: DeepRank Inference
-         │    └── predict([word_count, urgent_kw, sentiment, hist_count]) → CSI
-         │
-         ├─ Step 5: ESI Tier Assignment
-         │    └── CSI ≥ 0.85 → ESI_1 | 0.60 → ESI_2 | 0.35 → ESI_3 | else ROUTINE
-         │
-         ├─ Step 6: Grant Optimizer
-         │    └── Compute recommended_copay_amount from CSI + fund liquidity
-         │
-         ├─ Step 7: Policy Match (RAG)
-         │    └── Vector embedding similarity → matched_policy_name
-         │
-         └─ Step 8: Supabase Update + Socket.io Broadcast
-              └── ticket.status = 'Triage Active' + real-time push to admin dashboard
-```
-
-### 3.2 ML Retraining Worker (`mlRetrainingWorker.ts`)
-- Triggered periodically or by admin action
-- Loads resolved tickets from Supabase as labeled training data
-- Calls `fineTuneDeepRankModel()` to update weights on real outcome data
-- Saves updated model weights back to `./models/deep_rank/`
-
-### 3.3 Notification Worker (`notificationWorker.ts`)
-- Sends email (Nodemailer / Resend) for claim status changes
-- SMS via Twilio for critical ESI-1 alerts
-- Queued via BullMQ `notification-queue`
-
----
-
-## 4. REST API Specification
-
-### Public / Auth
-| Method | Route | Description |
-|---|---|---|
-| `POST` | `/api/v1/auth/signup` | Register patient or admin |
-| `POST` | `/api/v1/auth/login` | Get JWT + user profile |
-| `GET` | `/api/v1/auth/profile` | Authenticated user profile |
-
-### Claim Intake
-| Method | Route | Description |
-|---|---|---|
-| `POST` | `/api/v1/intake/web` | Submit new claim (multipart: text + PDF/image) |
-| `GET` | `/api/v1/claims` | List claims (filtered by ESI, status, search) |
-| `GET` | `/api/v1/claims/:id` | Get full claim details + triage breakdown |
-
-### Clinical Admin (ADMIN role required)
-| Method | Route | Description |
-|---|---|---|
-| `POST` | `/api/v1/claims/:id/disburse` | Execute RazorpayX / Stripe payout |
-| `POST` | `/api/v1/claims/:id/override` | ESI level / fraud flag override with notes |
-| `GET` | `/api/v1/admin/telemetry` | KPI dashboard: fund liquidity, ESI distribution |
-| `GET` | `/api/v1/admin/reports` | HIPAA compliance audit PDF (PDFKit) |
-| `GET` | `/api/v1/admin/knowledge` | Institutional policy knowledge base |
-
-### PFA Chat
-| Method | Route | Description |
-|---|---|---|
-| `POST` | `/api/v1/chat` | Send message, get Qwen PFA AI reply |
-| `GET` | `/api/v1/chat/:ticketId/messages` | Retrieve full chat history for a claim |
-
-### Health Check
-| Method | Route | Description |
-|---|---|---|
-| `GET` | `/health` | Service + DB connectivity + ML model status |
-
----
-
-## 5. Flutter MVVM Architecture
-
-```
-lib/
-├── main.dart                          # App entry, Provider tree, route table
-├── config/                            # API base URLs, environment flags
-├── models/                            # Immutable domain entities
-│   ├── claim.dart                     # Medical claim entity (fromJson/toJson)
-│   ├── claim_message.dart             # PFA chat turn entity
-│   ├── health_fund.dart               # Welfare fund balance entity
-│   └── emergency_helpline.dart        # Crisis hotline directory model
-├── services/                          # Network & infrastructure layer
-│   ├── clinical_api_service.dart      # REST client (claims, payouts, PDF)
-│   ├── socket_service.dart            # Socket.io room manager + event stream
-│   └── offline_sync_manager.dart      # SharedPreferences offline fallback
-├── providers/ (ViewModels)            # Reactive state (ChangeNotifier)
-│   ├── auth_provider.dart             # Session, role, JWT refresh
-│   ├── claims_provider.dart           # Triage queue + ESI filter state
-│   ├── clinical_chat_provider.dart    # PFA conversation + typing indicator
-│   ├── war_room_provider.dart         # Telemetry KPIs + fund liquidity
-│   ├── ticket_provider.dart           # Patient-side ticket tracking
-│   ├── preferences_provider.dart      # User settings + theme
-│   └── job_tracking_manager.dart      # Background job poll + status
-├── screens/                           # View layer (UI presentation)
-│   ├── auth/
-│   │   ├── admin_signup_screen.dart
-│   │   └── patient_login_screen.dart
-│   ├── onboarding/                    # Intro + institution selection
-│   ├── patient/                       # Patient portal
-│   │   ├── patient_main_screen.dart   # Tab navigator (intake / chat / status)
-│   │   ├── claim_intake_screen.dart   # PDF/image upload + text submission
-│   │   ├── clinical_chat_screen.dart  # Real-time PFA chat UI
-│   │   └── claim_status_screen.dart   # ESI badge + payout tracker
-│   ├── admin/                         # Admin governance
-│   │   ├── admin_main_screen.dart     # Navigation hub
-│   │   ├── admin_war_room_screen.dart # Triage queue + one-tap payout
-│   │   ├── admin_telemetry_dashboard_screen.dart  # FL Chart KPIs
-│   │   ├── admin_health_funds_screen.dart         # Fund liquidity management
-│   │   ├── admin_knowledge_base_screen.dart       # Policy RAG search
-│   │   └── admin_compliance_audit_screen.dart     # HIPAA audit PDF download
-│   └── profile/
-└── theme/
-    └── app_theme.dart                 # Clinical design system, ESI color tokens
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                         MedAccess AI Flutter Client (Mobile & Web)                     │
+│                                                                                        │
+│   Patient Clinical Portal                         Admin Clinical War Room              │
+│   ───────────────────────                         ───────────────────────              │
+│   • Dermatology / Lesion Scan (Camera)           • ESI Triage Queue (DeepRank sorted) │
+│   • Acoustic Cough Capture (16kHz Audio)          • Grad-CAM Visual Heatmap Review     │
+│   • Contactless rPPG Vitals (Video Pulse)         • CDSS Differential Diagnosis Review │
+│   • Prescription OCR & 8,000+ DDI Checker         • Clinician Diagnostic & ESI Override│
+│   • PFA Crisis Chat (Local Qwen ONNX)             • Copay Liquidity & Payout Modal     │
+│   • Emergency Copay Status Tracker                • Tamper-Evident HIPAA Audit PDF     │
+└──────────────────────────────────────────▲─────────────────────────────────────────────┘
+                                           │  REST + WebSocket (Socket.io)
+┌──────────────────────────────────────────▼─────────────────────────────────────────────┐
+│                 MedAccess Backend API (Express 5 / TypeScript / Node.js ESM)           │
+│                                                                                        │
+│  /api/v1/auth              JWT Authentication & Tenant Scoping                         │
+│  /api/v1/diagnostics       Multimodal Vision (Qwen2.5-VL), Cough ML, rPPG Vitals       │
+│  /api/v1/cdss              WHO ICD-11 Differential Engine & HL7 FHIR R4 Converter      │
+│  /api/v1/pharmacy          Prescription OCR Parser & 8,000+ DDI / Allergy Sentinel     │
+│  /api/v1/chat              Confidential Psychological First Aid (Qwen ONNX Local)      │
+│  /api/v1/intake/web        Asynchronous Claim Ingestion $\rightarrow$ BullMQ Processing Queue   │
+│  /api/v1/claims            Clinical Triage CRUD, CSI Filtering & Encounter Telemetry   │
+│  /api/v1/admin             Clinician Overrides, Telemetry Dashboards, Audit Logs       │
+│  /api/v1/claims/:id/disburse Instant Multi-Rail Copay Disbursement (RazorpayX/Stripe) │
+└──────────────┬──────────────────────────────────────────┬──────────────────────────────┘
+               │                                          │
+    Job Events │ BullMQ (Redis 7)                  Query  │ SQL / RLS
+               ▼                                          ▼
+┌──────────────────────────────────────────┐   ┌─────────────────────────────────────────┐
+│       Distributed BullMQ Workers         │   │      Supabase PostgreSQL + pgvector     │
+│  ────────────────────────────────        │   │  ─────────────────────────────────────  │
+│  Intake Worker (10-Step Pipeline):       │   │  institutions (multi-tenancy partitioning)│
+│  • Poppler pdftotext & Tesseract.js OCR  │   │  profiles (RBAC: STUDENT/ADMIN/CLINICIAN)│
+│  • SHA-256 Receipt Deduplication Hash    │   │  tickets (clinical encounters & ESI)    │
+│  • Fraud Sentinel & Autoencoder MSE      │   │  ticket_messages (PFA chat history)     │
+│  • DeepRank CSI Prediction & ESI Tier    │   │  health_funds & vouchers (copay pools)  │
+│  • Temporal Attrition LSTM Health Risk   │   │  audit_logs (immutable HIPAA trail)     │
+│  • Grant Optimizer (MC Dropout Bounds)   │   │  policies (pgvector 768-d embeddings)   │
+│  • Gemini Multimodal & RAG Matching      │   │  (Row-Level Security active on all DB)  │
+│  • Socket.io Real-Time Broadcast         │   └─────────────────────────────────────────┘
+│                                          │
+│  ML Retraining Worker:                   │
+│  • In-process Adam fine-tuning on        │
+│    verified clinician outcomes (5 epochs)│
+│                                          │
+│  Notification Worker:                    │
+│  • Transactional Email (Resend)          │
+│  • Emergency Life-Safety SMS (Twilio)    │
+└──────────────────────────────────────────┘
 ```
 
 ---
 
-## 6. WebSocket Events (Socket.io)
+## 2. Multimodal Diagnostic Sensing & CDSS Architecture
 
-| Event | Direction | Payload |
-|---|---|---|
-| `join-institution` | Client → Server | `{ institutionId }` |
-| `ticket-created` | Server → Client | Full ticket object |
-| `ticket-updated` | Server → Client | `{ ticketId, status, esiLevel, csi }` |
-| `payout-completed` | Server → Client | `{ ticketId, txnRef, amount }` |
-| `fraud-flagged` | Server → Client | `{ ticketId, flagReasons }` |
+MedAccess AI decomposes clinical decision-making into dedicated diagnostic micro-engines:
+
+```
+                                  PATIENT PRESENTATION
+                                           │
+         ┌─────────────────────────────────┼─────────────────────────────────┐
+         │ Visual                          │ Acoustic                        │ Physiological
+         ▼                                 ▼                                 ▼
+┌───────────────────┐             ┌──────────────────┐             ┌───────────────────┐
+│ Dermatology Photo │             │  Cough Recording │             │  Facial Video     │
+│ (Rash, Burn, Eye) │             │  (16kHz WAV)     │             │  (30 FPS Stream)  │
+└────────┬──────────┘             └────────┬─────────┘             └─────────┬─────────┘
+         │                                 │                                 │
+         │ sharp normalization             │ Meyda.js DSP                    │ Green-Channel ROI
+         ▼                                 ▼                                 ▼
+┌───────────────────┐             ┌──────────────────┐             ┌───────────────────┐
+│ Qwen2.5-VL 72B    │             │ 16-d MFCC Vector │             │ Butterworth Filter│
+│ (Cloud VLM)       │             └────────┬─────────┘             │ (0.75 - 3.5 Hz)   │
+│                   │                      │                       └─────────┬─────────┘
+│ Fallback:         │                      ▼                                 │
+│ MobileNet-V3      │             ┌──────────────────┐                       ▼
+└────────┬──────────┘             │ CoughClassifier  │             ┌───────────────────┐
+         │                        │ (4-Class TF.js)  │             │ Heart Rate (BPM)  │
+         │                        └────────┬─────────┘             │ SpO2 & Red Flags  │
+         │                                 │                       └─────────┬─────────┘
+         └─────────────────────────────────┼─────────────────────────────────┘
+                                           │
+                                           ▼
+                       ┌──────────────────────────────────────┐
+                       │     Multimodal Fusion DNN (168-d)    │
+                       │  [128 visual + 32 symptom + 8 demo]  │
+                       └───────────────────┬──────────────────┘
+                                           │
+                                           ▼
+                       ┌──────────────────────────────────────┐
+                       │ CDSS & WHO ICD-11 Differential Engine│
+                       │   • Qwen2.5-72B Evidence Pathway     │
+                       │   • Logit Scorer (T=1.25, [-20, 20]) │
+                       │   • HL7 FHIR R4 Bundle Export        │
+                       └───────────────────┬──────────────────┘
+                                           │
+                                           ▼
+                       ┌──────────────────────────────────────┐
+                       │ DeepRank ESI Triage & Copay Optimizer│
+                       │   • Crisis Severity Index (CSI 0-1)  │
+                       │   • ESI Levels 1 to 5 Classification │
+                       │   • MC Dropout Copay Grant Estimate  │
+                       └──────────────────────────────────────┘
+```
 
 ---
 
-## 7. Security Architecture
+## 3. Database Schema Specification (PostgreSQL / Supabase)
 
-```
-Request → CORS → JWT Middleware (requireAuth)
-                        │
-                        ▼
-              requireRole(['ADMIN']) — blocks non-admin routes
-                        │
-                        ▼
-              tenantScopeMiddleware — injects institution_id
-              from JWT claims into all DB queries
-                        │
-                        ▼
-              Supabase RLS — enforces data isolation
-              at the database level (service_role bypasses for backend)
-```
+Every database table is protected by **Row-Level Security (RLS)**. Multi-tenancy is enforced by partitioning records with `institution_id`.
 
-- **HIPAA-aligned audit trail:** every disbursement, override, and fraud decision recorded in `audit_logs` with `action_type`, `actor_type`, and full JSONB `details`
-- **Receipt integrity:** SHA-256 hashes stored in `receipt_image_hash` at intake time
-- **Tamper-evident PDFs:** SHA-256 checksum printed on every audit report
+### 3.1 `institutions` — Multi-Tenancy Partition
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | TEXT | PRIMARY KEY | Tenant identifier (e.g. `campus-health-001`) |
+| `name` | TEXT | NOT NULL | Display name of the institution |
+| `domain` | TEXT | NOT NULL | Allowed email domain whitelist |
+| `currency` | TEXT | DEFAULT 'INR' | Base currency (`INR` or `USD`) |
+
+### 3.2 `profiles` — User Identity & RBAC
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | UUID | PRIMARY KEY, REFERENCES `auth.users.id` | User identity |
+| `email` | TEXT | UNIQUE, NOT NULL | University email address |
+| `role` | TEXT | NOT NULL | `STUDENT`, `ADMIN`, or `CLINICIAN` |
+| `institution_id` | TEXT | REFERENCES `institutions.id` | Multi-tenant scoping |
+| `name` | TEXT | | Full name |
+| `phone` | TEXT | | Phone number for emergency SMS |
+
+### 3.3 `tickets` — Clinical Encounter & Claim Record
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | UUID | PRIMARY KEY | Unique clinical encounter ID |
+| `institution_id` | TEXT | REFERENCES `institutions.id` | Tenant partition |
+| `student_id` | UUID | REFERENCES `profiles.id` | Patient reference |
+| `raw_message` | TEXT | NOT NULL | Narrative symptom / emergency text |
+| `media_url` | TEXT | | Medical invoice or clinical photo URL |
+| `parsed_category` | TEXT | | Clinical category classification |
+| `urgency_level` | TEXT | | ESI tier: `ESI_1_CRITICAL` to `ROUTINE` |
+| `status` | TEXT | DEFAULT 'Pending' | `Pending` $\rightarrow$ `Triage Active` $\rightarrow$ `Approved` / `Disbursed` |
+| `calculated_amount` | NUMERIC | | OCR-extracted bill / copay amount |
+| `crisis_severity_index`| NUMERIC | | DeepRank continuous score ($0.0–1.0$) |
+| `dropout_risk_score` | NUMERIC | | Longitudinal health burnout score ($0.0–1.0$) |
+| `recommended_grant_amount`| NUMERIC | | Grant Optimizer suggested copay relief |
+| `fraud_risk_score` | NUMERIC | | Fraud Sentinel multi-layer composite score |
+| `receipt_image_hash` | TEXT | | Cryptographic SHA-256 deduplication hash |
+| `anomaly_reconstruction_score`| NUMERIC | | Autoencoder feature reconstruction MSE |
+| `embedding` | vector(768) | | Semantic embedding for RAG policy retrieval |
+
+### 3.4 `ticket_messages` — Confidential PFA Log
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | UUID | PRIMARY KEY | Message identifier |
+| `ticket_id` | UUID | REFERENCES `tickets.id` | Parent encounter |
+| `sender` | TEXT | NOT NULL | `STUDENT`, `COUNSELOR_AI`, or `HUMAN_ADMIN` |
+| `message` | TEXT | NOT NULL | Message content |
+| `is_crisis_response`| BOOLEAN | DEFAULT FALSE | Flagged true on self-harm detection |
+| `suggested_resources`| JSONB | | Array of 24/7 crisis hotline cards |
+
+### 3.5 `audit_logs` — Immutable HIPAA Audit Trail
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | UUID | PRIMARY KEY | Audit event identifier |
+| `institution_id` | TEXT | NOT NULL | Tenant scoping |
+| `ticket_id` | UUID | | Associated encounter ID |
+| `action_type` | TEXT | NOT NULL | `ESI_OVERRIDE`, `DIAGNOSTIC_CONFIRM`, `DISBURSEMENT` |
+| `actor_type` | TEXT | NOT NULL | `CLINICIAN`, `ADMIN`, or `AI_SYSTEM` |
+| `details` | JSONB | NOT NULL | Structured telemetry payload & clinical rationale |
+| `created_at` | TIMESTAMPTZ | DEFAULT NOW() | Tamper-evident timestamp |
 
 ---
 
-## 8. Deployment
+## 4. Background Processing Pipelines (BullMQ / Redis)
 
-### Docker Compose
-```yaml
-services:
-  backend:
-    build: ./intellidesk_backend
-    ports: ["3000:3000"]
-    environment:
-      - SUPABASE_URL
-      - SUPABASE_SERVICE_ROLE_KEY
-      - REDIS_URL
-      - RAZORPAY_KEY_ID
-      - RAZORPAY_KEY_SECRET
-    depends_on: [redis]
-  redis:
-    image: redis:7-alpine
-    ports: ["6379:6379"]
+### 4.1 10-Step Intake & Triage Pipeline (`intakeWorker.ts`)
+```
+Job Enqueued (claim_id, raw_message, media_url)
+         │
+         ├─ Step 1: Receipt / Document Parsing (Poppler pdftotext / Tesseract OCR)
+         ├─ Step 2: Clinical NLP Extraction (DistilBERT sentiment + Urgent RegEx)
+         ├─ Step 3: Fraud Sentinel Audit (SHA-256 hash + 7-day velocity + Autoencoder)
+         ├─ Step 4: DeepRank CSI Inference (Computes Crisis Severity Index in [0, 1])
+         ├─ Step 5: ESI Tier Assignment (Maps CSI to ESI-1 through ESI-5)
+         ├─ Step 6: Temporal Attrition Risk (Evaluates longitudinal health burnout via LSTM)
+         ├─ Step 7: Copay Grant Optimization (MC Dropout uncertainty regression)
+         ├─ Step 8: Multimodal Intake Parsing (Gemini 2.0 Flash structured triage)
+         ├─ Step 9: Policy Match & RAG (pgvector 768-d search + Gemini 1.5 Pro CoT)
+         └─ Step 10: Supabase Persistence & Real-Time Socket.io Broadcast
 ```
 
-### Environment Variables (`.env`)
-| Variable | Description |
-|---|---|
-| `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Backend service role key (bypasses RLS) |
-| `SUPABASE_ANON_KEY` | Flutter client anon key |
-| `REDIS_URL` | BullMQ Redis connection string |
-| `RAZORPAY_KEY_ID` | RazorpayX API key |
-| `RAZORPAY_KEY_SECRET` | RazorpayX API secret |
-| `RAZORPAYX_ACCOUNT_NUMBER` | Fund account for payouts |
-| `STRIPE_SECRET_KEY` | Stripe secret for USD payouts |
-| `TWILIO_ACCOUNT_SID` | SMS notifications |
-| `PORT` | HTTP server port (default `3000`) |
+### 4.2 In-Process Continuous Learning (`mlRetrainingWorker.ts`)
+- Queries resolved tickets with verified clinician outcomes.
+- Executes 5 epochs of Adam fine-tuning on DeepRank CSI and Grant Optimizer models in Node.js.
+- Persists updated weights to `intellidesk_backend/models/` without restarting the server.
+
+### 4.3 Notification Dispatch (`notificationWorker.ts`)
+- Transmits email encounter receipts via Nodemailer / Resend.
+- Sends emergency SMS via Twilio for all ESI-1 Resuscitation events.
+
+---
+
+## 5. Flutter MVVM Architecture & Module Map
+
+```
+intellidesk_app/lib/
+├── main.dart                          # App bootstrap, MultiProvider tree, routing table
+├── config/                            # Environment constants & API hostnames
+├── models/                            # Domain entities (Claim, Message, Fund, Helpline)
+├── services/                          # Network, edge ML, and offline services
+│   ├── clinical_api_service.dart      # REST client for Vision, Audio, Vitals, CDSS, Pharmacy
+│   ├── socket_service.dart            # WebSocket connection with institution rooms
+│   └── offline_sync_engine.dart       # SharedPreferences caching for offline triage
+├── providers/                         # Reactive ViewModels (ChangeNotifier)
+│   ├── auth_provider.dart             # Session lifecycle, RBAC, JWT
+│   ├── claims_provider.dart           # ESI-sorted triage queue & search state
+│   ├── clinical_chat_provider.dart    # Confidential PFA multi-turn conversation
+│   ├── war_room_provider.dart         # Clinical telemetry & fund liquidity KPIs
+│   └── ticket_provider.dart           # Patient health encounter tracker
+└── screens/                           # View presentation layer
+    ├── patient/
+    │   ├── patient_clinical_dashboard.dart # Main hub: Vision, Cough, Vitals launchpad
+    │   ├── pharmacy_hub_screen.dart        # Prescription OCR & 8,000+ DDI checker
+    │   ├── health_records_screen.dart      # Longitudinal history & FHIR R4 viewer
+    │   ├── claim_intake_screen.dart        # Multimodal submission (photo/bill/audio)
+    │   ├── clinical_chat_screen.dart       # Local Qwen ONNX PFA chat interface
+    │   ├── claim_status_screen.dart        # ESI level badge & copay progress bar
+    │   └── emergency_hub_screen.dart       # One-tap 24/7 crisis hotline directory
+    └── admin/
+        ├── admin_clinical_diagnoses_screen.dart # Diagnostic VLM, Grad-CAM & CDSS evaluation
+        ├── admin_war_room_screen.dart           # ESI triage queue & one-tap payout modal
+        ├── admin_health_funds_screen.dart       # Copay pool management
+        ├── admin_knowledge_base_screen.dart     # Policy RAG semantic search
+        └── admin_main_screen.dart               # Responsive shell navigation
+```
+
+---
+
+## 6. Security, Compliance & Governance
+
+- **HIPAA Alignment:** Row-Level Security ensures tenant isolation. Every diagnostic and override decision is written to an immutable `audit_logs` record containing full structured JSONB context.
+- **Tamper-Evident Verification:** Exported audit PDFs embed a calculated SHA-256 hash of the generated report content.
+- **FERPA Redaction:** Gemini 1.5 Flash strips acute diagnostic conditions from professor notification letters, replacing them with generic medical excuse phrasing.
+- **Crisis Life-Safety Bypass:** Suicidal ideation or acute life-safety keywords immediately bypass non-critical velocity and rate-limit restrictions.

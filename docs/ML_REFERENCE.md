@@ -1,320 +1,279 @@
-# MedAccess AI — ML Reference
+# MedAccess AI — Machine Learning Architecture Reference
 
-> **Deep-dive into all machine learning models:** DeepRank ESI classifier, LSTM attrition predictor, Autoencoder fraud detector, and local Qwen2.5 PFA counselor.
+> **Complete technical reference for the MedAccess AI machine learning ecosystem:** 21 hybrid diagnostic, triage, and welfare models spanning on-device computer vision, WHO ICD-11 clinical decision support, acoustic respiratory screening, contactless rPPG vitals, pharmacy safety, local ONNX PFA counselors, and continuous in-process neural retraining.
 
 ---
 
-## Overview
+## 1. Machine Learning Ecosystem Overview
 
-MedAccess AI runs **four ML models** entirely locally — no cloud inference costs, no patient data sent to external APIs.
+MedAccess AI employs a **hybrid edge-cloud machine learning architecture**. It prioritizes zero-downtime offline clinical safety by pairing high-capacity cloud models with on-device or deterministic fallbacks:
 
-| Model | Framework | Purpose | Input Shape |
+| Category | Primary Cloud Model | Local / Edge Fallback Model | Framework |
 |---|---|---|---|
-| **DeepRank** | TensorFlow.js (Dense NN) | Predict Crisis Severity Index (CSI) | `[n, 4]` |
-| **TemporalAttritionLSTM** | TensorFlow.js (LSTM) | Predict patient dropout risk | `[1, 4]` |
-| **AnomalyAutoencoder** | TensorFlow.js (Autoencoder) | Detect anomalous claim patterns | `[n, 4]` |
-| **Qwen2.5-0.5B PFA** | Xenova Transformers (ONNX) | Generate empathetic counselor replies | Text (ChatML) |
-
-All four models share the **same 4-feature input vector:**
-
-| Feature | Raw Source | Normalization |
-|---|---|---|
-| `word_count` | Token count of patient message | ÷ 500 |
-| `urgent_keyword_count` | Matched urgent/medical keywords | ÷ 10 |
-| `sentiment_score` | NLP sentiment (0 = negative, 1 = positive) | Already `[0, 1]` |
-| `historical_ticket_count` | Past claims by same patient | ÷ 20 |
+| **Clinical Image Vision** | Qwen2.5-VL 72B VLM (Hugging Face) | Clinical MobileNet-V3 (Quantized TFLite) | Hugging Face Router / TFLite |
+| **CDSS Differential Dx** | Qwen2.5-72B LLM (Hugging Face) | `DifferentialDiagnosisEngine` (ICD-11 Logits) | Hugging Face Router / TypeScript |
+| **Acoustic Cough Screening**| Hugging Face Audio Inference | Local CoughClassifier NN (16-d MFCC) | Meyda.js DSP / `@tensorflow/tfjs-node` |
+| **Contactless Vitals** | — *(100% On-Device / Local)* | rPPG Video Decomposition + Butterworth Filter | Node.js DSP (0.75–3.5 Hz) |
+| **Multimodal Fusion** | — *(100% Local Neural Network)* | 168-d Late-Fusion Multi-Head DNN | `@tensorflow/tfjs-node` Functional API |
+| **Visual Explainability** | — *(100% Local Inference)* | Grad-CAM Saliency Backpropagation | Saliency Gradient Engine |
+| **Prescription OCR** | Poppler `pdftotext -layout` | Tesseract.js v7.0 + RxNorm Fuzzy Matcher | OCR Engine / Levenshtein Matcher |
+| **Pharmacy Safety & DDI** | — *(100% In-Memory)* | 8,000+ Drug Pair Contraindication Matrix | In-Memory Graph / Concept Hash |
+| **PFA Crisis Chat** | — *(Local-First for Absolute Privacy)* | Xenova Qwen1.5-0.5B ONNX $\rightarrow$ Rogerian PFA | `@xenova/transformers` (WASM) |
+| **Clinical Sentiment NLP** | DistilBERT SST-2 (ONNX) | Clinical Urgent Keyword Regex Heuristics | `@xenova/transformers` / RegEx |
+| **Clinical ESI Triage (CSI)**| Local DeepRank NN (TF.js) | Safe Baseline Model (CSI = 0.5) | `@tensorflow/tfjs-node` Sequential |
+| **Copay Grant Optimization**| Local MC Dropout NN (TF.js) | Standard Capped Grant Function | `@tensorflow/tfjs-node` (MC Dropout) |
+| **Longitudinal Health Risk**| Local Temporal Attrition LSTM (TF.js)| Safe Baseline Model (Risk = 0.0) | `@tensorflow/tfjs-node` Recurrent |
+| **Fraud Anomaly Detection** | Local Autoencoder (TF.js) | SHA-256 Hash + Velocity Filter | `@tensorflow/tfjs-node` Autoencoder |
+| **Multimodal Claim Intake** | Google Gemini 2.0 Flash | Structured Default Triage Payload | Google Gemini API (Zod Validated) |
+| **Policy Adjudication (RAG)**| Google Gemini 1.5 Pro (Chain-of-Thought)| Escalated / Manual Administrative Flag | Gemini API + pgvector (768-d) |
+| **HIPAA PHI Redaction** | Google Gemini 1.5 Flash | Manual Redaction Escalation Flag | Gemini API + Post-Redaction Regex |
 
 ---
 
-## 1. DeepRank — ESI Crisis Severity Classifier
+## 2. Clinical Diagnostics & Vision Suite
 
-**Source files:**
-- Training definition: [`intellidesk_backend/src/ml/deep_rank.ts`](../intellidesk_backend/src/ml/deep_rank.ts)
-- Inference service: [`intellidesk_backend/src/services/deepRankModel.ts`](../intellidesk_backend/src/services/deepRankModel.ts)
+### 2.1 Cloud Vision Classifier — Qwen2.5-VL 72B & Clinical MobileNet-V3
+**Source Files:**
+- Cloud VLM: `intellidesk_backend/src/modules/diagnostics/vision/CloudVisionClassifier.ts`
+- Local Fallback: `intellidesk_backend/src/modules/diagnostics/vision/clinicalMobileNet.ts`
+- Orchestration: `intellidesk_backend/src/modules/diagnostics/vision/imageClassifier.ts`
 
-### Architecture
+#### Architecture & Inference Pipeline
+The clinical vision system ingests medical photographs of rashes, skin lesions, burns, ocular redness, and oral conditions:
+1. **Preprocessing:** Image buffer passed through `sharp`:
+   - Resized to $1024 \times 1024$ maintaining aspect ratio.
+   - Normalized RGB color channels.
+   - EXIF orientation automatically corrected.
+2. **Cloud Path (Primary):** Dispatched to `Qwen/Qwen2.5-VL-72B-Instruct` via Hugging Face Inference Router.
+   - Structured JSON prompt with schema: `condition`, `anatomicalSite`, `severity`, `confidence`, `findings[]`, `differentialDiagnoses[]`, `recommendedAction`, `isEmergencyAlert`.
+3. **Local Fallback (Offline):** If network or API timeout occurs, passes to quantized Clinical MobileNet-V3:
+   - Evaluates image against 10 common triage classes: Eczema, Psoriasis, Cellulitis, Dermatitis, Fungal Infection, Thermal Burn, Conjunctivitis, Urticaria, Herpes Zoster, Normal Skin.
+   - Yields Top-3 class probabilities and severity rating.
+
+---
+
+### 2.2 CDSS — Clinical Decision Support System (WHO ICD-11 + Qwen2.5-72B)
+**Source Files:**
+- Orchestrator: `intellidesk_backend/src/modules/cdss/CDSSService.ts`
+- Differential Logit Scorer: `intellidesk_backend/src/modules/cdss/DifferentialDiagnosisEngine.ts`
+- Knowledge Base: `intellidesk_backend/src/modules/cdss/ICD11ConceptStore.ts`
+- FHIR Interoperability: `intellidesk_backend/src/modules/cdss/fhir/FHIRConverterService.ts`
+
+#### Logit Calibration & Differential Algorithm
+The CDSS combines LLM reasoning with mathematical logit bounds:
+1. **Symptom Vector Encoding:** Maps patient narrative and structured inputs to cardinal clinical symptoms.
+2. **Logit Transformation & Boundary Clipping:**
+   $$\text{logit}(p) = \log\left(\frac{p}{1 - p}\right)$$
+   Logits are strictly clipped to the $[-20, 20]$ interval to prevent float overflow.
+3. **Temperature Scaling:** Logits are calibrated using $T = 1.25$ to avoid overconfident misdiagnoses:
+   $$\hat{p}_i = \frac{\exp(z_i / 1.25)}{\sum_j \exp(z_j / 1.25)}$$
+4. **Urgency Classification:**
+   - `IMMEDIATE_EMERGENCY`: Severe red-flag criteria (anaphylaxis, chest pain, meningeal signs).
+   - `PROMPT_EVALUATION`: Acute symptoms requiring clinician intervention within 12–24 hours.
+   - `ROUTINE`: Self-limiting or stable conditions.
+5. **HL7 FHIR R4 Bundle Export:** Formats the complete evaluation into a standard clinical FHIR JSON bundle containing `DiagnosticReport`, `Observation`, and `Condition` resources.
+
+---
+
+### 2.3 Multimodal Clinical Fusion Model — 168-d Late-Fusion DNN
+**Source Files:**
+- Network: `intellidesk_backend/src/modules/diagnostics/fusion/MultimodalFusionModel.ts`
+- Coordinator: `intellidesk_backend/src/modules/diagnostics/fusion/multimodalRiskNetwork.ts`
+
+#### Architecture
+The late-fusion model fuses visual, clinical symptom, and demographic signals into a single unified representation:
 
 ```
-Input [4 features]
+Visual Embedding (128-d) ──┐
+Symptom Vector (32-d)   ───┼──► Concatenate [168-d vector]
+Demographics (8-d)       ──┘
+            │
+            ├── Dense(128, relu) + BatchNormalization + Dropout(0.30)
+            ├── Dense(64, relu) + BatchNormalization + Dropout(0.25)
+            │
+            ├── Head 1: Dense(1, sigmoid) ──► Continuous Clinical Risk ∈ [0, 1]
+            └── Head 2: Dense(3, softmax) ──► [Low Risk, Moderate Need, Critical Referral]
+```
+
+- **Uncertainty Quantification:** Runs 20 active forward passes using Monte Carlo Dropout to calculate epistemic variance and 95% confidence intervals for clinical risk.
+
+---
+
+### 2.4 Grad-CAM Visual Explainability Engine
+**Source File:** `intellidesk_backend/src/modules/diagnostics/explainability/gradCamGenerator.ts`
+
+#### Mathematical Formulation
+Allows physicians to verify whether the AI's classification was driven by pathological features or incidental image artifacts:
+1. Calculates the gradient of class score $y^c$ with respect to feature activation map $A^k$ of the final convolutional layer:
+   $$\alpha_k^c = \frac{1}{Z} \sum_{i} \sum_{j} \frac{\partial y^c}{\partial A_{i,j}^k}$$
+2. Computes the weighted combination followed by a ReLU non-linearity:
+   $$L_{\text{Grad-CAM}}^c = \text{ReLU}\left(\sum_k \alpha_k^c A^k\right)$$
+3. Normalizes heatmap values to $[0, 1]$ and generates a false-color jet heatmap superimposed on the original medical photograph.
+
+---
+
+### 2.5 Cough Classifier — On-Device Acoustic Respiratory ML
+**Source Files:**
+- Model Definition: `intellidesk_backend/src/modules/diagnostics/audio/CoughClassifier.ts`
+- DSP Feature Extraction: `intellidesk_backend/src/modules/diagnostics/audio/AudioFeatureExtractor.ts`
+- Training Script: `intellidesk_backend/scripts/trainCoughClassifier.ts`
+
+#### Audio DSP & Neural Architecture
+1. **Audio Feature Extraction:** Ingests 16kHz uncompressed WAV audio. Uses Meyda.js DSP to extract 16 Mel-Frequency Cepstral Coefficients (MFCCs).
+2. **Neural Network Architecture:**
+   ```
+   Input [16-d MFCC vector]
+       │
+       ├── Dense(48, relu) + L2(0.001) + BatchNormalization + Dropout(0.2)
+       ├── Dense(24, relu) + Dropout(0.2)
+       └── Dense(4, softmax) ──► [dry, wet/productive, whooping, normal]
+   ```
+3. **Wheeze & Stridor Sentinel:** Spectral rolloff and high-frequency centroid analysis trigger an immediate respiratory alert if wheeze patterns are identified.
+
+---
+
+### 2.6 rPPG Vital Sign Processor — Contactless Photoplethysmography
+**Source Files:**
+- Signal Processor: `intellidesk_backend/src/modules/diagnostics/vitals/rPPGSignalProcessor.ts`
+- Filter: `intellidesk_backend/src/modules/diagnostics/vitals/ButterworthFilter.ts`
+
+#### Signal Processing Pipeline
+Extracts cardiovascular metrics from standard smartphone selfie video without wearable sensors:
+1. **Region of Interest (ROI):** Tracks forehead and upper cheek facial vascular beds.
+2. **Channel Decomposition:** Isolates the green channel (peak absorption of oxygenated hemoglobin at ~540nm).
+3. **Temporal Resampling:** Resamples incoming frame luminance timestamps to a strict uniform 30.0 Hz grid.
+4. **Butterworth Bandpass Filter:** Applies 2nd-order digital Butterworth filter with passband $[0.75, 3.5\text{ Hz}]$ ($45–210\text{ BPM}$).
+5. **Peak Detection:** Fast Fourier Transform (FFT) identifies dominant frequency peak:
+   $$\text{BPM} = f_{\text{peak}} \times 60$$
+6. **Physiological Sentinel:** Flags tachycardia ($>110\text{ BPM}$) and bradycardia ($<50\text{ BPM}$).
+
+---
+
+### 2.7 Prescription OCR & RxNorm Fuzzy Matcher
+**Source Files:**
+- OCR Parser: `intellidesk_backend/src/modules/pharmacy/PrescriptionOCRParser.ts`
+- Fuzzy Matcher: `intellidesk_backend/src/modules/pharmacy/fuzzyMatcher.ts`
+- RxNorm Store: `intellidesk_backend/src/modules/pharmacy/rxNormDataset.ts`
+
+#### Extraction & Normalization
+1. **Dual-Engine OCR:** Uses Poppler `pdftotext -layout` for structured electronic PDFs; falls back to Tesseract.js v7.0 for photographs.
+2. **Token Sanitization:** Applies heuristic regex rules to fix common OCR token corruptions (e.g., replacing 'O' with '0' in dosage numerical values, fixing 'mg' vs 'mcg').
+3. **Levenshtein Fuzzy Matching:** Compares extracted drug names against 8,000+ canonical entries in `rxNormDataset.ts`. Calculates similarity ratio:
+   $$\text{similarity} = 1 - \frac{\text{Levenshtein}(s_1, s_2)}{\max(|s_1|, |s_2|)}$$
+   Matches with similarity $\ge 0.82$ are mapped to canonical RxNorm Concept Unique Identifiers (RxCUIs).
+
+---
+
+### 2.8 Drug Interaction Engine & Allergy Safety Sentinel
+**Source Files:**
+- DDI Matrix: `intellidesk_backend/src/modules/pharmacy/DrugInteractionEngine.ts`
+- Allergy Sentinel: `intellidesk_backend/src/modules/pharmacy/AllergySafetySentinel.ts`
+
+#### Safety Evaluation
+- Maintains an in-memory graph of 8,000+ known clinical drug-drug pairs.
+- Classifies multi-drug interactions into 4 severity tiers:
+  - `CONTRAINDICATED`: Extreme adverse risk (e.g., Monoamine Oxidase Inhibitors + SSRIs). Blocks automated dispensing.
+  - `MAJOR`: Significant clinical hazard requiring physician review.
+  - `MODERATE`: Physiological interaction requiring patient monitoring.
+  - `MINOR`: Slight pharmacokinetic effect.
+- Cross-references patient allergy records against drug active ingredients and chemical classes.
+
+---
+
+## 3. Crisis Response, NLP & Triage Models
+
+### 3.1 PFA Crisis Counselor — Local ONNX Transformer
+**Source File:** `intellidesk_backend/src/services/crisisCounselorService.ts`
+
+#### Architecture
+- **Model:** `Xenova/Qwen1.5-0.5B-Chat` running in-process via ONNX Runtime (WASM / CPU).
+- **Secondary Fallback:** `onnx-community/Qwen2.5-0.5B-Instruct`.
+- **Tertiary Fallback:** Deterministic Rogerian active-listening engine (zero-latency, 100% uptime).
+- **Crisis Interception:** Multi-pattern regex (`CRITICAL_SELF_HARM_REGEX`) matches suicidal ideation or acute self-harm. Upon a match:
+  - Sets `isCrisisResponse = true`.
+  - Injects one-tap calling cards for 24/7 hotlines (Tele-MANAS 14416, 988 Lifeline).
+  - Conversation runs 100% locally on CPU — zero text is transmitted to external cloud servers.
+
+---
+
+### 3.2 DeepRank — Crisis Severity Indexer & ESI Triage NN
+**Source Files:**
+- Training: `intellidesk_backend/src/ml/deep_rank.ts`
+- Inference: `intellidesk_backend/src/services/deepRankModel.ts`
+
+#### Architecture
+```
+Input [4 features: word_count, urgent_kw, sentiment_score, hist_count]
     │
-    ├── Dense(64, relu) + L2(0.001)
-    ├── BatchNormalization
-    ├── Dropout(0.2)
-    │
-    ├── Dense(32, relu) + L2(0.001)
-    ├── BatchNormalization
-    ├── Dropout(0.2)
-    │
+    ├── Dense(64, relu) + L2(0.001) + BatchNormalization + Dropout(0.2)
+    ├── Dense(32, relu) + L2(0.001) + BatchNormalization + Dropout(0.2)
     ├── Dense(16, relu)
-    └── Dense(1, sigmoid)   ──► Crisis Severity Index ∈ [0.0, 1.0]
+    └── Dense(1, sigmoid) ──► Crisis Severity Index (CSI) ∈ [0.0, 1.0]
 ```
 
-**Optimizer:** Adam (lr=0.0005)  
-**Loss:** Mean Squared Error  
-**Regularization:** L2(0.001) on first two dense layers + Dropout(0.2)  
-**Early stopping:** patience=3 on `val_loss`
-
-### Training
-```bash
-# Generate synthetic training data + train all models
-npm run train:ml
-```
-
-Training data: `data/train.csv` and `data/val.csv`  
-Saved weights: `models/deep_rank/model.json` + `model.weights.bin`
-
-### ESI Mapping
-
-| CSI Score | ESI Level | Grant Coverage | SLA |
-|---|---|---|---|
-| `≥ 0.85` | ESI_1_CRITICAL | 100% (up to ₹80,000) | < 2 min |
-| `0.60–0.85` | ESI_2_EMERGENT | 80% (up to ₹40,000) | < 10 min |
-| `0.35–0.60` | ESI_3_URGENT | 50% (up to ₹20,000) | < 30 min |
-| `< 0.35` | ROUTINE | 30% (up to ₹5,000) | < 2 hrs |
-
-Life-safety keywords (e.g., "suicid", "kill myself") force-override CSI ≥ 0.85 regardless of model output.
-
-### Inference API
-```typescript
-// Single prediction
-const csi: number = await predict([word_count, urgent_kw, sentiment, hist_count]);
-
-// Batch ranking (sorts descending by CSI)
-const ranked: TicketBatch[] = rankPendingQueue(ticketsArray);
-```
-
-### Online Fine-Tuning
-The `mlRetrainingWorker` periodically calls `fineTuneDeepRankModel(resolvedTickets)` to update weights on real outcome data (5 epochs, batch size 32). This closes the feedback loop from adjudication decisions back into the model.
+- **Optimizer:** Adam ($lr = 0.0005$).
+- **Loss:** Mean Squared Error.
+- **ESI Tier Mapping:**
+  - $\text{CSI} \ge 0.85 \rightarrow \text{ESI-1 (Critical / Resuscitation)}$
+  - $\text{CSI} \ge 0.60 \rightarrow \text{ESI-2 (Emergent)}$
+  - $\text{CSI} \ge 0.35 \rightarrow \text{ESI-3 (Urgent)}$
+  - $\text{CSI} < 0.35 \rightarrow \text{ESI-4 / ESI-5 (Routine)}$
 
 ---
 
-## 2. TemporalAttritionLSTM — Dropout Risk Predictor
+### 3.3 Temporal Attrition LSTM — Longitudinal Health Risk
+**Source Files:**
+- Training: `intellidesk_backend/src/ml/lstm.ts`
+- Inference: `intellidesk_backend/src/services/attritionModel.ts`
 
-**Source files:**
-- Training definition: [`intellidesk_backend/src/ml/lstm.ts`](../intellidesk_backend/src/ml/lstm.ts)
-- Inference service: [`intellidesk_backend/src/services/attritionModel.ts`](../intellidesk_backend/src/services/attritionModel.ts)
-
-### Architecture
-
-```
-Input [1, 4]  (TIME_STEPS=1, FEATURES=4)
-    │
-    ├── LSTM(32, dropout=0.2, recurrent_dropout=0.2)
-    ├── Dense(16, relu)
-    └── Dense(1, sigmoid)   ──► Dropout Risk ∈ [0.0, 1.0]
-```
-
-**Optimizer:** Adam (lr=0.001)  
-**Loss:** Binary Cross-Entropy  
-**Epochs:** 10
-
-### Purpose
-Predicts the probability a patient will disengage from care or abandon a claim before resolution. Surfaced in the Admin War Room alongside ESI level to help prioritize outreach for at-risk patients.
-
-### Design Note
-The LSTM uses `TIME_STEPS=1` to mock time-series structure with a single static feature snapshot. True temporal modeling (multi-step sequences over visit history) is a planned enhancement.
-
-### Inference
-```typescript
-import { predictAttritionRisk } from './services/attritionModel.js';
-const dropoutRisk: number = await predictAttritionRisk(features);
-```
+#### Architecture
+- **Input Shape:** `[batch=1, timeSteps=1, features=4]`.
+- **Recurrent Layer:** LSTM(32 units, returnSequences=false) + Dropout(0.2).
+- **Dense Head:** Dense(16, relu) $\rightarrow$ Dense(1, sigmoid) outputting student health burnout / attrition probability in $[0, 1]$.
+- Evaluates longitudinal sequences across the patient's last 10 medical encounters.
 
 ---
 
-## 3. AnomalyAutoencoder — Fraud Anomaly Detector
+### 3.4 Grant Optimizer — Monte Carlo Dropout Neural Regression
+**Source Files:**
+- Training: `intellidesk_backend/src/ml/lstm.ts` (grant optimizer section)
+- Inference: `intellidesk_backend/src/services/grantOptimizerModel.ts`
 
-**Source files:**
-- Training definition: [`intellidesk_backend/src/ml/autoencoder.ts`](../intellidesk_backend/src/ml/autoencoder.ts)
-- Inference service: [`intellidesk_backend/src/services/anomalyModel.ts`](../intellidesk_backend/src/services/anomalyModel.ts)
-
-### Architecture
-
-```
-Input [4 features]
-    │
-    ├── [Encoder]  Dense(16, relu)
-    ├── [Bottleneck] Dense(4, relu)   ◄── latent space (dimensionality reduction)
-    ├── [Decoder]  Dense(16, relu)
-    └── [Reconstruction] Dense(4, sigmoid)
-```
-
-**Optimizer:** Adam (lr=0.001)  
-**Loss:** Mean Squared Error (reconstruction loss)  
-**Target:** `xs === ys` — the model learns the distribution of *normal* claims
-
-### How Anomaly Detection Works
-1. Train only on known-good (non-fraudulent) claim feature vectors
-2. At inference: reconstruct the input and compute MSE between input and reconstruction
-3. High reconstruction error → the input doesn't fit the learned distribution of normal claims → anomalous
-
-```
-anomaly_score = MSE(input, reconstruction)
-
-if anomaly_score ≥ 0.75 → flag as ANOMALOUS_PATTERN
-```
-
-### Integration with Fraud Sentinel
-The autoencoder is one of three fraud signals in `fraudSentinel.ts`:
-
-```
-Fraud Risk = SHA-256 Duplicate Check (+0.50)
-           + 7-day Velocity Check    (+0.35)
-           + Autoencoder Anomaly     (+0.40)
-           + Threshold Gaming Check  (+0.30)
-           ─────────────────────────────────
-           Capped at 1.0
-
-isFlagged = riskScore ≥ 0.60 (or ≥ 0.50 for life-safety cases)
-```
-
-Life-safety critical claims have reduced fraud sensitivity — only hard fraud (duplicate receipt) triggers a flag.
+#### Architecture & Uncertainty Quantification
+- **Input Features (5-d):** `[dropout_risk_score, requested_amount, historical_grant_total, fund_remaining_ratio, urgency_level_numeric]`.
+- **Layers:** Dense(64, relu) + Dropout(0.3) $\rightarrow$ Dense(32, relu) + Dropout(0.2) $\rightarrow$ Dense(1, sigmoid).
+- **Monte Carlo Dropout:** Runs 20 stochastic forward passes at inference time with dropout layers kept active. Calculates mean recommended grant ratio $\mu$ and epistemic variance $\sigma^2$.
 
 ---
 
-## 4. Qwen2.5-0.5B — PFA Counselor AI
+### 3.5 Anomaly Autoencoder — Feature Reconstruction NN
+**Source Files:**
+- Training: `intellidesk_backend/src/ml/autoencoder.ts`
+- Inference: `intellidesk_backend/src/services/anomalyModel.ts`
 
-**Source files:**
-- Pipeline service: [`intellidesk_backend/src/services/crisisCounselorService.ts`](../intellidesk_backend/src/services/crisisCounselorService.ts)
-- Alternate implementation: [`intellidesk_backend/src/services/clinicalCounselorService.ts`](../intellidesk_backend/src/services/clinicalCounselorService.ts)
-
-### Model Loading
-```typescript
-// Primary: Xenova/Qwen1.5-0.5B-Chat (quantized)
-// Fallback: onnx-community/Qwen2.5-0.5B-Instruct (quantized)
-// Final fallback: Rogerian PFA rule engine (no model needed)
-
-const model = await pipeline('text-generation', 'Xenova/Qwen1.5-0.5B-Chat', { quantized: true });
-```
-
-Models are loaded once and cached in-process. First load downloads ~300MB ONNX weights to the local Xenova cache directory.
-
-### Inference Pipeline
-
-```
-Student Message
-       │
-       ├─ Safety Check: CRITICAL_SELF_HARM_REGEX
-       │   → triggers crisis protocol + EMERGENCY_RESOURCES
-       │
-       ├─ Hardship Check: RELIEF_HARDSHIP_REGEX
-       │   → requiresConfirmation = true → Rogerian grant offer
-       │
-       ├─ Multi-turn ChatML prompt build:
-       │   system: MedAccess PFA system prompt
-       │   + last 4 turns of conversation history
-       │   + current student message
-       │
-       ├─ Qwen inference (max_new_tokens=45, temperature=0.6, top_p=0.85)
-       │   with 2500ms safety timeout (race with timeout promise)
-       │
-       ├─ Output validation + disclaimer filter
-       │   → fallback to generateRogerianPFAResponse() if invalid
-       │
-       └─ Store in ticket_messages + return to client
-```
-
-### Crisis Detection Regex
-```typescript
-CRITICAL_SELF_HARM_REGEX = /\b(suicid(e|al)|kill myself|end my life|self harm|
-  hurt myself|want to die|overdose|cut myself|hang myself|don't want to live|
-  no reason to live|end it all|better off dead|give up on life)\b/i
-```
-
-When triggered:
-1. `isCrisisResponse = true` on the stored message
-2. `EMERGENCY_RESOURCES` card array sent to client
-3. Rogerian crisis response generated (overrides ONNX output)
-4. Crisis hotline numbers appended to response
-
-### Emergency Resource Cards
-
-```typescript
-EMERGENCY_RESOURCES = [
-  { name: "Tele-MANAS (India)", number: "14416", actionUrl: "tel:14416" },
-  { name: "988 Suicide & Crisis Lifeline", number: "988", actionUrl: "tel:988" },
-  { name: "Vandrevala Foundation", number: "+91 9999 666 555" },
-  { name: "MedAccess 24/7 Emergency Desk", number: "1800-MED-ACCESS" }
-]
-```
-
-### System Prompt
-The model is instructed to:
-- Practice active listening and validate distress
-- Keep replies to 2–4 sentences (max_new_tokens=45 enforces this)
-- Use grounding techniques ("Take a slow breath with me")
-- Reassure that clinical staff are actively processing their request
-- Route to emergency numbers for immediate life-safety concerns
+#### Architecture
+- **Symmetric Architecture:** Input(4) $\rightarrow$ Dense(16, relu) $\rightarrow$ Dense(8, relu) [Bottleneck] $\rightarrow$ Dense(16, relu) $\rightarrow$ Output(4, sigmoid).
+- **Anomaly Scoring:** Computes Mean Squared Error (MSE) between original feature vector $x$ and reconstructed output $\hat{x}$:
+  $$\text{MSE} = \frac{1}{4} \sum_{i=1}^4 (x_i - \hat{x}_i)^2$$
+  Submissions with $\text{MSE} \ge 0.75$ are flagged for anomalous pattern review.
 
 ---
 
-## 5. NLP Feature Extraction Pipeline
+## 4. In-Process Model Training & Continuous Learning
 
-**Source file:** [`intellidesk_backend/src/services/nlpPipeline.ts`](../intellidesk_backend/src/services/nlpPipeline.ts)
-
-Converts raw patient text → normalized 4-feature vector for all ML models:
-
-```typescript
-function extractFeatures(text: string, historicalCount: number): number[] {
-  const word_count = text.split(/\s+/).length;
-  const urgent_keyword_count = countUrgentKeywords(text);  // e.g. "emergency", "urgent", "bleeding"
-  const sentiment_score = computeSentiment(text);           // 0 (negative) → 1 (positive)
-  const historical_ticket_count = historicalCount;
-  return [word_count, urgent_keyword_count, sentiment_score, historical_ticket_count];
-}
-```
-
----
-
-## 6. Training Data Generation
-
-**Source file:** [`intellidesk_backend/scripts/generate_training_data.ts`](../intellidesk_backend/scripts/)
-
-Synthetic dataset generation creates `data/synthetic_tickets.csv` with labeled examples:
-- `word_count`, `urgent_keyword_count`, `sentiment_score`, `historical_ticket_count`
-- Labels: `crisis_severity_index`, `recommended_grant`, `dropout_risk`
-
-Run with:
+### Master Training Script (`npm run train:ml`)
+Executes `src/ml/train_all.ts` to build and persist all local TensorFlow.js models:
 ```bash
 npm run train:ml
-# Runs: generate_training_data.ts → train_all.ts
-# Outputs: models/deep_rank/, models/lstm/, models/autoencoder/
+# 1. Trains DeepRank CSI Dense NN
+# 2. Trains TemporalAttritionLSTM
+# 3. Trains AnomalyAutoencoder
+# 4. Saves model.json and binary weight shards to intellidesk_backend/models/
 ```
 
----
-
-## 7. Grant Optimizer Model
-
-**Source file:** [`intellidesk_backend/src/services/grantOptimizerModel.ts`](../intellidesk_backend/src/services/grantOptimizerModel.ts)
-
-A separate regression model that outputs `recommended_copay_amount` given:
-- CSI score from DeepRank
-- Fund liquidity ratio
-- Institutional currency (INR / USD)
-- Historical grant approval rates
-
-Used by the admin war room to pre-populate the payout modal with a data-driven recommendation.
-
----
-
-## 8. Model File Locations
-
-```
-intellidesk_backend/
-├── models/
-│   ├── deep_rank/
-│   │   ├── model.json          # TF.js model topology
-│   │   └── model.weights.bin   # Trained weights
-│   ├── lstm/
-│   │   ├── model.json
-│   │   └── model.weights.bin
-│   └── autoencoder/
-│       ├── model.json
-│       └── model.weights.bin
-└── data/
-    ├── train.csv               # DeepRank training set
-    ├── val.csv                 # DeepRank validation set
-    └── synthetic_tickets.csv   # LSTM + Autoencoder training set
-```
-
-> **Note:** Model weights are not committed to Git. Run `npm run train:ml` after cloning to regenerate them.
+### Online Continuous Learning (`mlRetrainingWorker.ts`)
+The background retraining worker runs on a scheduled BullMQ queue:
+1. Queries Supabase for newly resolved claims with clinician-adjudicated triage outcomes.
+2. Formulates labeled training batches.
+3. Calls `fineTuneDeepRankModel()` and `fineTuneGrantOptimizerModel()`, running 5 epochs of in-memory Adam fine-tuning.
+4. Serializes updated weights back to disk, completing the human-in-the-loop adaptive feedback cycle.

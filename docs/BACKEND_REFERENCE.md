@@ -1,20 +1,25 @@
-# MedAccess AI — Backend Reference
+# MedAccess AI — Backend Architecture Reference
 
-> **Complete guide to the Node.js/TypeScript backend:** server bootstrap, routes, services, middleware, workers, and configuration.
+> **Complete architectural reference for the Node.js/TypeScript backend:** server bootstrap sequence, modular clinical diagnostics engine, CDSS WHO ICD-11 framework, pharmacy safety pipeline, BullMQ background queues, in-process ML retraining, and HIPAA security architecture.
 
 ---
 
-## 1. Project Overview
+## 1. System Overview & Technology Stack
 
-| Item | Value |
-|---|---|
-| **Runtime** | Node.js 18+ (ESM modules) |
-| **Framework** | Express 5 |
-| **Language** | TypeScript 5 |
-| **Queue** | BullMQ + Redis |
-| **Database** | Supabase (PostgreSQL) |
-| **ML Runtime** | TensorFlow.js Node (native bindings) |
-| **Entry point** | `src/server.ts` |
+The MedAccess AI backend is an enterprise-grade, event-driven medical intelligence and triage platform built on Express 5 and modern TypeScript (ESM). It orchestrates clinical computer vision, acoustic respiratory ML, camera photoplethysmography (rPPG), WHO ICD-11 decision support, and emergency copay disbursements.
+
+| Component | Technology | Specification / Notes |
+|---|---|---|
+| **Runtime** | Node.js 20+ (ESM modules) | High-throughput asynchronous event loop |
+| **HTTP Framework** | Express 5 / TypeScript 5 | Strict typing, robust middleware pipeline, 50MB payload capacity |
+| **In-Process ML** | `@tensorflow/tfjs-node` v4.22 | Native C++ bindings for DeepRank, CoughClassifier, MultimodalFusion, Autoencoder, LSTM |
+| **Edge Transformer Runtime** | `@xenova/transformers` v2.17 | In-process ONNX Runtime (WASM/CPU) for local Qwen1.5/2.5 PFA & DistilBERT |
+| **Database & Vector Store** | Supabase PostgreSQL + `pgvector` | Row-Level Security (RLS) on all tables, `vector(768)` semantic embeddings |
+| **Job Queue & Workers** | BullMQ v5 + Redis 7 Alpine | Distributed asynchronous claim processing, continuous retraining, notification dispatch |
+| **Real-Time Engine** | Socket.io v4 | WebSocket rooms segmented per institution tenant |
+| **Digital Signal Processing** | Meyda.js + Custom Butterworth | MFCC acoustic extraction & 0.75–3.5 Hz bandpass pulse filtering |
+| **OCR & Imaging** | Poppler `pdftotext` + Tesseract.js + `sharp` | Handwritten Rx digitization, bill parsing, and clinical image preprocessing |
+| **Audit PDF Generation** | PDFKit | Tamper-evident HIPAA compliance reports with SHA-256 cryptographic hashes |
 
 ---
 
@@ -23,417 +28,263 @@
 ```
 intellidesk_backend/
 ├── src/
-│   ├── server.ts               # HTTP server bootstrap + route mount
-│   ├── config/                 # Supabase client + env config
-│   ├── controllers/
-│   │   ├── claimsController.ts # Claim CRUD, ESI triage, payout dispatch
-│   │   └── chatController.ts   # PFA counselor message handler
-│   ├── routes/
-│   │   ├── auth.ts             # Signup, login, profile
-│   │   ├── asyncIntake.ts      # Claim submission → BullMQ enqueue
-│   │   ├── claims.ts           # Claim read endpoints
-│   │   ├── chat.ts             # PFA chat endpoints
-│   │   ├── admin.ts            # Admin CRUD + override endpoints
-│   │   ├── telemetry.ts        # KPI dashboard data
-│   │   ├── reports.ts          # Audit PDF generation
-│   │   ├── knowledge.ts        # Policy knowledge base (RAG)
-│   │   ├── simulation.ts       # Crisis scenario simulation
-│   │   ├── patients.ts         # Patient profile endpoints
-│   │   └── workflow_dispatch.ts # ML retraining workflow trigger
-│   ├── services/               # Business logic layer (25 services)
-│   ├── middleware/             # Auth, RBAC, tenant scoping
-│   ├── ml/                     # TF.js model training definitions
-│   ├── workers/                # BullMQ background job processors
-│   ├── types/                  # Shared TypeScript interfaces
-│   └── utils/                  # Shared utility functions
-├── scripts/                    # One-off seed and test scripts
-├── data/                       # Training CSVs
-├── models/                     # Saved TF.js model weights
-└── Dockerfile / docker-compose.yml
+│   ├── server.ts                       # HTTP bootstrap, ML weight loading, route registration
+│   ├── config/                         # Supabase client credentials & environment validation
+│   ├── middleware/
+│   │   ├── authMiddleware.ts           # Supabase JWT authentication & RBAC guards
+│   │   └── tenant.ts                   # Multi-tenant institution scoping middleware
+│   ├── modules/                        # Domain-driven clinical diagnostic engines
+│   │   ├── cdss/                       # Clinical Decision Support System
+│   │   │   ├── CDSSService.ts                  # Central CDSS coordinator & cache
+│   │   │   ├── DifferentialDiagnosisEngine.ts  # Temperature-scaled ICD-11 logit scorer
+│   │   │   ├── ICD11ConceptStore.ts            # Curated WHO ICD-11 knowledge graph
+│   │   │   ├── QwenInferenceService.ts         # Cloud Qwen2.5-72B inference client
+│   │   │   ├── TreatmentPathwayAdvisor.ts      # Clinical evidence guideline generator
+│   │   │   └── routes/cdssRouter.ts            # /api/v1/cdss endpoints
+│   │   ├── diagnostics/                # Multimodal diagnostic sensing suite
+│   │   │   ├── vision/
+│   │   │   │   ├── CloudVisionClassifier.ts    # Qwen2.5-VL 72B dermatology & lesion VLM
+│   │   │   │   ├── clinicalMobileNet.ts        # Local 10-class MobileNet-V3 fallback
+│   │   │   │   └── imageClassifier.ts          # Vision service orchestrator
+│   │   │   ├── audio/
+│   │   │   │   ├── CoughClassifier.ts          # 4-class respiratory neural network
+│   │   │   │   ├── AudioFeatureExtractor.ts    # 16-d MFCC extraction (Meyda DSP)
+│   │   │   │   └── CloudAudioClassifier.ts     # Hugging Face audio inference client
+│   │   │   ├── vitals/
+│   │   │   │   ├── rPPGSignalProcessor.ts      # Facial video camera pulse extractor
+│   │   │   │   ├── ButterworthFilter.ts        # 2nd-order 0.75-3.5 Hz bandpass filter
+│   │   │   │   └── PhysiologicalRedFlagSentinel.ts # Tachycardia/bradycardia alerts
+│   │   │   ├── fusion/
+│   │   │   │   ├── MultimodalFusionModel.ts    # 168-d late-fusion DNN (visual+symptom+vitals)
+│   │   │   │   ├── multimodalRiskNetwork.ts    # Fusion coordinator & uncertainty engine
+│   │   │   │   └── vectorAssembler.ts          # Concatenates multimodal sub-vectors
+│   │   │   ├── explainability/
+│   │   │   │   ├── gradCamGenerator.ts         # Grad-CAM saliency heatmaps for clinical trust
+│   │   │   │   └── uncertaintyEngine.ts        # Monte Carlo Dropout confidence bounds
+│   │   │   ├── fhir/
+│   │   │   │   ├── FHIRConverterService.ts     # HL7 FHIR R4 DiagnosticReport generator
+│   │   │   │   └── ReferralLetterGenerator.ts  # Formats official medical referral letters
+│   │   │   ├── progression/
+│   │   │   │   └── ScreeningDeltaAnalyzer.ts   # Tracks lesion healing over time
+│   │   │   └── routes/diagnosticsRouter.ts     # /api/v1/diagnostics endpoints
+│   │   └── pharmacy/                   # Medication intelligence & safety
+│   │       ├── PrescriptionOCRParser.ts        # Poppler & Tesseract OCR engine
+│   │       ├── DrugInteractionEngine.ts        # 8,000+ drug pair DDI lookup matrix
+│   │       ├── AllergySafetySentinel.ts        # Patient allergen contraindication scanner
+│   │       ├── fuzzyMatcher.ts                 # Levenshtein RxNorm concept matcher
+│   │       ├── rxNormDataset.ts                # In-memory RxNorm clinical formulation store
+│   │       ├── RxSentinelService.ts            # Pharmacy safety coordinator
+│   │       └── routes/pharmacyRouter.ts        # /api/v1/pharmacy endpoints
+│   ├── services/                       # Triage, Welfare & Foundation Services
+│   │   ├── deepRankModel.ts            # DeepRank Crisis Severity Index (CSI) NN
+│   │   ├── crisisCounselorService.ts   # On-device Qwen ONNX PFA counselor
+│   │   ├── clinicalCounselorService.ts # Gemini Flash Lite clinical triage chat
+│   │   ├── gemini.ts                   # Multimodal intake, RAG search & PHI redaction
+│   │   ├── fraudSentinel.ts            # 3-layer claim integrity check (Hash/Velocity/Autoencoder)
+│   │   ├── anomalyModel.ts             # Autoencoder feature reconstruction NN
+│   │   ├── attritionModel.ts           # Temporal LSTM longitudinal risk NN
+│   │   ├── grantOptimizerModel.ts      # MC Dropout copay optimizer NN
+│   │   ├── disbursementService.ts      # RazorpayX UPI & IMPS payouts
+│   │   ├── payoutService.ts            # Stripe international & campus vouchers
+│   │   ├── receiptParser.ts            # Bill total extraction & currency detection
+│   │   ├── pdfReportService.ts         # HIPAA audit report generator
+│   │   ├── socketManager.ts            # Socket.io room broadcaster
+│   │   ├── dbService.ts                # Database health & telemetry check
+│   │   └── storageBootstrap.ts         # Supabase storage bucket auto-provisioning
+│   ├── routes/                         # Core HTTP API route controllers
+│   │   ├── auth.ts                     # Signup, login, institution profile
+│   │   ├── asyncIntake.ts              # Multipart submission enqueuing to BullMQ
+│   │   ├── claims.ts                   # Claim CRUD & triage queue endpoints
+│   │   ├── chat.ts                     # PFA crisis counseling chat endpoints
+│   │   ├── admin.ts                    # Admin overrides, audit trail, payouts
+│   │   ├── telemetry.ts                # Real-time ESI & fund analytics
+│   │   ├── reports.ts                  # Audit PDF download endpoints
+│   │   └── knowledge.ts                # Institutional policy RAG semantic search
+│   ├── workers/                        # Distributed BullMQ background workers
+│   │   ├── intakeWorker.ts             # 10-step asynchronous intake pipeline
+│   │   ├── mlRetrainingWorker.ts       # Continuous in-process fine-tuning for TF.js models
+│   │   └── notificationWorker.ts       # Asynchronous email & SMS dispatch
+│   └── ml/                             # Training scripts for local TF.js models
+│       ├── deep_rank.ts                # DeepRank training pipeline
+│       ├── lstm.ts                     # Attrition LSTM training pipeline
+│       ├── autoencoder.ts              # Anomaly Autoencoder training pipeline
+│       └── train_all.ts                # Master training orchestration script
+├── models/                             # Persistent weights (model.json + binary shards)
+├── eng.traineddata                     # 5MB Tesseract English language OCR model
+├── Dockerfile & docker-compose.yml     # Containerized production runtime
+└── package.json                        # Dependencies & npm scripts
 ```
 
 ---
 
-## 3. Server Bootstrap (`server.ts`)
+## 3. Server Bootstrap Sequence (`src/server.ts`)
 
-The server initializes in this order:
+The backend initializes sequentially to ensure zero-crash resilience:
 
 ```
-1. ensureStorageBucketsExist()     — Create Supabase storage buckets if missing
-2. DatabaseService.checkDatabaseHealth()  — Verify schema + connectivity
-3. Promise.all([
-     loadOrTrainLSTMModel(),
-     loadOrTrainGrantOptimizerModel(),
-     loadOrTrainDeepRankModel(),
-     loadOrTrainAnomalyModel()
-   ])                              — Load TF.js model weights from disk
-4. server.listen(PORT)            — Start HTTP on 0.0.0.0:3000
-5. startWorkers()                  — Spin up BullMQ intake + notification workers
-```
+1. Storage Bucket Provisioning (ensureStorageBucketsExist())
+   • Verifies 'claim-receipts', 'prescriptions', and 'diagnostic-images' exist in Supabase.
 
-If model weight files are missing, each loader logs a warning and sets the model to `null`. Inference falls back to neutral defaults (CSI = 0.5) so the server never crashes on startup.
+2. Database Health & Schema Telemetry (DatabaseService.checkDatabaseHealth())
+   • Pings Supabase PostgreSQL, verifies RLS status, claims table readiness, and fund liquidity.
 
----
+3. Triage & Financial ML Models Initialization
+   • Concurrently bootstraps in-process TF.js models:
+     - loadOrTrainLSTMModel()
+     - loadOrTrainGrantOptimizerModel()
+     - loadOrTrainDeepRankModel()
+     - loadOrTrainAnomalyModel()
+   • If weights are missing, initializes baseline fallbacks gracefully.
 
-## 4. Middleware Stack
+4. Multimodal Clinical Diagnostics Models Initialization
+   • Concurrently bootstraps clinical neural networks:
+     - ClinicalImageClassifier.initialize() (loads MobileNet-V3 weights)
+     - CoughClassifier.loadOrBootstrapModel() (loads TF.js 4-class respiratory weights)
+     - MultimodalRiskNetwork.initialize() (loads 168-d late-fusion weights)
 
-### `requireAuth` — JWT Verification
-```typescript
-// src/middleware/authMiddleware.ts
-// Reads Authorization: Bearer <token>
-// Verifies via Supabase Auth API
-// Attaches user object to req.user
-```
-
-### `requireRole(roles[])` — RBAC Guard
-```typescript
-// Checks req.user.role against allowed roles
-// Returns 403 if role not in list
-// Admin routes require ['ADMIN']
-```
-
-### `tenantScopeMiddleware` — Institution Isolation
-```typescript
-// Extracts institution_id from JWT claims
-// Attaches to req.institutionId
-// All DB queries are implicitly scoped to this tenant
-// Prevents cross-institution data leakage
+5. HTTP & Socket.io Listen
+   • Binds to 0.0.0.0 on PORT (default 3000).
+   • Spins up BullMQ intakeWorker, mlRetrainingWorker, and notificationWorker.
 ```
 
 ---
 
-## 5. Route Reference
+## 4. Clinical Modules Architecture
 
-### Auth (`/api/v1/auth`)
+### 4.1 CDSS — Clinical Decision Support System (`src/modules/cdss/`)
+- **`CDSSService.ts`**: Coordinates clinical evaluations. Validates incoming symptoms, applies in-memory caching keyed by `screeningId` to ensure idempotency, and routes to either cloud Qwen2.5-72B or local deterministic algorithms.
+- **`DifferentialDiagnosisEngine.ts`**: Evaluates symptom vectors against the WHO ICD-11 graph. Applies temperature-scaled logit transformation ($T=1.25$) with clipping to $[-20, 20]$ to prevent numerical overflow and calculate calibrated probability distributions.
+- **`ICD11ConceptStore.ts`**: In-memory knowledge base containing cardinal ICD-11 codes, baseline prevalence priors, severity weights, and contraindications.
+- **`FHIRConverterService.ts`**: Transforms CDSS outputs into HL7 FHIR R4 `Bundle` containing `DiagnosticReport`, `Observation`, and `Condition` resources.
 
-**POST `/signup`**
-```json
-Request:  { "email": "...", "password": "...", "role": "STUDENT", "institution_id": "..." }
-Response: { "user": {...}, "session": { "access_token": "..." } }
-```
+### 4.2 Diagnostics Sensing Suite (`src/modules/diagnostics/`)
+- **Vision (`vision/`)**:
+  - `CloudVisionClassifier.ts`: Sends image buffers through `sharp` preprocessing to `Qwen/Qwen2.5-VL-72B-Instruct` via Hugging Face. Returns structured JSON containing primary diagnosis, severity, anatomical location, and differential list.
+  - `clinicalMobileNet.ts`: Local TFLite fallback supporting 10 common clinical categories (eczema, psoriasis, cellulitis, burn, conjunctivitis, etc.).
+- **Audio (`audio/`)**:
+  - `AudioFeatureExtractor.ts`: Processes 16kHz uncompressed WAV buffers via Meyda.js, extracting 16 Mel-Frequency Cepstral Coefficients (MFCCs).
+  - `CoughClassifier.ts`: Dense neural network (`@tensorflow/tfjs-node`) mapping 16 MFCC features to 4 classes: dry, wet, whooping, normal.
+- **Vitals (`vitals/`)**:
+  - `rPPGSignalProcessor.ts`: Samples green-channel pixel variance from facial video at 30Hz.
+  - `ButterworthFilter.ts`: 2nd-order bandpass filter ($0.75–3.5\text{ Hz}$) isolating pulse signals in the 45–210 BPM human heart rate band.
+  - `PhysiologicalRedFlagSentinel.ts`: Generates real-time alerts for tachycardia ($>110\text{ BPM}$), bradycardia ($<50\text{ BPM}$), or signal noise.
+- **Fusion & Explainability (`fusion/`, `explainability/`)**:
+  - `MultimodalFusionModel.ts`: Late-fusion DNN concatenating 128 visual features + 32 clinical symptom features + 8 demographic features into a 168-d vector, outputting continuous risk and categorical care tiers.
+  - `gradCamGenerator.ts`: Computes gradient of the predicted class score with respect to convolutional feature maps, producing normalized 2D saliency heatmaps.
 
-**POST `/login`**
-```json
-Request:  { "email": "...", "password": "..." }
-Response: { "user": {...}, "session": { "access_token": "..." } }
-```
-
-**GET `/profile`**  
-Returns authenticated user profile including role and institution.
+### 4.3 Pharmacy & Medication Safety (`src/modules/pharmacy/`)
+- **`PrescriptionOCRParser.ts`**: Extracts raw text using Poppler `pdftotext` for clean PDFs or Tesseract.js v7 for camera photographs. Includes rule-based sanitization for common OCR confusions (e.g., replacing 'O' with '0' in dosage numbers).
+- **`fuzzyMatcher.ts` & `rxNormDataset.ts`**: Maps noisy drug strings to standardized RxNorm Concept Unique Identifiers (RxCUIs) using Levenshtein distance metrics.
+- **`DrugInteractionEngine.ts`**: In-memory hash map indexing 8,000+ known clinical drug-drug interactions. Evaluates incoming regimens and classifies severity into `CONTRAINDICATED`, `MAJOR`, `MODERATE`, or `MINOR`.
+- **`AllergySafetySentinel.ts`**: Intersects extracted drug ingredients with the patient's recorded allergen profile.
 
 ---
 
-### Claim Intake (`/api/v1/intake`)
+## 5. Core Services Architecture (`src/services/`)
 
-**POST `/web`** — Submit a new medical claim  
-Content-Type: `multipart/form-data`
+- **`deepRankModel.ts`**: Neural network evaluating crisis text. Computes Crisis Severity Index (CSI $\in [0, 1]$) and maps to ESI triage levels:
+  - $\text{CSI} \ge 0.85 \rightarrow \text{ESI-1 (Critical / Resuscitation)}$
+  - $\text{CSI} \ge 0.60 \rightarrow \text{ESI-2 (Emergent)}$
+  - $\text{CSI} \ge 0.35 \rightarrow \text{ESI-3 (Urgent)}$
+  - $\text{CSI} < 0.35 \rightarrow \text{ESI-4 / ESI-5 (Routine)}$
+- **`crisisCounselorService.ts`**: Local ONNX transformer executing `Xenova/Qwen1.5-0.5B-Chat`. Intercepts self-harm keywords via `CRITICAL_SELF_HARM_REGEX`, injecting emergency 24/7 hotline cards with 100% on-device privacy.
+- **`gemini.ts`**: Wraps Google Gemini APIs for:
+  - Multimodal claim intake narrative parsing (`gemini-2.0-flash`).
+  - Chain-of-Thought policy adjudication with mandatory clause citations (`gemini-1.5-pro`).
+  - Semantic embeddings (`gemini-embedding-001`, 768-d) for hybrid Reciprocal Rank Fusion (RRF) policy search.
+  - HIPAA PHI de-identification and redaction before generating official letters (`gemini-1.5-flash`).
+- **`fraudSentinel.ts`**: 3-layer claim integrity check:
+  - Layer A: SHA-256 cryptographic image hashing to detect duplicate receipts.
+  - Layer B: 7-day claim velocity monitoring per student phone identity.
+  - Layer C: Feature reconstruction anomaly detection via Autoencoder MSE (threshold = 0.75).
+  - *Emergency life-safety claims automatically bypass velocity checks.*
+- **`disbursementService.ts` & `payoutService.ts`**: Multi-rail disbursement executing instant UPI/IMPS via RazorpayX, USD payouts via Stripe, or generating campus clinic QR vouchers.
+- **`pdfReportService.ts`**: Generates downloadable HIPAA compliance audit reports with cryptographic SHA-256 tamper-evident checksums.
 
-| Field | Type | Required | Description |
+---
+
+## 6. Complete API Reference
+
+### 🔷 Clinical Diagnostics & CDSS
+| Method | Route | Auth / Role | Description |
 |---|---|---|---|
-| `message` | string | ✅ | Patient's description of their emergency |
-| `studentPhone` | string | ✅ | Phone number for velocity checks |
-| `institutionId` | string | ✅ | Tenant identifier |
-| `receipt` | file | ❌ | Hospital invoice (PDF / PNG / JPG) |
-| `studentName` | string | ❌ | Patient display name |
+| `POST` | `/api/v1/diagnostics/vision` | Authenticated | Upload clinical image $\rightarrow$ Qwen2.5-VL 72B / MobileNet + Grad-CAM heatmap |
+| `POST` | `/api/v1/diagnostics/audio` | Authenticated | Upload cough audio $\rightarrow$ 16-d MFCC extraction $\rightarrow$ 4-class respiratory model |
+| `POST` | `/api/v1/diagnostics/vitals` | Authenticated | Ingest facial video frames $\rightarrow$ rPPG pulse extraction & tachycardia/bradycardia check |
+| `POST` | `/api/v1/diagnostics/fusion` | Authenticated | Concatenate vision + symptoms + vitals $\rightarrow$ 168-d late-fusion clinical risk score |
+| `POST` | `/api/v1/cdss/evaluate` | Authenticated | Submit clinical symptoms $\rightarrow$ WHO ICD-11 differential diagnosis & FHIR R4 Bundle |
 
-**Response (202 Accepted):**
-```json
-{
-  "ticketId": "uuid-...",
-  "status": "Processing",
-  "message": "Claim submitted. Clinical triage is in progress."
-}
-```
+### 🔷 Pharmacy & Medication Safety
+| Method | Route | Auth / Role | Description |
+|---|---|---|---|
+| `POST` | `/api/v1/pharmacy/parse` | Authenticated | Ingest prescription image $\rightarrow$ OCR $\rightarrow$ RxNorm canonical matching |
+| `POST` | `/api/v1/pharmacy/interactions`| Authenticated | Ingest drug list $\rightarrow$ 8,000+ DDI matrix & patient allergy contraindication check |
 
-Processing continues asynchronously via BullMQ. Real-time status updates arrive over Socket.io.
+### 🔷 Psychological First Aid & Chat
+| Method | Route | Auth / Role | Description |
+|---|---|---|---|
+| `POST` | `/api/v1/chat` | Authenticated | Send message $\rightarrow$ on-device Qwen PFA reply + self-harm crisis interception |
+| `GET` | `/api/v1/chat/:ticketId/messages`| Authenticated | Retrieve conversation history for a given encounter |
 
----
+### 🔷 Triage & Intake
+| Method | Route | Auth / Role | Description |
+|---|---|---|---|
+| `POST` | `/api/v1/intake/web` | Public / Auth | Submit clinical request (narrative + photos/bills) $\rightarrow$ enqueued to BullMQ |
+| `GET` | `/api/v1/intake/status/:jobId` | Public / Auth | Poll 10-step progress of an asynchronous intake job |
+| `GET` | `/api/v1/claims` | Tenant Scoped | List clinical encounters (filter by ESI tier, status, keyword) |
+| `GET` | `/api/v1/claims/:id` | Tenant Scoped | Retrieve full encounter record with all ML and diagnostic telemetry |
 
-### Claims (`/api/v1/claims`)
-
-**GET `/`** — List claims  
-Query params: `?status=Pending&esiLevel=ESI_1_CRITICAL&search=fracture&limit=20&offset=0`
-
-**GET `/:id`** — Get full claim with triage breakdown  
-Returns: ticket object + ML scores + OCR result + fraud report + chat history count
-
----
-
-### Admin (`/api/v1/admin` — ADMIN role required)
-
-**POST `/claims/:id/disburse`**
-```json
-Request:  {
-  "amount": 5000,
-  "payoutMethod": "RAZORPAY_UPI",
-  "studentVpa": "student@okaxis",
-  "approvalNotes": "ESI-2 verified, fund pool C"
-}
-Response: {
-  "transactionReference": "pout_abc12345",
-  "disbursedAmount": 5000,
-  "disbursementMethod": "RAZORPAY_UPI",
-  "timestamp": "2026-08-15T13:00:00Z"
-}
-```
-
-**POST `/claims/:id/override`**
-```json
-Request:  { "esiLevel": "ESI_1_CRITICAL", "notes": "Verified trauma via hospital call" }
-Response: { "success": true, "updatedClaim": {...} }
-```
-
-**GET `/telemetry`** — Returns KPI metrics:
-- Total claims by ESI level
-- Fund liquidity per pool
-- Average adjudication time
-- Fraud flag rate
-- 30-day disbursement volume
-
-**GET `/reports`** — Triggers HIPAA audit PDF generation  
-Returns binary PDF stream with `Content-Disposition: attachment`
+### 🔷 Clinical Admin War Room
+| Method | Route | Auth / Role | Description |
+|---|---|---|---|
+| `POST` | `/api/v1/claims/:id/override` | `ADMIN` | Override AI-assigned ESI tier with mandatory clinician documentation |
+| `POST` | `/api/v1/claims/:id/disburse` | `ADMIN` | Execute instant emergency copay disbursement via RazorpayX or Stripe |
+| `GET` | `/api/v1/admin/telemetry` | `ADMIN` | Dashboard telemetry: ESI breakdown, diagnostic counts, fund liquidity |
+| `GET` | `/api/v1/admin/reports` | `ADMIN` | Download tamper-evident HIPAA compliance audit PDF |
+| `GET` | `/api/v1/admin/knowledge` | `ADMIN` | Semantic search (RAG) over institutional healthcare policies |
 
 ---
 
-### PFA Chat (`/api/v1/chat`)
+## 7. Background Workers (`src/workers/`)
 
-**POST `/`** — Send a patient message, receive PFA AI reply
-```json
-Request:  {
-  "ticketId": "uuid-...",     // null for pre-claim chat
-  "message": "I can't afford my insulin, I don't know what to do",
-  "history": [
-    { "sender": "STUDENT", "message": "..." },
-    { "sender": "COUNSELOR_AI", "message": "..." }
-  ]
-}
+### `intakeWorker.ts` — Asynchronous 10-Step Pipeline
+Runs on the `clinical-intake-queue` BullMQ worker for every submitted claim:
+1. **Multimodal Receipt / Document Parsing**: Poppler `pdftotext` $\rightarrow$ Tesseract.js OCR fallback.
+2. **Clinical NLP Feature Extraction**: DistilBERT sentiment scoring and urgent medical keyword density calculation.
+3. **Fraud Sentinel Check**: SHA-256 duplicate receipt hash lookup, 7-day velocity check, and Autoencoder anomaly scoring.
+4. **DeepRank CSI Inference**: Computes continuous Crisis Severity Index ($[0, 1]$).
+5. **ESI Tier Assignment**: Maps CSI to standard ESI-1 through ESI-5 triage levels.
+6. **Temporal Attrition Risk**: Evaluates multi-encounter patient history via LSTM.
+7. **Grant Optimization**: Computes recommended emergency copay relief with MC Dropout epistemic variance.
+8. **Multimodal Intake Parsing**: Structures text narrative and clinical media using Gemini 2.0 Flash.
+9. **Policy Match & RAG**: Semantic vector similarity search via pgvector and Gemini 1.5 Pro CoT adjudication.
+10. **Persistence & Broadcast**: Commits record to Supabase and broadcasts real-time `ticket-created` event via Socket.io.
 
-Response: {
-  "reply": "I hear how frightening this is...",
-  "isCrisisResponse": false,
-  "requiresConfirmation": true,
-  "isTicketLogged": false,
-  "resources": null,
-  "latencyMs": 1240,
-  "messageId": "uuid-..."
-}
-```
+### `mlRetrainingWorker.ts` — Continuous In-Process Learning
+- Triggers on scheduled BullMQ intervals or via admin API (`/api/v1/workflow/retrain`).
+- Queries resolved tickets from Supabase containing clinician-verified outcomes.
+- Executes 5 epochs of in-process retraining for DeepRank CSI and Grant Optimizer models using Adam.
+- Overwrites weights directly in `./models/`, enabling continuous adaptation to clinical trends.
 
----
-
-## 6. Core Services
-
-### Receipt Parser (`receiptParser.ts`)
-Extracts bill totals from hospital invoices:
-
-```
-Input: media_url (HTTPS / data URI / local file path)
-         │
-         ├── PDF → pdftotext -layout (Poppler) → preserve table alignment
-         │         fallback → pdf-parse (in-memory)
-         │
-         └── Image → Tesseract.js (eng.traineddata) → OCR text
-                         │
-                         └── extractInvoiceTotal(text)
-                               ├── High-precision regex anchors (TOTAL DUE, GRAND TOTAL, etc.)
-                               ├── INR vs USD currency detection
-                               └── Fallback: highest numeric value in document
-```
-
-Supported formats: PDF, PNG, JPG/JPEG, GIF, BMP, TIFF, WebP
-
-### Fraud Sentinel (`fraudSentinel.ts`)
-Three-layer fraud detection:
-
-```
-Layer 1: Duplicate Receipt (SHA-256)
-  computeImageHash(mediaUrl) → compare against tickets.receipt_image_hash
-  → +0.50 risk if duplicate found
-
-Layer 2: Claim Velocity
-  7-day window per patient_phone
-  → +0.35 if ≥ 3 claims in 7 days (non life-safety)
-  → Threshold gaming: +0.30 if repeated micro-grants near $200
-
-Layer 3: ML Anomaly
-  predictAnomalyScore(features) via Autoencoder
-  → +0.40 if reconstruction MSE ≥ 0.75 (non life-safety)
-
-Final: riskScore = min(1.0, sum)
-       isFlagged = riskScore ≥ 0.60 (or 0.50 for life-safety)
-```
-
-### Disbursement Service (`disbursementService.ts`)
-
-Supports three payout rails:
-
-**RAZORPAY_UPI (INR, instant)**
-```typescript
-razorpayInstance.payouts.create({
-  amount: amount * 100,  // paise
-  mode: 'UPI',
-  fund_account: { account_type: 'vpa', vpa: { address: studentVpa } }
-})
-```
-
-**RAZORPAY_BANK (INR, IMPS)**
-```typescript
-// mode: 'IMPS', fund_account.account_type: 'bank_account'
-```
-
-**VOUCHER (offline / sandbox)**
-```typescript
-// Generates EDU-GRANT-XXXXXX code
-// Inserts into vouchers table
-// Redeemable at campus finance office
-```
-
-### PDF Report Service (`pdfReportService.ts`)
-Generates HIPAA-compliant audit PDFs using PDFKit:
-- Clinical governance header with institution branding
-- Claim-by-claim adjudication log with ML scores
-- Disbursement ledger with transaction references
-- SHA-256 integrity checksum of report content
-- Signed timestamp from server
-
-### Socket Manager (`socketManager.ts`)
-Real-time event broadcasting via Socket.io:
-```typescript
-// Clients join a room per institution_id
-io.to(institutionId).emit('ticket-updated', { ticketId, status, esiLevel, csi });
-io.to(institutionId).emit('payout-completed', { ticketId, txnRef, amount });
-```
-
-### Audit Logger (`auditLogger.ts`)
-Every clinically significant action records to `audit_logs`:
-```typescript
-await logAudit({
-  institution_id,
-  ticket_id,
-  action_type: 'DISBURSEMENT',
-  actor_type: 'ADMIN',
-  details: { amount, method, approvalNotes, txnRef }
-});
-```
-
-### Email Dispatch (`emailDispatch.ts`)
-- Uses Nodemailer (SMTP) with Resend as a fallback
-- Templates: claim received, triage complete, payout sent, fraud flag notification
+### `notificationWorker.ts` — Asynchronous Dispatch
+- Dispatches transactional emails via Nodemailer / Resend for status milestones.
+- Dispatches emergency SMS alerts via Twilio for all ESI-1 Resuscitation tickets.
 
 ---
 
-## 7. Background Workers
+## 8. Security & HIPAA Architecture
 
-### IntakeWorker (`workers/intakeWorker.ts`)
-
-Processes jobs from the `clinical-intake-queue` BullMQ queue.
-
-**Job payload:**
-```typescript
-{
-  ticketId: string,
-  rawMessage: string,
-  mediaUrl?: string,
-  studentPhone: string,
-  institutionId: string
-}
+```
+Client Request ──► CORS ──► JWT Auth Middleware (requireAuth)
+                                     │
+                        RBAC Guard (requireRole(['ADMIN']))
+                                     │
+                        tenantScopeMiddleware (injects institution_id)
+                                     │
+                        Supabase PostgreSQL (Row-Level Security Policies)
 ```
 
-**Processing steps** (see [ARCHITECTURE.md](../ARCHITECTURE.md) §3.1 for full pipeline diagram):
-1. Receipt OCR extraction
-2. NLP feature vector extraction  
-3. Fraud Sentinel evaluation
-4. DeepRank CSI prediction
-5. ESI tier assignment
-6. Grant optimizer recommendation
-7. Policy RAG match
-8. Supabase update + Socket.io broadcast
-
-**Retry policy:** 3 attempts, exponential backoff
-
-### ML Retraining Worker (`workers/mlRetrainingWorker.ts`)
-
-Triggered by admin via `POST /api/v1/workflow/retrain`:
-1. Queries resolved tickets from Supabase as training examples
-2. Calls `fineTuneDeepRankModel(pastTickets)` — 5 epochs online learning
-3. Updates `models/deep_rank/` weights on disk
-4. Logs retraining loss to audit_logs
-
-### Notification Worker (`workers/notificationWorker.ts`)
-
-Processes jobs from `notification-queue`:
-- Email via Nodemailer/Resend for status changes
-- SMS via Twilio for ESI-1 critical alerts
-- Internal Socket.io push for real-time dashboard updates
-
----
-
-## 8. Database Service (`services/dbService.ts`)
-
-`DatabaseService` wraps all Supabase queries with consistent error handling and tenant scoping:
-
-```typescript
-// Example: get claims for an institution, filtered by ESI
-await DatabaseService.getClaims({
-  institutionId: 'campus-001',
-  esiLevel: 'ESI_1_CRITICAL',
-  status: 'Pending',
-  limit: 20
-});
-
-// Health check (used by /health endpoint and startup)
-await DatabaseService.checkDatabaseHealth();
-// Returns: { status: 'healthy' | 'degraded', claimsReady, fundsReady }
-```
-
----
-
-## 9. Environment Configuration
-
-```bash
-# .env (copy from .env.example)
-
-# Supabase
-SUPABASE_URL=https://xxxx.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=eyJ...   # Full database access (backend only)
-SUPABASE_ANON_KEY=eyJ...           # Flutter client key
-
-# Redis (BullMQ)
-REDIS_URL=redis://localhost:6379
-
-# Payment Rails
-RAZORPAY_KEY_ID=rzp_live_...
-RAZORPAY_KEY_SECRET=...
-RAZORPAYX_ACCOUNT_NUMBER=2323230039262626
-STRIPE_SECRET_KEY=sk_live_...
-
-# Notifications
-TWILIO_ACCOUNT_SID=...
-TWILIO_AUTH_TOKEN=...
-TWILIO_PHONE_NUMBER=+1...
-RESEND_API_KEY=re_...
-SMTP_HOST=smtp.gmail.com
-SMTP_USER=...
-SMTP_PASS=...
-
-# App
-PORT=3000
-NODE_ENV=production
-```
-
----
-
-## 10. NPM Scripts
-
-| Script | Command | Description |
-|---|---|---|
-| `dev` | `tsx src/server.ts` | Development server with hot reload |
-| `build` | `tsc` | Compile TypeScript to `dist/` |
-| `start` | `node dist/src/server.js` | Production server |
-| `train:ml` | `tsx scripts/generate_training_data.ts && tsx src/ml/train_all.ts` | Generate data + train all ML models |
-| `seed:policies` | `tsx scripts/seed_policies.ts` | Seed institutional policy KB |
-| `seed:funds` | `tsx scripts/seed_funds.ts` | Seed health fund pools |
-| `seed:audits` | `tsx scripts/seed_audit_logs.ts` | Seed sample audit log data |
-| `seed:all` | runs all three seed scripts | Full database seed |
-| `test:workflows` | `tsx scripts/testMedAccessSuite.ts` | Integration test suite |
-| `test:advanced` | `tsx scripts/testMedAccessAdvancedSuite.ts` | Advanced integration tests |
+- **Row-Level Security (RLS)**: Enforced across all PostgreSQL tables (`tickets`, `profiles`, `audit_logs`, `health_funds`). Queries without valid institutional tenant scoping are rejected at the database level.
+- **HIPAA Audit Logging**: Every clinician override, diagnosis modification, and copay disbursement generates an immutable record in `audit_logs` containing actor ID, timestamp, and full structured JSONB payload.
+- **Cryptographic Tamper-Evidence**: Exported audit PDFs embed a calculated SHA-256 hash of the generated report content.
+- **FERPA Compliance**: Clinical diagnosis redaction replaces acute medical conditions with generalized medical necessity phrasing prior to sending notices to university faculty.

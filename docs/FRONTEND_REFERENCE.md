@@ -1,52 +1,68 @@
-# MedAccess AI — Frontend Reference
+# MedAccess AI — Frontend Architecture Reference
 
-> **Complete guide to the Flutter client:** MVVM architecture, Provider state management, screens, services, theme system, and real-time Socket.io integration.
+> **Complete architectural reference for the Flutter client:** MVVM pattern, Provider state management, Clinical Diagnostics & Vision Suite, CDSS & Pharmacy Hubs, Real-Time Socket.io integration, on-device edge ML, and accessibility design system.
 
 ---
 
-## 1. Project Overview
+## 1. Project & Technology Overview
 
-| Item | Value |
-|---|---|
-| **Framework** | Flutter 3.29+ (Dart SDK ^3.10.7) |
-| **Architecture** | MVVM via Provider |
-| **State Management** | `provider` ^6.1.5 |
-| **Charting** | `fl_chart` ^1.2.0 |
-| **Real-time** | `socket_io_client` ^3.1.6 |
-| **Typography** | `google_fonts` ^8.2.1 |
-| **File Upload** | `file_picker` + `image_picker` |
-| **Offline** | `shared_preferences` ^2.5.5 |
-| **Notifications** | `flutter_local_notifications` ^22.2.0 |
-| **Networking** | `http` ^1.6.0 |
+The MedAccess AI mobile and web frontend is engineered with Flutter, delivering hospital-grade clinical diagnostics, real-time emergency triage, and confidential Psychological First Aid (PFA) across iOS, Android, Desktop, and Web.
+
+| Technology | Version / Package | Architectural Role |
+|---|---|---|
+| **Framework** | Flutter 3.29+ (Dart SDK ^3.10.7) | High-performance multi-platform UI runtime |
+| **State Management** | `provider` ^6.1.5 | Reactive MVVM architecture with ChangeNotifier |
+| **Edge ML Execution** | `tflite_flutter` | On-device inference for quantized clinical vision & cough models |
+| **Audio Capture** | `record` ^5.2.1 | High-fidelity 16kHz uncompressed acoustic capture for respiratory cough analysis |
+| **Camera & Video** | `camera` ^0.11.0 + `image_picker` | High-resolution capture for dermatology, wounds, and 30Hz rPPG vitals |
+| **Real-Time Telemetry** | `socket_io_client` ^3.1.6 | Low-latency bi-directional WebSocket connection with institution rooms |
+| **Data Visualization** | `fl_chart` ^1.2.0 | ESI triage distribution, fund liquidity, and longitudinal health risk charts |
+| **Offline Resilience** | `shared_preferences` ^2.5.5 | Local persistent storage with `OfflineSyncEngine` caching |
+| **Local Alerts** | `flutter_local_notifications` ^22.2.0 | Device push notifications for emergent ESI-1 triage updates |
+| **Networking** | `http` ^1.6.0 | RESTful HTTP client with token injection & tenant scoping |
+| **Typography** | `google_fonts` ^8.2.1 | Clean, high-legibility clinical typography (Outfit / Inter) |
 
 ---
 
 ## 2. MVVM Architecture Pattern
 
+The application strictly separates visual presentation, UI state/business logic, and network/edge infrastructure:
+
 ```
-┌─────────────────────────────────────────────────┐
-│                   View Layer                      │
-│              (screens/*.dart)                     │
-│   Reads state via context.watch<ProviderX>()      │
-│   Dispatches actions via context.read<ProviderX>  │
-└──────────────────────┬──────────────────────────┘
-                       │ ChangeNotifier
-┌──────────────────────▼──────────────────────────┐
-│                ViewModel Layer                    │
-│             (providers/*.dart)                    │
-│   Holds UI state, fetches data, processes events  │
-└──────────────────────┬──────────────────────────┘
-                       │ async calls
-┌──────────────────────▼──────────────────────────┐
-│               Infrastructure Layer               │
-│           (services/*.dart)                      │
-│   REST API calls, Socket.io, SharedPreferences   │
-└─────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                               VIEW LAYER                                │
+│                     (lib/screens/patient & admin/*.dart)                │
+│   • Renders diagnostic camera previews, acoustic waveforms, heatmaps    │
+│   • Subscribes reactively via context.watch<T>()                        │
+│   • Dispatches user events via context.read<T>()                        │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │ ChangeNotifier updates
+┌────────────────────────────────────▼────────────────────────────────────┐
+│                             VIEWMODEL LAYER                             │
+│                         (lib/providers/*.dart)                          │
+│   • AuthProvider: Session lifecycle, JWT tokens, RBAC routing           │
+│   • ClaimsProvider: ESI-sorted triage queue, status filters, search     │
+│   • ClinicalChatProvider: PFA multi-turn conversation, crisis cards     │
+│   • WarRoomProvider: Real-time clinical telemetry & ESI statistics      │
+│   • TicketProvider: Patient-side encounter tracking & FHIR records      │
+│   • JobTrackingManager: Async BullMQ queue polling with step progress    │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │ async service invocations
+┌────────────────────────────────────▼────────────────────────────────────┐
+│                          INFRASTRUCTURE LAYER                           │
+│                          (lib/services/*.dart)                          │
+│   • ClinicalApiService: REST routes for Vision, CDSS, Audio, Vitals     │
+│   • SocketService: WebSocket event subscription & push notifications    │
+│   • OfflineSyncEngine: Local storage caching & network reconnection sync│
+│   • Edge TFLite Plugins: In-app inference for offline MobileNet-V3      │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## 3. Provider Tree (`main.dart`)
+
+The application root configures dependency injection through a global `MultiProvider` tree wrapping the `MaterialApp`:
 
 ```dart
 MultiProvider(
@@ -60,435 +76,163 @@ MultiProvider(
     ChangeNotifierProvider(create: (_) => AccessibilityProvider()),
     ChangeNotifierProvider(create: (_) => JobTrackingManager()),
   ],
-  child: MaterialApp(...)
-)
+  child: MaterialApp(
+    title: 'MedAccess AI',
+    theme: AppTheme.lightTheme,
+    darkTheme: AppTheme.darkTheme,
+    home: const AuthGatekeeper(),
+  ),
+);
 ```
 
 ---
 
-## 4. Providers (ViewModels)
+## 4. State Management (ViewModels)
 
-### `AuthProvider` — Session & RBAC
+### `AuthProvider` — Authentication & RBAC Guard
 **File:** `lib/providers/auth_provider.dart`
+- Manages Supabase JWT lifecycle, user profile metadata, and tenant partition (`institutionId`).
+- Exposes computed getters: `bool get isAuthenticated`, `bool get isAdmin`, `bool get isStudent`.
+- Directs routing to either `PatientMainScreen` or `AdminMainScreen`.
 
-| State | Type | Description |
-|---|---|---|
-| `isAuthenticated` | `bool` | Whether user has a valid session |
-| `currentUser` | `UserModel?` | Authenticated user object |
-| `userRole` | `String?` | `'STUDENT'` or `'ADMIN'` |
-| `institutionId` | `String?` | Tenant partition key |
-| `isLoading` | `bool` | Auth operation in progress |
-
-**Key methods:**
-```dart
-await authProvider.signIn(email, password);
-await authProvider.signUp(email, password, role, institutionId);
-await authProvider.signOut();
-bool get isAdmin => userRole == 'ADMIN';
-```
-
-Routing logic in `main.dart` reads `isAuthenticated` and `isAdmin` to push the correct entry screen.
-
----
-
-### `ClaimsProvider` — Triage Queue State
+### `ClaimsProvider` — Clinical Triage Queue State
 **File:** `lib/providers/claims_provider.dart`
+- Stores the active list of clinical claims/encounters for the current institution.
+- Automatically maintains descending sort order by Crisis Severity Index (`crisis_severity_index`).
+- Provides filter predicates: `filterByEsi(String level)`, `filterByStatus(String status)`, and text query search.
+- Reacts to real-time WebSocket `ticket-updated` events by performing in-place state replacement.
 
-| State | Type | Description |
-|---|---|---|
-| `claims` | `List<Claim>` | Filtered + sorted claim list |
-| `selectedEsiFilter` | `String?` | Active ESI level filter |
-| `searchQuery` | `String` | Text search filter |
-| `isLoading` | `bool` | API fetch in progress |
-
-**Key methods:**
-```dart
-await claimsProvider.fetchClaims(institutionId);
-claimsProvider.filterByEsi('ESI_1_CRITICAL');
-claimsProvider.search('fracture');
-```
-
-Sorted descending by `crisis_severity_index` after fetch.
-
----
-
-### `ClinicalChatProvider` — PFA Conversation State
+### `ClinicalChatProvider` — Confidential PFA Conversation State
 **File:** `lib/providers/clinical_chat_provider.dart`
+- Orchestrates multi-turn Psychological First Aid chat with the local/edge Qwen ONNX counselor.
+- Tracks turn-by-turn chat history, typing indicators, and hardship confirmation dialogs.
+- **Crisis Interceptor:** When the API returns `isCrisisResponse: true`, the provider activates `resources`, triggering the emergency 24/7 hotline card overlay and grounding guidance.
 
-| State | Type | Description |
-|---|---|---|
-| `messages` | `List<ChatMessage>` | Ordered conversation history |
-| `isTyping` | `bool` | AI is generating a reply |
-| `resources` | `List<EmergencyResource>?` | Crisis hotline cards (if crisis detected) |
-| `requiresConfirmation` | `bool` | Awaiting patient consent to file ticket |
-
-**Key methods:**
-```dart
-await chatProvider.sendMessage(ticketId, text, history);
-chatProvider.clearConversation();
-```
-
-On crisis detection (`isCrisisResponse: true` from API), automatically surfaces the emergency resource cards overlay.
-
----
-
-### `WarRoomProvider` — Admin Telemetry State
+### `WarRoomProvider` — Clinician Telemetry & Analytics
 **File:** `lib/providers/war_room_provider.dart`
+- Aggregates operational metrics: pending ESI-1 critical cases, diagnostic review queues, fund liquidity, and disbursement history.
+- Automatically refreshes every 30 seconds or immediately upon receiving Socket.io broadcast signals.
 
-| State | Type | Description |
-|---|---|---|
-| `kpiMetrics` | `Map<String, dynamic>` | KPI counts per ESI level |
-| `fundLiquidity` | `List<HealthFund>` | Fund pool balances |
-| `recentDisbursements` | `List<Claim>` | Last 10 payouts |
-| `alertCount` | `int` | Pending ESI-1 cases |
-
-Refreshed every 30 seconds and on Socket.io `ticket-updated` events.
-
----
-
-### `TicketProvider` — Patient-Side Ticket Tracking
-**File:** `lib/providers/ticket_provider.dart`
-
-| State | Type | Description |
-|---|---|---|
-| `myTickets` | `List<Claim>` | Patient's own claims |
-| `activeTicket` | `Claim?` | Currently viewed claim |
-
----
-
-### `JobTrackingManager` — Background Job Polling
+### `JobTrackingManager` — Asynchronous Pipeline Polling
 **File:** `lib/providers/job_tracking_manager.dart`
-
-Polls `/api/v1/intake/status/:jobId` after submission to update UI with processing progress:
-- `Submitted` → `Processing` → `Triage Active` → `Approved` / `Rejected`
-
-Uses a 2-second polling interval, cancels on terminal status.
+- Tracks 10-step asynchronous BullMQ intake jobs: `Submitted` $\rightarrow$ `Processing` $\rightarrow$ `Triage Active` $\rightarrow$ `Approved` / `Flagged`.
+- Polls `/api/v1/intake/status/:jobId` on a 2-second interval with progressive visual feedback.
 
 ---
 
-## 5. Screens
+## 5. Client Services & Infrastructure Layer
 
-### Patient Portal
-
-#### `PatientMainScreen` — Navigation Hub
-**File:** `lib/screens/patient/patient_main_screen.dart`
-
-Bottom tab navigator with three destinations:
-1. **Claim Intake** — submit a new emergency claim
-2. **My Claims** — list + status tracker
-3. **PFA Chat** — 24/7 counselor
-
----
-
-#### `ClaimIntakeScreen` — Submit Emergency Claim
-**File:** `lib/screens/patient/claim_intake_screen.dart`
-
-**UI elements:**
-- Multi-line text field for emergency description
-- File picker for hospital invoice (PDF / image)
-- Image picker for camera capture
-- Submit button → POST `/api/v1/intake/web` (multipart)
-- Real-time status feedback (submitted → processing animation)
-
-**Validation:**
-- Message text required (min 10 chars)
-- Phone number format validation
-- File size warning if > 10MB
-
----
-
-#### `ClinicalChatScreen` — PFA Counselor Chat
-**File:** `lib/screens/patient/clinical_chat_screen.dart`
-
-**Features:**
-- WhatsApp-style message bubbles (patient right, AI left)
-- Typing indicator (animated dots) while `isTyping = true`
-- **Crisis cards overlay:** if `isCrisisResponse = true`, slides up a card stack with emergency hotlines and `tel:` deep links
-- Confirm-to-submit grant banner if `requiresConfirmation = true`
-- "Take a slow breath" grounding animation on crisis response
-
----
-
-#### `ClaimStatusScreen` — Copay Tracker
-**File:** `lib/screens/patient/claim_status_screen.dart`
-
-**Displays:**
-- ESI level badge with color coding (red / orange / yellow / green)
-- Crisis Severity Index progress bar (0.0 → 1.0)
-- Fraud risk indicator (low / medium / high)
-- Recommended copay amount + grant coverage %
-- Payout status with transaction reference
-- Step-by-step timeline: Submitted → Processing → Triage → Approved → Paid
-- PDF receipt download when disbursed
-
----
-
-### Admin Clinical War Room
-
-#### `AdminMainScreen` — Navigation Hub
-**File:** `lib/screens/admin/admin_main_screen.dart`
-
-Side navigation drawer (desktop) or bottom nav (mobile) with:
-1. War Room (triage queue)
-2. Telemetry Dashboard
-3. Health Funds
-4. Knowledge Base
-5. Compliance Audit
-
----
-
-#### `AdminWarRoomScreen` — Real-Time Triage Queue
-**File:** `lib/screens/admin/admin_war_room_screen.dart`
-
-**Features:**
-- Live claim list sorted by CSI score (descending)
-- ESI color-coded row indicators
-- Filter chips: All / ESI-1 / ESI-2 / ESI-3 / Routine / Flagged
-- Click claim → slide-up detail sheet:
-  - OCR-extracted bill amount
-  - DeepRank CSI + LSTM dropout risk scores
-  - Fraud flags (if any)
-  - **One-tap Payout Modal:**
-    - Amount field (pre-filled with `recommended_copay_amount`)
-    - Method selector: UPI / Bank Transfer / Voucher
-    - UPI VPA input (for UPI payouts)
-    - Confirm → POST `/api/v1/admin/claims/:id/disburse`
-    - Success snackbar with txn reference
-
-Socket.io listener automatically inserts new claims at the top of the list with a brief highlight animation.
-
----
-
-#### `AdminTelemetryDashboardScreen` — KPI Charts
-**File:** `lib/screens/admin/admin_telemetry_dashboard_screen.dart`
-
-**Charts (FL Chart):**
-- **Donut chart:** ESI level distribution (ESI-1 / ESI-2 / ESI-3 / Routine)
-- **Bar chart:** Daily claim volume (last 30 days)
-- **Line chart:** Average adjudication time trend
-- **Stat cards:** Total disbursed / Pending / Flagged / Fund liquidity %
-
----
-
-#### `AdminHealthFundsScreen` — Fund Liquidity Management
-**File:** `lib/screens/admin/admin_health_funds_screen.dart`
-
-**Features:**
-- Fund pool list with budget vs. disbursed progress bars
-- Currency toggle (INR / USD)
-- Top-up fund pool action (admin only)
-- Historical disbursement log per fund
-
----
-
-#### `AdminKnowledgeBaseScreen` — Policy RAG Search
-**File:** `lib/screens/admin/admin_knowledge_base_screen.dart`
-
-**Features:**
-- Semantic search across institutional policies
-- Query → POST `/api/v1/admin/knowledge/search`
-- Results show matched policy name, relevance score, excerpt
-- Upload new policy documents (PDF)
-
----
-
-#### `AdminComplianceAuditScreen` — HIPAA Audit PDF
-**File:** `lib/screens/admin/admin_compliance_audit_screen.dart`
-
-**Features:**
-- Date range picker for audit period
-- Institution-scoped claim audit log preview (paginated)
-- **Generate & Download PDF** → GET `/api/v1/admin/reports`
-  - Streams PDF binary → saved to device downloads
-- SHA-256 checksum displayed for tamper verification
-
----
-
-## 6. Services (Infrastructure Layer)
-
-### `ClinicalApiService` — REST Client
+### `ClinicalApiService`
 **File:** `lib/services/clinical_api_service.dart`
+Dedicated client for all clinical diagnostic endpoints:
+- `evaluateVision({required File image, required String anatomicalSite})`: Uploads dermatology/lesion photo to `/api/v1/diagnostics/vision`. Returns condition, severity, findings, and Grad-CAM heatmap base64.
+- `evaluateCough({required File audioFile})`: Uploads 16kHz audio sample to `/api/v1/diagnostics/audio`. Returns 4-class probabilities and wheeze alert status.
+- `evaluateVitals({required List<String> frameData})`: Posts 30Hz facial video frames to `/api/v1/diagnostics/vitals` to calculate heart rate and SpO2.
+- `evaluateCDSS({required Map<String, dynamic> clinicalPayload})`: Dispatches structured symptom payload to `/api/v1/cdss/evaluate`, returning WHO ICD-11 differential candidates and FHIR R4 Bundle.
+- `parsePrescription({required File prescriptionImage})`: Uploads prescription to `/api/v1/pharmacy/parse` for OCR extraction and RxNorm mapping.
+- `checkInteractions({required List<String> medications})`: Cross-references drug lists against the 8,000+ DDI matrix via `/api/v1/pharmacy/interactions`.
 
-Wraps all HTTP calls with:
-- Base URL injection from `config/`
-- JWT `Authorization: Bearer` header on every request
-- JSON decoding into model objects
-- Timeout handling (30s default)
-- Error normalization
-
-```dart
-// Example usage
-final claims = await ClinicalApiService.getClaims(institutionId: id, esiLevel: 'ESI_1_CRITICAL');
-final result = await ClinicalApiService.disburseClaim(claimId, amount, method, vpa);
-final pdf = await ClinicalApiService.downloadAuditPdf(startDate, endDate);
-```
-
-### `SocketService` — Real-Time Events
+### `SocketService`
 **File:** `lib/services/socket_service.dart`
+- Maintains persistent bi-directional connection to the backend Socket.io server.
+- Emits `join-institution` room scoping upon user authentication.
+- Listens for server events: `ticket-created`, `ticket-updated`, `payout-completed`, and `fraud-flagged`.
 
-```dart
-// Connect + join institution room
-SocketService.connect(institutionId, token);
-
-// Listen for updates
-SocketService.onTicketUpdated.listen((event) {
-  // Update ClaimsProvider state
-});
-
-SocketService.onPayoutCompleted.listen((event) {
-  // Show success snackbar
-});
-
-SocketService.disconnect();
-```
-
-### `OfflineSyncManager` — Offline Fallback
-**File:** `lib/services/offline_sync_manager.dart`
-
-Uses `SharedPreferences` to:
-- Cache last-fetched claims list for offline viewing
-- Queue failed intake submissions for retry when connectivity returns
-- Persist JWT token across app restarts
-
-Connectivity monitoring via `connectivity_plus`.
+### `OfflineSyncEngine`
+**File:** `lib/services/offline_sync_engine.dart`
+- Persists diagnostic reports, symptom logs, and emergency offline contacts in `shared_preferences`.
+- Automatically queues offline submissions and flushes them sequentially upon network restoration.
 
 ---
 
-## 7. Models (Domain Entities)
+## 6. Screen Catalog & Clinical Navigation
 
-### `Claim`
-**File:** `lib/models/claim.dart`
+### 🔷 Patient Portal Screens (`lib/screens/patient/`)
 
-```dart
-class Claim {
-  final String id;
-  final String institutionId;
-  final String patientId;
-  final String rawMessage;
-  final String? mediaUrl;
-  final String parsedCategory;
-  final String esiLevel;          // 'ESI_1_CRITICAL' | 'ESI_2_EMERGENT' | ...
-  final String status;            // 'Pending' | 'Processing' | 'Approved' | ...
-  final double? calculatedAmount;
-  final String? currency;
-  final double crisisSeverityIndex;
-  final double? dropoutRiskScore;
-  final double? fraudRiskScore;
-  final String? fraudFlags;
-  final String? payoutReference;
-  final String? payoutMethod;
-  final DateTime createdAt;
-  // fromJson / toJson
-}
-```
+#### 1. `PatientClinicalDashboard`
+**File:** `patient_clinical_dashboard.dart` (38 KB)
+The central clinical hub for patients:
+- **Diagnostic Launchpad:** One-tap navigation to Dermatology Vision Scan, Cough Acoustic Screening, and Contactless Vitals Monitor.
+- **Symptom Tracker:** Interactive body map and symptom severity selector.
+- **Active Prescriptions:** Current medications with quick links to Pharmacy Hub for interaction checking.
+- **Recent Screenings:** Summary cards showing latest diagnostic risk scores and follow-up guidance.
 
-### `ClaimMessage`
-```dart
-class ClaimMessage {
-  final String id;
-  final String claimId;
-  final String sender;             // 'STUDENT' | 'COUNSELOR_AI' | 'HUMAN_ADMIN'
-  final String message;
-  final bool isCrisisResponse;
-  final List<EmergencyResource>? suggestedResources;
-  final DateTime createdAt;
-}
-```
+#### 2. `PharmacyHubScreen`
+**File:** `pharmacy_hub_screen.dart` (35 KB)
+Comprehensive medication safety center:
+- **Prescription Upload:** Dual camera/PDF capture for handwritten prescriptions.
+- **OCR Review Panel:** Displays digitized medications with editable dosage, frequency, and canonical RxCUI tags.
+- **Drug-Drug Interaction Matrix:** Visual traffic-light indicators (`Contraindicated`, `Major`, `Moderate`, `Minor`) explaining physiological risks.
+- **Allergy Scanner:** Alerts patients if active ingredients conflict with their medical profile.
 
-### `HealthFund`
-```dart
-class HealthFund {
-  final String id;
-  final String institutionId;
-  final String fundName;
-  final double totalBudget;
-  final double allocatedAmount;
-  final String currency;
-  double get availableAmount => totalBudget - allocatedAmount;
-  double get utilizationPercent => allocatedAmount / totalBudget;
-}
-```
+#### 3. `HealthRecordsScreen`
+**File:** `health_records_screen.dart` (32 KB)
+Patient health summary and clinical documentation:
+- Historical diagnostic reports with Grad-CAM image comparisons over time.
+- Standardized HL7 FHIR R4 JSON viewer and export utility for external clinicians.
+- Verified medical leave letters and institutional excuse notes with redaction tags.
+
+#### 4. `ClaimIntakeScreen`
+**File:** `claim_intake_screen.dart` (23 KB)
+Multimodal intake screen supporting narrative text, hospital bills (PDF/JPG), and clinical imagery.
+
+#### 5. `ClinicalChatScreen`
+**File:** `clinical_chat_screen.dart` (13 KB)
+Confidential, on-device Psychological First Aid chat with local Qwen ONNX model, conversational grounding animations, and emergency resource triggers.
+
+#### 6. `ClaimStatusScreen`
+**File:** `claim_status_screen.dart` (28 KB)
+Visual progress tracker displaying assigned ESI triage level, CSI severity meter, copay relief calculation, and live payout status.
+
+#### 7. `EmergencyHubScreen`
+**File:** `emergency_hub_screen.dart` (10 KB)
+One-tap access to 24/7 crisis hotlines (Tele-MANAS, 988 Lifeline, campus emergency contacts) with immediate `tel:` intent dispatch.
 
 ---
 
-## 8. Theme System (`app_theme.dart`)
+### 🔷 Admin Clinical War Room Screens (`lib/screens/admin/`)
+
+#### 1. `AdminClinicalDiagnosesScreen`
+**File:** `admin_clinical_diagnoses_screen.dart` (75 KB)
+The primary diagnostic evaluation workbench for clinical officers:
+- **Multimodal Visualizer:** Side-by-side comparison of original patient medical photograph and Grad-CAM saliency heatmap overlay.
+- **CDSS Differential Panel:** Calibrated probability bars for WHO ICD-11 differential candidates with logit confidence scores.
+- **Acoustic Spectrogram & Waveform:** Visual player for cough audio samples with 4-class model probabilities and wheeze detection.
+- **Contactless Vitals Inspector:** Real-time pulse waveform curve with calculated BPM, SpO2 estimate, and physiological red flags.
+- **Clinician Override Action:** One-tap mechanism to accept, modify, or reject AI diagnostic suggestions with mandatory audit comments.
+
+#### 2. `AdminWarRoomScreen`
+**File:** `admin_war_room_screen.dart` (22 KB)
+- Real-time clinical triage queue sorted by Crisis Severity Index (CSI).
+- ESI badge indicators (ESI-1 Critical to ESI-5 Routine) with instant filtering chips.
+- Slide-up bottom sheet with complete multimodal claim breakdown, fraud sentinel analysis, and one-tap RazorpayX / Stripe payout execution.
+
+#### 3. `AdminHealthFundsScreen`
+**File:** `admin_health_funds_screen.dart` (38 KB)
+Fund pool liquidity monitoring, historical disbursement ledgers, and emergency voucher generator.
+
+#### 4. `AdminKnowledgeBaseScreen`
+**File:** `admin_knowledge_base_screen.dart` (39 KB)
+Institutional medical policy management with Gemini semantic vector search (RAG) and PDF policy ingestion.
+
+#### 5. `AdminMainScreen`
+**File:** `admin_main_screen.dart` (17 KB)
+Master navigation shell providing responsive drawer navigation on desktop/tablet and bottom navigation on mobile devices.
+
+---
+
+## 7. Clinical Design System & Theme Architecture
 
 **File:** `lib/theme/app_theme.dart`
 
-### ESI Color Tokens
-```dart
-static const Color esiCritical = Color(0xFFDC2626);   // Red-600
-static const Color esiEmergent = Color(0xFFEA580C);   // Orange-600
-static const Color esiUrgent   = Color(0xFFCA8A04);   // Yellow-600
-static const Color esiRoutine  = Color(0xFF16A34A);   // Green-600
-```
-
 ### Clinical Color Palette
-```dart
-static const Color primaryBlue    = Color(0xFF1D4ED8);
-static const Color surfaceDark    = Color(0xFF0F172A);
-static const Color cardBackground = Color(0xFF1E293B);
-static const Color textPrimary    = Color(0xFFF1F5F9);
-static const Color textSecondary  = Color(0xFF94A3B8);
-```
+- **ESI-1 Resuscitation:** Crimson Red (`#DC2626`) — Immediate life-safety emergency.
+- **ESI-2 Emergent:** High-Risk Amber/Orange (`#EA580C`) — High urgency, rapid physician evaluation required.
+- **ESI-3 Urgent:** Warm Ochre (`#D97706`) — Moderate severity, stable vitals.
+- **ESI-4 Semi-Urgent / ESI-5 Routine:** Medical Teal / Emerald (`#059669`) — Non-emergent care.
+- **Clinical Primary Brand:** Deep Clinical Cyan (`#0EA5E9`) paired with Hospital Navy (`#0F172A`).
 
-### Typography
-Uses **Google Fonts Inter** (body) and **Inter Display** (headings) for clinical readability.
-
-### ESI Badge Widget
-Helper method returns themed Badge widget given ESI level string:
-```dart
-Widget esiLevelBadge(String esiLevel) { ... }
-```
-
----
-
-## 9. Key Dependencies
-
-| Package | Version | Purpose |
-|---|---|---|
-| `provider` | ^6.1.5 | MVVM state management |
-| `http` | ^1.6.0 | REST API calls |
-| `socket_io_client` | ^3.1.6 | Real-time WebSocket events |
-| `fl_chart` | ^1.2.0 | Telemetry charts |
-| `google_fonts` | ^8.2.1 | Inter font family |
-| `file_picker` | ^8.1.7 | Invoice PDF/image selection |
-| `image_picker` | ^1.1.2 | Camera capture |
-| `qr_flutter` | ^4.1.0 | QR code for voucher display |
-| `url_launcher` | ^6.3.2 | `tel:` deep links for crisis hotlines |
-| `connectivity_plus` | ^7.3.1 | Network state monitoring |
-| `shared_preferences` | ^2.5.5 | Offline cache + token persistence |
-| `flutter_local_notifications` | ^22.2.0 | Local push for status changes |
-| `intl` | ^0.20.3 | Currency + date formatting |
-
----
-
-## 10. Running the Flutter App
-
-```bash
-# Install dependencies
-flutter pub get
-
-# Run on default device (Chrome for web, emulator for mobile)
-flutter run
-
-# Run on specific target
-flutter run -d chrome          # Web
-flutter run -d android         # Android emulator
-flutter run -d ios             # iOS simulator
-
-# Build production APK
-flutter build apk --release
-
-# Build web bundle
-flutter build web --release
-```
-
-### Environment Config
-Create `lib/config/api_config.dart` (not committed):
-```dart
-const String kApiBaseUrl = 'http://localhost:3000/api/v1';
-const String kWsUrl = 'http://localhost:3000';
-const String kSupabaseUrl = 'https://xxxx.supabase.co';
-const String kSupabaseAnonKey = 'eyJ...';
-```
+### Accessibility Standards
+- Contrast ratios exceed WCAG 2.1 AAA for clinical text and diagnostic indicators.
+- Minimum touch targets of $48 \times 48\text{ dp}$ across all clinical action buttons.
+- Full dynamic type support via `AccessibilityProvider`, scaling typography for visually impaired users.

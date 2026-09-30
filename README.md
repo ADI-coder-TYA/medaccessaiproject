@@ -1020,4 +1020,4 @@ flutter pub get && flutter run
 
 ---
 
-*Built for PeddieHacks — AI-powered campus welfare, zero compromise.*
+*Built with patience, perseverance and dedication.*

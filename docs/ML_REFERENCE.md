@@ -26,7 +26,7 @@ MedAccess AI employs a **hybrid edge-cloud machine learning architecture**. It p
 | **Fraud Anomaly Detection** | Local Autoencoder (TF.js) | SHA-256 Hash + Velocity Filter | `@tensorflow/tfjs-node` Autoencoder |
 | **Multimodal Claim Intake** | Google Gemini 2.0 Flash | Structured Default Triage Payload | Google Gemini API (Zod Validated) |
 | **Policy Adjudication (RAG)**| Google Gemini 1.5 Pro (Chain-of-Thought)| Escalated / Manual Administrative Flag | Gemini API + pgvector (768-d) |
-| **HIPAA PHI Redaction** | Google Gemini 1.5 Flash | Manual Redaction Escalation Flag | Gemini API + Post-Redaction Regex |
+| **Medical Privacy & PHI Redaction** | Google Gemini 1.5 Flash | Manual Redaction Escalation Flag | Gemini API + Post-Redaction Regex |
 
 ---
 

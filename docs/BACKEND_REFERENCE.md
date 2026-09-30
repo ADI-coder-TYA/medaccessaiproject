@@ -1,6 +1,6 @@
 # MedAccess AI — Backend Architecture Reference
 
-> **Complete architectural reference for the Node.js/TypeScript backend:** server bootstrap sequence, modular clinical diagnostics engine, CDSS WHO ICD-11 framework, pharmacy safety pipeline, BullMQ background queues, in-process ML retraining, and HIPAA security architecture.
+> **Complete architectural reference for the Node.js/TypeScript backend:** server bootstrap sequence, modular clinical diagnostics engine, CDSS WHO ICD-11 framework, pharmacy safety pipeline, BullMQ background queues, in-process ML retraining, and medical data protection architecture.
 
 ---
 
@@ -19,7 +19,7 @@ The MedAccess AI backend is an enterprise-grade, event-driven medical intelligen
 | **Real-Time Engine** | Socket.io v4 | WebSocket rooms segmented per institution tenant |
 | **Digital Signal Processing** | Meyda.js + Custom Butterworth | MFCC acoustic extraction & 0.75–3.5 Hz bandpass pulse filtering |
 | **OCR & Imaging** | Poppler `pdftotext` + Tesseract.js + `sharp` | Handwritten Rx digitization, bill parsing, and clinical image preprocessing |
-| **Audit PDF Generation** | PDFKit | Tamper-evident HIPAA compliance reports with SHA-256 cryptographic hashes |
+| **Report Generation** | PDFKit | Tamper-evident clinical encounter reports with SHA-256 cryptographic hashes |
 
 ---
 
@@ -87,7 +87,7 @@ intellidesk_backend/
 │   │   ├── disbursementService.ts      # RazorpayX UPI & IMPS payouts
 │   │   ├── payoutService.ts            # Stripe international & campus vouchers
 │   │   ├── receiptParser.ts            # Bill total extraction & currency detection
-│   │   ├── pdfReportService.ts         # HIPAA audit report generator
+│   │   ├── pdfReportService.ts         # Clinical report generator
 │   │   ├── socketManager.ts            # Socket.io room broadcaster
 │   │   ├── dbService.ts                # Database health & telemetry check
 │   │   └── storageBootstrap.ts         # Supabase storage bucket auto-provisioning
@@ -192,14 +192,14 @@ The backend initializes sequentially to ensure zero-crash resilience:
   - Multimodal claim intake narrative parsing (`gemini-2.0-flash`).
   - Chain-of-Thought policy adjudication with mandatory clause citations (`gemini-1.5-pro`).
   - Semantic embeddings (`gemini-embedding-001`, 768-d) for hybrid Reciprocal Rank Fusion (RRF) policy search.
-  - HIPAA PHI de-identification and redaction before generating official letters (`gemini-1.5-flash`).
+  - Automated medical privacy and PHI redaction before generating official letters (`gemini-1.5-flash`).
 - **`fraudSentinel.ts`**: 3-layer claim integrity check:
   - Layer A: SHA-256 cryptographic image hashing to detect duplicate receipts.
   - Layer B: 7-day claim velocity monitoring per student phone identity.
   - Layer C: Feature reconstruction anomaly detection via Autoencoder MSE (threshold = 0.75).
   - *Emergency life-safety claims automatically bypass velocity checks.*
 - **`disbursementService.ts` & `payoutService.ts`**: Multi-rail disbursement executing instant UPI/IMPS via RazorpayX, USD payouts via Stripe, or generating campus clinic QR vouchers.
-- **`pdfReportService.ts`**: Generates downloadable HIPAA compliance audit reports with cryptographic SHA-256 tamper-evident checksums.
+- **`pdfReportService.ts`**: Generates clinical encounter reports with cryptographic SHA-256 tamper-evident checksums.
 
 ---
 
@@ -240,7 +240,7 @@ The backend initializes sequentially to ensure zero-crash resilience:
 | `POST` | `/api/v1/claims/:id/override` | `ADMIN` | Override AI-assigned ESI tier with mandatory clinician documentation |
 | `POST` | `/api/v1/claims/:id/disburse` | `ADMIN` | Execute instant emergency copay disbursement via RazorpayX or Stripe |
 | `GET` | `/api/v1/admin/telemetry` | `ADMIN` | Dashboard telemetry: ESI breakdown, diagnostic counts, fund liquidity |
-| `GET` | `/api/v1/admin/reports` | `ADMIN` | Download tamper-evident HIPAA compliance audit PDF |
+| `GET` | `/api/v1/admin/reports` | `ADMIN` | Download clinical encounter report PDF |
 | `GET` | `/api/v1/admin/knowledge` | `ADMIN` | Semantic search (RAG) over institutional healthcare policies |
 
 ---
@@ -272,7 +272,7 @@ Runs on the `clinical-intake-queue` BullMQ worker for every submitted claim:
 
 ---
 
-## 8. Security & HIPAA Architecture
+## 8. Security & Privacy Architecture
 
 ```
 Client Request ──► CORS ──► JWT Auth Middleware (requireAuth)
@@ -285,6 +285,6 @@ Client Request ──► CORS ──► JWT Auth Middleware (requireAuth)
 ```
 
 - **Row-Level Security (RLS)**: Enforced across all PostgreSQL tables (`tickets`, `profiles`, `audit_logs`, `health_funds`). Queries without valid institutional tenant scoping are rejected at the database level.
-- **HIPAA Audit Logging**: Every clinician override, diagnosis modification, and copay disbursement generates an immutable record in `audit_logs` containing actor ID, timestamp, and full structured JSONB payload.
+- **Clinical Activity Logging**: Every clinician override, diagnosis modification, and copay disbursement generates an immutable record in `audit_logs` containing actor ID, timestamp, and full structured JSONB payload.
 - **Cryptographic Tamper-Evidence**: Exported audit PDFs embed a calculated SHA-256 hash of the generated report content.
 - **FERPA Compliance**: Clinical diagnosis redaction replaces acute medical conditions with generalized medical necessity phrasing prior to sending notices to university faculty.

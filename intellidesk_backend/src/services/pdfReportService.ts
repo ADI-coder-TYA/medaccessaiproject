@@ -185,7 +185,7 @@ export async function generateExecutiveReport(
       info: {
         Title: 'MedAccess AI - Institutional Clinical Triage & Copay Audit Report',
         Author: 'MedAccess AI Compliance & Clinical Governance Engine',
-        Subject: 'HIPAA Adjudication, Emergency Severity Index & Copay Disbursement Audit',
+        Subject: 'Clinical Adjudication, Emergency Severity Index & Copay Disbursement Report',
       },
     });
 
@@ -361,7 +361,7 @@ export async function generateExecutiveReport(
        .font('Helvetica')
        .text('CONFIDENTIAL — FOR INSTITUTIONAL CLINICAL GOVERNANCE, HEALTH BOARDS & COMPLIANCE OFFICERS ONLY', 40, footerY + 7);
 
-    doc.text(`Tamper-Evident Checksum (SHA-256): ${complianceHash} | Verified HIPAA Compliance Signature`, 40, footerY + 16);
+    doc.text(`Tamper-Evident Checksum (SHA-256): ${complianceHash} | Verified Digital Signature`, 40, footerY + 16);
     doc.text('Page 1 of 1', 500, footerY + 16, { align: 'right' });
 
     doc.end();

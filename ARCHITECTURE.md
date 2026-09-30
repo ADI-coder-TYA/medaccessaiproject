@@ -19,7 +19,7 @@ MedAccess AI is architected as an offline-resilient, hybrid edge-cloud medical p
 │   • Contactless rPPG Vitals (Video Pulse)         • CDSS Differential Diagnosis Review │
 │   • Prescription OCR & 8,000+ DDI Checker         • Clinician Diagnostic & ESI Override│
 │   • PFA Crisis Chat (Local Qwen ONNX)             • Copay Liquidity & Payout Modal     │
-│   • Emergency Copay Status Tracker                • Tamper-Evident HIPAA Audit PDF     │
+│   • Emergency Copay Status Tracker                • Clinical Encounter Reports     │
 └──────────────────────────────────────────▲─────────────────────────────────────────────┘
                                            │  REST + WebSocket (Socket.io)
 ┌──────────────────────────────────────────▼─────────────────────────────────────────────┐
@@ -46,7 +46,7 @@ MedAccess AI is architected as an offline-resilient, hybrid edge-cloud medical p
 │  • SHA-256 Receipt Deduplication Hash    │   │  tickets (clinical encounters & ESI)    │
 │  • Fraud Sentinel & Autoencoder MSE      │   │  ticket_messages (PFA chat history)     │
 │  • DeepRank CSI Prediction & ESI Tier    │   │  health_funds & vouchers (copay pools)  │
-│  • Temporal Attrition LSTM Health Risk   │   │  audit_logs (immutable HIPAA trail)     │
+│  • Temporal Attrition LSTM Health Risk   │   │  audit_logs (clinical activity logs)     │
 │  • Grant Optimizer (MC Dropout Bounds)   │   │  policies (pgvector 768-d embeddings)   │
 │  • Gemini Multimodal & RAG Matching      │   │  (Row-Level Security active on all DB)  │
 │  • Socket.io Real-Time Broadcast         │   └─────────────────────────────────────────┘
@@ -169,7 +169,7 @@ Every database table is protected by **Row-Level Security (RLS)**. Multi-tenancy
 | `is_crisis_response`| BOOLEAN | DEFAULT FALSE | Flagged true on self-harm detection |
 | `suggested_resources`| JSONB | | Array of 24/7 crisis hotline cards |
 
-### 3.5 `audit_logs` — Immutable HIPAA Audit Trail
+### 3.5 `audit_logs` — Clinical Activity Log
 | Column | Type | Constraints | Description |
 |---|---|---|---|
 | `id` | UUID | PRIMARY KEY | Audit event identifier |
@@ -249,7 +249,7 @@ intellidesk_app/lib/
 
 ## 6. Security, Compliance & Governance
 
-- **HIPAA Alignment:** Row-Level Security ensures tenant isolation. Every diagnostic and override decision is written to an immutable `audit_logs` record containing full structured JSONB context.
+- **Data Isolation & Governance:** Row-Level Security ensures tenant isolation. Every diagnostic and override decision is written to an immutable `audit_logs` record containing full structured JSONB context.
 - **Tamper-Evident Verification:** Exported audit PDFs embed a calculated SHA-256 hash of the generated report content.
 - **FERPA Redaction:** Gemini 1.5 Flash strips acute diagnostic conditions from professor notification letters, replacing them with generic medical excuse phrasing.
 - **Crisis Life-Safety Bypass:** Suicidal ideation or acute life-safety keywords immediately bypass non-critical velocity and rate-limit restrictions.

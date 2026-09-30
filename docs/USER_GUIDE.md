@@ -271,11 +271,9 @@ Dr. Chen, Chief Medical Officer, reviews active overnight emergency cases and AI
   - **Acoustic Audio Player:** Listens to Marcus's cough audio; inspects the MFCC spectrogram showing wheeze frequency peaks.
 - Dr. Chen confirms the AI recommendations and clicks **"Export HL7 FHIR R4 Bundle"** to sync with the university hospital EMR.
 
-**4. Generate Monthly HIPAA Audit Report**
-- Navigate to **"Compliance Audit"** in the sidebar.
-- Select date range: `01 Aug 2026 - 31 Aug 2026`.
-- Click **"Generate Audit PDF"**.
-- System compiles an institutional report containing all ESI decisions, overrides, and fund ledgers, complete with an embedded **SHA-256 cryptographic tamper-evident checksum**.
+**4. Review Institutional Healthcare Guidelines**
+- Navigate to **"Clinical Policies"** in the navigation rail.
+- Use semantic search to look up campus clinical protocols, copay thresholds, and emergency referral guidelines.
 
 ---
 
@@ -287,7 +285,7 @@ A: No. Privacy is prioritized by design:
 - Cloud VLM calls (Qwen2.5-VL 72B) only execute when network is available and clinical detail requires 72B-parameter resolution. All Protected Health Information (PHI) is automatically redacted before API transmission.
 
 **Q: Can clinicians override AI diagnosis and triage recommendations?**  
-A: Yes. MedAccess AI is strictly an **AI-First, Human-in-the-Loop** system. Clinicians can override any diagnostic classification or ESI level at any time with documented clinical rationale, which is immutably logged in the HIPAA audit trail.
+A: Yes. MedAccess AI is strictly an **AI-First, Human-in-the-Loop** system. Clinicians can override any diagnostic classification or ESI level at any time with documented clinical rationale, which is immutably logged in the clinical activity trail.
 
 **Q: What happens if there is no internet connection at the health center?**  
 A: The mobile client uses the **OfflineSyncEngine**:

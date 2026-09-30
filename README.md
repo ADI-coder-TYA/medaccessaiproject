@@ -6,7 +6,7 @@
 
 ## 📑 Table of Contents
 
-1. [What is MedAccessAI?](#1-what-is-intellidesk)
+1. [What is MedAccessAI?](#1-what-is-medaccessai)
 2. [Real-World Use Cases](#2-real-world-use-cases)
 3. [Feature Overview](#3-feature-overview)
 4. [🤖 ML & AI Systems — Deep Dive](#4--ml--ai-systems--deep-dive)

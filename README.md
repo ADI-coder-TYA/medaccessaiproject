@@ -1,13 +1,13 @@
 # 🏥 MedAccess AI
 
-> **AI-powered student health emergency & welfare platform** — clinical triage, multimodal diagnostics, psychological first aid, pharmacy safety, and emergency fund disbursement, all in one system.
+> **AI-Powered Multimodal Clinical Diagnostics, CDSS Triage & Emergency Health Platform** — on-device computer vision, WHO ICD-11 clinical decision support, acoustic respiratory screening, contactless rPPG vitals, pharmacy safety intelligence, psychological first aid, and emergency medical welfare.
 
 ---
 
 ## 📑 Table of Contents
 
 1. [What is MedAccessAI?](#1-what-is-medaccessai)
-2. [Real-World Use Cases](#2-real-world-use-cases)
+2. [Real-World Clinical Scenarios](#2-real-world-clinical-scenarios)
 3. [Feature Overview](#3-feature-overview)
 4. [🤖 ML & AI Systems — Deep Dive](#4--ml--ai-systems--deep-dive)
 5. [System Architecture](#5-system-architecture)
@@ -25,515 +25,457 @@
 
 ## 1. What is MedAccessAI?
 
-**MedAccess AI** is a full-stack, AI-first medical welfare platform built for university campuses. It bridges the gap between a student experiencing a health or financial crisis and institutional support — using cutting-edge on-device ML models, cloud LLMs, and real-time infrastructure.
+**MedAccess AI** is a full-stack, AI-first clinical diagnostic and medical triage platform engineered for campus health centers and university populations. It accelerates patient care by placing hospital-grade diagnostic intelligence directly in students' and clinicians' hands — combining multimodal computer vision, WHO ICD-11 clinical decision support, acoustic cough analysis, contactless camera vitals, and pharmacy safety with an integrated emergency welfare relief rail.
 
-| Role | Portal | Core Workflow |
+| Role | Portal | Core Clinical Workflow |
 |---|---|---|
-| **Student / Patient** | Mobile (Flutter) | Submit health claim → chat with PFA AI → track payout status |
-| **Clinical Admin** | Mobile (Flutter) | Triage ESI queue → approve/disburse grants → monitor fund liquidity |
+| **Patient / Student** | Mobile (Flutter) | Submit clinical images/audio/vitals → receive differential AI assessment → chat with PFA counselor → access emergency copay relief |
+| **Clinical Admin / Triage Officer** | Mobile (Flutter) | Review AI diagnostic findings & Grad-CAM heatmaps → triage ESI emergency queue → verify ICD-11 differential pathways → disburse copay relief |
 
-### Core Principles
+### Core Clinical Principles
 
-- **AI-First, Human-in-the-Loop** — every ML prediction is a decision-support tool; clinicians can override with documented justification.
-- **Privacy by Design** — HIPAA-aligned audit trail, FERPA-compliant professor notification redaction, Row-Level Security on all data.
-- **Offline-Resilient** — every cloud ML call has a local on-device or deterministic fallback, ensuring zero downtime.
-- **Multi-Rail Disbursement** — funds reach students via UPI (RazorpayX), IMPS, Stripe (USD), or campus voucher codes.
+- **Diagnostic Rigor & Clinical Decision Support (CDSS)** — powered by a WHO ICD-11 concept graph with temperature-scaled logit scoring, calibrated differential diagnosis probabilities, and HL7 FHIR R4 Bundle exports.
+- **Multimodal Medical Sensing** — ingests visual (dermatology, ocular, wounds), acoustic (16-d MFCC respiratory audio), physiological (contactless rPPG video vitals), and pharmacological signals into a unified late-fusion neural network.
+- **AI-First, Human-in-the-Loop** — every ML prediction serves as a clinical decision-support tool. Clinicians retain full autonomy with documented justification for all diagnostic and ESI triage overrides.
+- **Explainability & Transparency** — Grad-CAM visual attention overlays generate heatmaps on clinical images, ensuring clinicians see exactly what regions prompted the AI classification.
+- **Offline-Resilient Edge Fallbacks** — every cloud diagnostic model (Qwen2.5-VL 72B, Qwen2.5-72B CDSS) pairs with a local on-device or deterministic fallback (Clinical MobileNet-V3, TFLite Cough Classifier, ICD-11 logit engine, local Qwen ONNX PFA chat), ensuring zero clinical downtime.
+- **Patient Privacy & Safety Safeguards** — strict HIPAA-aligned audit trails, automated PHI redaction via Gemini 1.5 Flash, FERPA-compliant communications, and physiological red-flag triggers for emergent vitals.
 
 ---
 
-## 2. Real-World Use Cases
+## 2. Real-World Clinical Scenarios
 
-| Scenario | How MedAccess Handles It |
+| Clinical Scenario | MedAccess AI Diagnostic & Care Workflow |
 |---|---|
-| Student has a hospital bill and needs ER copay relief | PDF bill → OCR extracts total → DeepRank assigns ESI tier → Grant Optimizer calculates amount → admin disburses via UPI |
-| Student messages about self-harm and rent crisis | Crisis regex detects self-harm → Qwen PFA model responds empathetically → emergency hotline cards displayed → welfare ticket created |
-| Student uploads a photo of a skin rash | Qwen2.5-VL 72B cloud vision classifier diagnoses condition → local MobileNet-V3 fallback → Grad-CAM heatmap highlights affected area |
-| Student submits a prescription for medication refill | Tesseract OCR parses handwritten prescription → fuzzy RxNorm matcher normalizes drug names → DrugInteractionEngine checks 8,000+ interaction pairs |
-| Admin reviews compliance at end of month | HIPAA audit PDF → ESI distribution, fund utilization, disbursement ledger → tamper-evident SHA-256 checksum |
-| Student has repeated high-urgency tickets | LSTM attrition model detects dropout risk → flags student for proactive outreach |
-| Student submits a suspicious duplicate receipt | SHA-256 image hash matches previous → Autoencoder detects anomalous feature pattern → claim flagged DUPLICATE_RECEIPT_DETECTED |
+| **Dermatological Rash or Lesion Evaluation** | Patient photographs skin rash → Qwen2.5-VL 72B vision model classifies lesion type, severity, and anatomical site → local MobileNet-V3 fallback ensures edge resilience → Grad-CAM generates saliency heatmap highlighting localized inflammation. |
+| **Complex Symptom Presentation & Differential Diagnosis** | Patient inputs multi-system symptoms → WHO ICD-11 concept store evaluates clinical priors → Qwen2.5-72B CDSS engine outputs differential diagnoses, urgency tiers, and evidence-based care pathways → exports HL7 FHIR R4 DiagnosticReport. |
+| **Acoustic Cough & Respiratory Screening** | Patient records 5-second cough sample → Meyda.js DSP extracts 16-d MFCC acoustic vector → on-device CoughClassifier NN identifies wet, dry, or whooping patterns → physiological sentinel flags wheeze anomalies. |
+| **Contactless Vitals Monitoring via Front Camera** | Student holds smartphone camera to face → rPPG signal processor decomposes green/RGB channel absorption at 30 Hz → Butterworth bandpass filter (0.75–3.5 Hz) isolates cardiac pulse wave → estimates HR (BPM) and SpO2 with bradycardia/tachycardia red-flag alerts. |
+| **Prescription Parsing & Drug Interaction Safety** | Student uploads handwritten prescription → Poppler/Tesseract OCR extracts text with character error correction → fuzzy RxNorm matcher maps active ingredients → DrugInteractionEngine cross-checks 8,000+ contraindication pairs and patient allergy profile. |
+| **Acute Mental Health & Crisis Intervention** | Student expresses acute distress or self-harm ideation → Regex and DistilBERT NLP detect critical crisis markers → local Qwen ONNX model delivers empathetic Psychological First Aid (PFA) → automatically injects one-tap 24/7 crisis hotline cards. |
+| **Emergency Copay & Medical Welfare Relief** | When an acute clinical condition requires hospital care → DeepRank assigns ESI triage level (1–5) based on severity → Grant Optimizer suggests emergency copay relief with Bayesian uncertainty bounds → clinical admin disburses emergency funds via UPI or Stripe. |
+| **Longitudinal Patient Health Risk Tracking** | Student presents repeated clinical encounters over the semester → Temporal Attrition LSTM analyzes multi-encounter trajectories → flags compounding academic/health burnout risk for proactive outreach. |
 
 ---
 
 ## 3. Feature Overview
 
-### 🔷 Patient Portal
+### 🩺 Clinical Diagnostics & Vision Suite
+- **Dermatology & Lesion Vision AI** — Qwen2.5-VL 72B multimodal vision classifier for rashes, burns, wounds, ocular redness, and oral lesions with automated severity grading.
+- **Local Clinical MobileNet-V3** — on-device quantized TFLite classifier acting as a zero-latency, offline fallback for visual triage.
+- **Grad-CAM Saliency Heatmaps** — gradient-weighted class activation mapping superimposed on clinical images to visualize areas of pathological concern.
+- **Longitudinal Screening Delta Analyzer** — tracks visual progression or healing of skin lesions and burns across follow-up consultations.
 
-- **Claim Intake** — submit a medical request as free text + attach PDF bill or receipt photo
-- **Multimodal Receipt Parsing** — automatic extraction of bill total from PDF (Poppler `pdftotext`) or scanned image (Tesseract.js OCR)
-- **Real-Time Status Tracking** — WebSocket push updates on ESI tier, triage status, and payout completion
-- **PFA Chat (Psychological First Aid)** — multi-turn AI chat with local Qwen ONNX model, full crisis detection, hardship confirmation flow, and ticket auto-creation
-- **Clinical Dashboard** — symptom logger, health record viewer, screening history
-- **Emergency Hub** — one-tap access to 24/7 crisis hotlines (Tele-MANAS 14416, 988 Lifeline, Vandrevala Foundation)
-- **Pharmacy Hub** — prescription OCR parser, drug interaction checker, allergy safety scanner
-- **Offline Sync** — SharedPreferences caching with graceful recovery on reconnection
-- **QR Voucher** — campus welfare voucher code for pharmacy/clinic redemption
-- **rPPG Vitals Monitor** — camera-based contactless heart rate measurement (no wearable required)
+### 🔬 Clinical Decision Support System (CDSS)
+- **WHO ICD-11 Knowledge Graph** — curated concept store with clinical condition priors, symptom linkages, and evidence-based guideline references.
+- **Differential Diagnosis Engine** — Qwen2.5-72B inference combined with temperature-scaled logit scoring ($T=1.25$) and $[-20, 20]$ logit clipping to produce calibrated probabilities for top differential candidates.
+- **Urgency Classification** — categorizes presentations into `ROUTINE`, `PROMPT_EVALUATION`, and `IMMEDIATE_EMERGENCY`.
+- **HL7 FHIR R4 Bundle Export** — transforms diagnostic encounters, observations, and recommendations into standardized clinical FHIR JSON bundles.
 
-### 🔷 Admin Clinical War Room
+### 🫁 Acoustic Respiratory Diagnostics
+- **Meyda MFCC DSP Pipeline** — extracts 16-dimensional Mel-Frequency Cepstral Coefficients from raw audio streams.
+- **On-Device Cough Classifier** — multi-layer neural network classifying cough audio into 4 distinct clinical categories: dry, wet/productive, whooping, or normal.
+- **Acoustic Red-Flag Sentinel** — triggers immediate clinical escalation upon detecting stridor, wheezing, or whoop signatures.
 
-- **ESI Triage Queue** — real-time sorted list ordered by Crisis Severity Index (CSI)
-- **One-Tap Payout** — execute RazorpayX UPI/bank or Stripe disbursement from the mobile app
-- **ESI Override** — override AI-assigned triage tier with documented clinical justification (full audit trail)
-- **Fraud Flag Management** — review Fraud Sentinel decisions, mark false positives
-- **Health Fund Liquidity Panel** — monitor budget utilization, remaining balance, allocation history
-- **Knowledge Base (RAG Search)** — semantic search over institutional policy documents
-- **HIPAA Compliance Audit PDF** — downloadable report with ESI distribution, disbursement ledger, fund utilization, tamper-evident SHA-256 checksum
-- **Clinical Diagnostics Screen** — review AI-generated multimodal diagnostic results
+### 💓 Contactless rPPG Camera Vitals
+- **Remote Video Photoplethysmography** — non-invasive pulse wave extraction from facial capillary blood absorption using standard smartphone camera sensors.
+- **Butterworth Bandpass Filtering** — 2nd-order bandpass filter ($0.75–3.5\text{ Hz}$, corresponding to 45–210 BPM) isolating cardiac pulsatile frequencies.
+- **Physiological Red-Flag Sentinel** — automated boundary monitoring detecting acute tachycardia ($>110\text{ BPM}$), bradycardia ($<50\text{ BPM}$), and hypoxia indicators.
+
+### 💊 Pharmacy Safety & RxSentinel
+- **Handwritten Prescription OCR** — hybrid Poppler `pdftotext` + Tesseract.js engine with custom alphanumeric sanitization (correcting common OCR confusions like O/0, I/1).
+- **RxNorm Semantic Normalizer** — fuzzy string matcher resolving brand names and colloquial spellings to standardized RxNorm Concept Unique Identifiers (RxCUIs).
+- **8,000+ Drug-Drug Interaction Matrix** — instant cross-referencing of multi-drug regimens classifying interactions as `CONTRAINDICATED`, `MAJOR`, `MODERATE`, or `MINOR`.
+- **Allergy Safety Sentinel** — cross-checks newly prescribed substances against patient allergy records to prevent anaphylaxis.
+
+### 🧠 Psychological First Aid (PFA) & Crisis Triage
+- **Local ONNX Qwen Chat Engine** — runs `Xenova/Qwen1.5-0.5B-Chat` completely on-device without network transmission, ensuring absolute privacy for sensitive mental health conversations.
+- **Life-Safety & Crisis Regex** — instant pattern matching detecting suicide and self-harm keywords, overriding conversation flow to present immediate 24/7 hotlines.
+- **Rogerian PFA Fallback** — deterministic, non-judgmental reflective listening engine providing continuous availability under zero-memory constraints.
+
+### 📋 Clinical ESI Triage & Emergency Copay Support
+- **DeepRank Emergency Severity Index (ESI)** — assigns Crisis Severity Index (CSI $\in [0, 1]$) and triage tiers (ESI-1 Resuscitation down to ESI-5 Routine).
+- **Clinical Admin War Room** — real-time WebSocket dashboard enabling clinicians to review diagnostic telemetry, inspect Grad-CAM heatmaps, and override AI recommendations.
+- **Emergency Copay Grant Optimizer** — Monte Carlo Dropout neural regression assessing fund allocations for urgent prescriptions and emergency room copays.
+- **Fraud Sentinel** — 3-layer claim integrity check (SHA-256 receipt hashing, velocity monitoring, Autoencoder anomaly scoring) protecting student health funds.
+- **Multi-Rail Instant Payout** — disburses approved emergency health copays via UPI (RazorpayX), bank transfer, Stripe, or campus clinic vouchers.
 
 ---
 
 ## 4. 🤖 ML & AI Systems — Deep Dive
 
-This section covers every ML model, AI pipeline, and cloud/local fallback pair in the system.
+MedAccess AI implements **21 distinct ML and AI components**. The core of the system is anchored around clinical diagnostic intelligence, with integrated triage and welfare rails.
 
 ---
 
-### 4.1 DeepRank — Crisis Severity Indexer
+### 4.1 Cloud Vision Classifier — Qwen2.5-VL 72B (Dermatology & Ocular)
 
-**Purpose:** Assigns a Crisis Severity Index (CSI in [0, 1]) and ESI triage tier to every incoming claim.
-
-| Attribute | Detail |
-|---|---|
-| **Architecture** | Dense Neural Network (TensorFlow.js Sequential) |
-| **Input Features** | `word_count`, `urgent_keyword_count`, `sentiment_score`, `historical_ticket_count` (4-d) |
-| **Output** | CSI → ESI tier (ESI-1 >= 0.85, ESI-2 >= 0.60, ESI-3 >= 0.35, ROUTINE) |
-| **Training** | Offline via `npm run train:ml`, synthetic + real-outcome labeled data |
-| **Fine-Tuning** | `fineTuneDeepRankModel()` — 5 epochs on resolved tickets, Adam optimizer |
-| **Fallback** | CSI = 0.5 (neutral) if model weights not found on disk |
-| **File** | `intellidesk_backend/src/services/deepRankModel.ts` |
-
-```
-Input: [word_count=180, urgent_kw=4, sentiment=0.87, hist_count=2]
-  Dense(hidden) → relu → sigmoid
-  CSI = 0.91  →  ESI_1 (CRITICAL)
-```
-
----
-
-### 4.2 TemporalAttrition LSTM — Dropout Risk Predictor
-
-**Purpose:** Analyzes a student's longitudinal ticket history to predict likelihood of dropping out.
-
-| Attribute | Detail |
-|---|---|
-| **Architecture** | LSTM Neural Network (TensorFlow.js) |
-| **Input Shape** | `[1, 1, 4]` — batch=1, timeSteps=1, features=4 |
-| **Features** | Aggregated `word_count`, `urgent_keyword_count`, `sentiment_score`, `historical_ticket_count` |
-| **Output** | Dropout risk score in [0, 1] |
-| **Data Source** | Last 10 tickets from Supabase per student phone |
-| **Fallback** | 0.0 (safe) if model not loaded |
-| **File** | `intellidesk_backend/src/services/attritionModel.ts` |
-
----
-
-### 4.3 Fraud Sentinel — Multi-Layer Anomaly Detection
-
-**Purpose:** Detects fraudulent or duplicate emergency fund claims using a 3-layer detection stack.
-
-| Layer | Method | Risk Contribution |
-|---|---|---|
-| **Layer A** | SHA-256 receipt image hash lookup in DB | +0.50 if duplicate found |
-| **Layer B** | 7-day claim velocity check per phone number | +0.35 if >= 2 claims in 7 days |
-| **Threshold Gaming** | Repeated micro-requests in $150–$200 band | +0.30 if pattern detected |
-| **Layer C** | Autoencoder MSE anomaly score | +0.40 if score >= 0.75 |
-
-Life-safety critical claims bypass velocity/threshold checks — only hard fraud (duplicate receipt) can flag them.
-
-| Attribute | Detail |
-|---|---|
-| **File** | `intellidesk_backend/src/services/fraudSentinel.ts` |
-| **Anomaly Dependency** | Calls `anomalyModel.ts` (Autoencoder) for Layer C |
-
----
-
-### 4.4 Anomaly Autoencoder — Reconstruction-Based Fraud Detection
-
-**Purpose:** Learns the normal feature distribution of legitimate claims. High MSE = anomalous/fraudulent submission.
-
-| Attribute | Detail |
-|---|---|
-| **Architecture** | Autoencoder (Encoder-Decoder) Neural Network (TensorFlow.js) |
-| **Input** | 4-feature normalized vector `[word_count_norm, urgent_kw_norm, sentiment, hist_count_norm]` |
-| **Output** | Reconstruction MSE as anomaly score |
-| **Training** | `npm run train:ml` → `train_all.ts` |
-| **Fallback** | 0.0 (no anomaly) if model not found |
-| **File** | `intellidesk_backend/src/services/anomalyModel.ts` |
-
----
-
-### 4.5 Grant Optimizer — MC Dropout Neural Regression
-
-**Purpose:** Recommends the optimal emergency grant amount with Bayesian uncertainty quantification.
-
-| Attribute | Detail |
-|---|---|
-| **Architecture** | Dense Sequential NN with Dropout layers (TensorFlow.js) |
-| **Input Features** | `dropout_risk_score`, `requested_amount`, `historical_grant_total`, `fund_remaining_ratio`, `urgency_level_numeric` (5-d) |
-| **Output** | `recommendedAmount`, `confidenceScore`, `variance` |
-| **Uncertainty** | Monte Carlo Dropout (20 forward passes with dropout active) → epistemic variance |
-| **Fine-Tuning** | `fineTuneGrantOptimizerModel()` on resolved historical tickets |
-| **Fallback** | min(requested, $200) if model not loaded |
-| **File** | `intellidesk_backend/src/services/grantOptimizerModel.ts` |
-
-```
-MC Dropout (20 passes) → mean grant ratio ± epistemic std dev
-confidence = 1.0 - min(variance x 10, 1.0)
-```
-
----
-
-### 4.6 NLP Sentiment Pipeline — Clinical Text Analysis
-
-**Purpose:** Extracts sentiment, distress magnitude, and urgent medical keywords from patient submissions.
-
-| Attribute | Detail |
-|---|---|
-| **Primary Model** | `Xenova/distilbert-base-uncased-finetuned-sst-2-english` (ONNX via `@xenova/transformers`) |
-| **Fallback** | Keyword heuristic scoring using `CLINICAL_URGENT_REGEX` |
-| **Output** | `sentimentScore`, `negativeScore`, `isCriticalDistress`, `extractedKeywords`, `medicalEntityCount` |
-| **Clinical Keywords** | hospital, emergency, icu, ambulance, seizure, overdose, suicide, stroke, cardiac, unconscious, burn, etc. |
-| **File** | `intellidesk_backend/src/services/nlpPipeline.ts` |
-
----
-
-### 4.7 PFA Counselor — Local ONNX Chat AI (Crisis Response)
-
-**Purpose:** Real-time Psychological First Aid using locally-running quantized LLMs. Detects crisis messages and triggers emergency resource cards.
-
-| Attribute | Detail |
-|---|---|
-| **Primary Model** | `Xenova/Qwen1.5-0.5B-Chat` (quantized ONNX, 100% CPU, no internet required) |
-| **Secondary Fallback** | `onnx-community/Qwen2.5-0.5B-Instruct` (quantized ONNX) |
-| **Tertiary Fallback** | Rogerian PFA deterministic response engine (zero-latency, 100% uptime) |
-| **Crisis Detection** | `CRITICAL_SELF_HARM_REGEX` → suicide/self-harm keywords → immediate emergency resource injection |
-| **Hardship Detection** | `RELIEF_HARDSHIP_REGEX` → financial hardship → ticket creation confirmation flow |
-| **Multi-Turn** | Last 4 messages included in ChatML prompt for conversational coherence |
-| **Inference Timeout** | 2.5s safety timeout, falls back instantly if local model is slow |
-| **File** | `intellidesk_backend/src/services/crisisCounselorService.ts` |
-
-```
-Student: "I can't pay my rent and I feel like giving up"
-  RELIEF_HARDSHIP_REGEX hit → requiresConfirmation = true
-Counselor: "I hear how stressful this is. Would you like me to submit an Emergency Grant ticket?"
-  Student confirms → ticket created → PFA response generated
-```
-
----
-
-### 4.8 Clinical Counselor — Gemini Flash Lite (Real-Time Chat)
-
-| Attribute | Detail |
-|---|---|
-| **Cloud Model** | `gemini-flash-lite-latest` (Google Gemini API) |
-| **Max Output Tokens** | 50 (optimized for real-time chat latency) |
-| **Response Cache** | In-memory 10-minute TTL cache |
-| **Rate Limiting** | Per-claim throttle to prevent spam |
-| **Life-Safety Detection** | `LIFE_SAFETY_REGEX` → bypasses throttle, injects emergency helplines |
-| **File** | `intellidesk_backend/src/services/clinicalCounselorService.ts` |
-
----
-
-### 4.9 Multimodal Intake Processor — Gemini 2.0 Flash
-
-| Attribute | Detail |
-|---|---|
-| **Cloud Model** | `gemini-2.0-flash` (Google Gemini API) |
-| **Input** | Free-text message + optional medical invoice/receipt URL |
-| **Output Schema** | `category`, `urgency`, `plainTextSummary`, `requestedAmount`, `sentimentNegativeScore`, `multiDepartmentInvolvement`, `policyAmbiguityScore` |
-| **Validation** | Zod schema validation on every response |
-| **Fallback** | Safe default `General Health / Routine` object if Gemini fails |
-| **File** | `intellidesk_backend/src/services/gemini.ts` |
-
----
-
-### 4.10 Policy Adjudicator — Gemini 1.5 Pro (Chain-of-Thought RAG)
-
-| Attribute | Detail |
-|---|---|
-| **Cloud Model** | `gemini-1.5-pro` (Google Gemini API) |
-| **Reasoning** | Chain-of-Thought — must cite exact policy clause before deciding |
-| **Decisions** | `Auto-Approved`, `Escalated`, `Denied` |
-| **Anti-Hallucination** | If policy context irrelevant → output `Escalated / Out of Scope` |
-| **Response Format** | Structured JSON via native Gemini `responseSchema` |
-| **File** | `intellidesk_backend/src/services/gemini.ts` → `evaluatePolicyMatch()` |
-
----
-
-### 4.11 Semantic Policy Search — Gemini Embeddings + pgvector RAG
-
-| Attribute | Detail |
-|---|---|
-| **Embedding Model** | `gemini-embedding-001` (768-d, Google Gemini API) |
-| **Vector Database** | Supabase `pgvector` extension, `vector(768)` column |
-| **Search Method** | Hybrid RRF (Reciprocal Rank Fusion) — vector similarity + keyword search |
-| **RPC Function** | `hybrid_match_policies()` PostgreSQL RPC |
-| **Low-Confidence Warning** | Logs warning if top RRF score < 0.015 |
-| **File** | `intellidesk_backend/src/services/gemini.ts` → `searchMatchingPolicies()` |
-
----
-
-### 4.12 Cloud Vision Classifier — Qwen2.5-VL 72B (Dermatology & Ocular)
-
-**Purpose:** Classifies clinical images (rashes, skin lesions, ocular conditions, wounds, burns, oral infections) via a 72B-parameter VLM.
+**Clinical Role:** Evaluates patient-submitted imagery (rashes, skin lesions, ocular redness, burns, and wounds) using a 72-billion parameter Vision-Language Model.
 
 | Attribute | Detail |
 |---|---|
 | **Cloud Model** | `Qwen/Qwen2.5-VL-72B-Instruct` via Hugging Face Inference Router |
-| **Local Fallback** | Clinical MobileNet-V3 (TFLite, on-device, quantized) |
-| **Input** | Raw image buffer (preprocessed by `sharp`) |
-| **Output** | `condition`, `anatomicalSite`, `severity`, `confidence`, `findings[]`, `differentialDiagnoses[]`, `recommendedAction`, `isEmergencyAlert` |
-| **Emergency Override** | severity = critical → immediate ER alert |
+| **Local Fallback** | Clinical MobileNet-V3 (quantized TFLite running on-device) |
+| **Preprocessing** | `sharp` image pipeline (resizing, normalization, orientation fix) |
+| **Clinical Schema** | `condition`, `anatomicalSite`, `severity`, `confidence`, `findings[]`, `differentialDiagnoses[]`, `recommendedAction`, `isEmergencyAlert` |
+| **Emergency Trigger** | `severity: critical` immediately generates an ESI-1 notification |
 | **File** | `intellidesk_backend/src/modules/diagnostics/vision/CloudVisionClassifier.ts` |
 
 ```
-Cloud (HF_TOKEN set):  Image → sharp → Qwen2.5-VL 72B → structured JSON
-Offline fallback:      Image → Local MobileNet-V3 → 10-class classification
+Cloud:    Clinical Photo → sharp → Qwen2.5-VL 72B → Structured Clinical JSON
+Fallback: Clinical Photo → MobileNet-V3 TFLite → 10-Class Top-K Probabilities
 ```
 
 ---
 
-### 4.13 Multimodal Fusion Model — Late-Fusion Deep Neural Network
+### 4.2 CDSS — Clinical Decision Support System (WHO ICD-11 + Qwen2.5-72B)
 
-**Purpose:** Fuses visual, symptom, and demographic signals into a unified clinical risk score with uncertainty bounds.
-
-| Attribute | Detail |
-|---|---|
-| **Architecture** | Multi-head Late-Fusion DNN (TensorFlow.js Functional API) |
-| **Input Dimension** | 168-d concatenated vector [128 visual + 32 symptoms + 8 demographics] |
-| **Head 1** | Dense(1, sigmoid) → continuous risk score in [0, 1] |
-| **Head 2** | Dense(3, softmax) → [Low Risk, Moderate Need, Critical Referral] |
-| **Uncertainty** | Monte Carlo Dropout → epistemic std dev + 95% CI bounds |
-| **Architecture Detail** | Dense(128, relu) → BatchNorm → Dropout(0.3) → Dense(64, relu) → Dropout(0.25) |
-| **File** | `intellidesk_backend/src/modules/diagnostics/fusion/MultimodalFusionModel.ts` |
-
----
-
-### 4.14 CDSS — Clinical Decision Support System (ICD-11 + Qwen2.5-72B)
-
-**Purpose:** WHO ICD-11 differential diagnosis, urgency classification, and evidence-based treatment pathways.
+**Clinical Role:** Formulates evidence-based differential diagnoses, clinical urgency categorization, and treatment pathway guidance mapped directly to the WHO ICD-11 catalog.
 
 | Attribute | Detail |
 |---|---|
-| **Cloud Model** | `Qwen/Qwen2.5-72B-Instruct` via Hugging Face Router |
-| **Local Fallback** | `DifferentialDiagnosisEngine` — deterministic ICD-11 scoring algorithm |
-| **Knowledge Base** | `ICD11ConceptStore` — curated WHO ICD-11 concept graph with probability priors |
-| **Differential Engine** | Temperature-scaled logit scoring (T=1.25), [-20, 20] logit clipping (Guardrail 2) |
-| **Urgency Levels** | `ROUTINE`, `PROMPT_EVALUATION`, `IMMEDIATE_EMERGENCY` |
-| **Idempotency** | Results cached by `screeningId` to prevent duplicate DB writes |
-| **FHIR Export** | `FHIRConverterService` converts result to HL7 FHIR R4 Bundle |
+| **Primary Cloud Model** | `Qwen/Qwen2.5-72B-Instruct` via Hugging Face Inference Router |
+| **Local Engine Fallback** | `DifferentialDiagnosisEngine` — deterministic ICD-11 probability calculator |
+| **Knowledge Base** | `ICD11ConceptStore` — graph of ICD-11 codes, priors, and cardinal symptoms |
+| **Logit Calibration** | Temperature-scaled logit scoring ($T=1.25$) with $[-20, 20]$ boundary clipping |
+| **Urgency Grades** | `ROUTINE`, `PROMPT_EVALUATION`, `IMMEDIATE_EMERGENCY` |
+| **Interoperability** | `FHIRConverterService` outputs HL7 FHIR R4 `DiagnosticReport` Bundles |
 | **File** | `intellidesk_backend/src/modules/cdss/CDSSService.ts` |
 
 ---
 
-### 4.15 Cough Classifier — On-Device Acoustic ML
+### 4.3 Multimodal Clinical Fusion Model — Late-Fusion Deep Neural Network
 
-**Purpose:** Passive respiratory disease screening via cough audio classification.
+**Clinical Role:** Synthesizes multimodal patient streams (visual embeddings, structured symptoms, demographic factors) into a calibrated clinical risk index and care tier.
 
 | Attribute | Detail |
 |---|---|
-| **Architecture** | Dense(48, BN, Dropout) → Dense(24, Dropout) → Dense(4, softmax) with L2 regularization |
-| **Input** | 16-d MFCC acoustic feature vector (extracted by AudioFeatureExtractor / Meyda.js) |
-| **Output** | 4-class probability [dry cough, wet/productive, whooping, normal] |
-| **Red Flag** | Wheeze confidence >= threshold → immediate clinical alert |
-| **Cloud Option** | `CloudAudioClassifier` → Hugging Face Audio Inference (fallback to local) |
-| **File** | `intellidesk_backend/src/modules/diagnostics/audio/CoughClassifier.ts` |
+| **Architecture** | Multi-head Late-Fusion DNN (TensorFlow.js Functional API) |
+| **Input Representation** | 168-dimensional concatenated feature vector: 128 visual + 32 clinical symptoms + 8 demographics |
+| **Head 1 (Continuous)** | Dense(1, sigmoid) → Continuous Clinical Risk Score $\in [0, 1]$ |
+| **Head 2 (Categorical)** | Dense(3, softmax) → [Low Risk, Moderate Need, Critical Referral] |
+| **Uncertainty Bounds** | Monte Carlo Dropout (active inference) yields epistemic standard deviation & 95% CI |
+| **Hidden Layers** | Dense(128, ReLU) → BatchNorm → Dropout(0.30) → Dense(64, ReLU) → Dropout(0.25) |
+| **File** | `intellidesk_backend/src/modules/diagnostics/fusion/MultimodalFusionModel.ts` |
 
 ---
 
-### 4.16 rPPG Vital Sign Processor — Camera-Based Heart Rate
+### 4.4 Grad-CAM Visual Explainability Engine
 
-**Purpose:** Extracts heart rate and SpO2 estimate from facial video frames — no wearable hardware required.
-
-| Attribute | Detail |
-|---|---|
-| **Method** | RGB channel decomposition + Butterworth bandpass filter (0.75–3.5 Hz) |
-| **Resampling** | Uniform 30.0 Hz time-series resampling (Guardrail 1) |
-| **Alert System** | `PhysiologicalRedFlagSentinel` → tachycardia, bradycardia, low SpO2 alerts |
-| **Output** | Heart rate (BPM), confidence interval, physiological alerts |
-| **File** | `intellidesk_backend/src/modules/diagnostics/vitals/rPPGSignalProcessor.ts` |
-
----
-
-### 4.17 Prescription OCR Parser — Handwritten Rx Recognition
+**Clinical Role:** Generates gradient-weighted class activation heatmaps overlaying clinical images to highlight specific regions driving model predictions, building clinician trust.
 
 | Attribute | Detail |
 |---|---|
-| **Primary OCR** | Poppler `pdftotext -layout` for structured PDFs |
-| **Secondary OCR** | Tesseract.js v7.0 (`eng.traineddata`, 5 MB, English) |
-| **OCR Sanitization** | Guardrail 3: O→0 in numeric tokens, I/l→1 in frequency patterns |
-| **Drug Normalization** | Fuzzy matcher against local `rxNormDataset.ts` (8,000+ drug entries) |
-| **Output** | `ExtractedMedication[]` — drug name, dosage, frequency, route, RxNorm concept |
-| **File** | `intellidesk_backend/src/modules/pharmacy/PrescriptionOCRParser.ts` |
-
----
-
-### 4.18 Drug Interaction Engine & Allergy Sentinel
-
-| Attribute | Detail |
-|---|---|
-| **Interaction DB** | `DrugInteractionEngine.ts` — 8,000+ drug pair interactions |
-| **Allergy Check** | `AllergySafetySentinel.ts` — cross-checks patient allergy list |
-| **RxSentinel** | `RxSentinelService.ts` — orchestrates both checks, severity scoring |
-| **Severity Levels** | `CONTRAINDICATED`, `MAJOR`, `MODERATE`, `MINOR` |
-| **Files** | `intellidesk_backend/src/modules/pharmacy/` |
-
----
-
-### 4.19 Grad-CAM Visual Explainability
-
-| Attribute | Detail |
-|---|---|
-| **Method** | Gradient backpropagation through final convolutional layer |
-| **Output** | Per-pixel saliency heatmap overlay on original image |
-| **Use Case** | "Our visual attention heatmap highlighted localized inflammation" |
+| **Method** | Saliency backpropagation through final convolutional feature maps |
+| **Output** | 2D colorized heatmap superimposed on the original medical photograph |
+| **Clinical Utility** | Allows physicians to inspect whether classification focused on genuine pathology or background artifacts |
 | **File** | `intellidesk_backend/src/modules/diagnostics/explainability/gradCamGenerator.ts` |
 
 ---
 
-### 4.20 HIPAA-Compliant Privacy Filter — Gemini 1.5 Flash
+### 4.5 Cough Classifier — On-Device Acoustic Respiratory ML
+
+**Clinical Role:** Passive screening and characterization of respiratory illness via patient cough audio samples.
+
+| Attribute | Detail |
+|---|---|
+| **Architecture** | Dense(48, BN, Dropout) → Dense(24, Dropout) → Dense(4, Softmax) + L2 Regularization |
+| **Feature Extraction** | 16-dimensional MFCC acoustic vector extracted via Meyda.js DSP |
+| **Output Classes** | `dry cough`, `wet/productive cough`, `whooping cough`, `normal/non-pathological` |
+| **Acoustic Red Flag** | High-frequency wheeze detection triggers automatic respiratory alert |
+| **Cloud Alternative** | `CloudAudioClassifier` Hugging Face audio inference endpoint |
+| **File** | `intellidesk_backend/src/modules/diagnostics/audio/CoughClassifier.ts` |
+
+---
+
+### 4.6 rPPG Vital Sign Processor — Contactless Camera Photoplethysmography
+
+**Clinical Role:** Non-contact physiological monitoring extracting heart rate (BPM) and SpO2 from ordinary selfie video frames.
+
+| Attribute | Detail |
+|---|---|
+| **Signal Decomposition** | Green-channel facial micro-vascular absorption tracking |
+| **Temporal Resampling** | Uniform 30.0 Hz time-series interpolation across variable camera frame rates |
+| **DSP Filtering** | 2nd-order Butterworth bandpass filter ($0.75–3.5\text{ Hz}$, $45–210\text{ BPM}$) |
+| **Safety Sentinel** | `PhysiologicalRedFlagSentinel` alerts on tachycardia, bradycardia, or low pulse confidence |
+| **File** | `intellidesk_backend/src/modules/diagnostics/vitals/rPPGSignalProcessor.ts` |
+
+---
+
+### 4.7 Prescription OCR Parser & RxNorm Normalizer
+
+**Clinical Role:** Digitize handwritten and typed prescriptions, resolving medication names to canonical clinical drug databases.
+
+| Attribute | Detail |
+|---|---|
+| **Primary Engine** | Poppler `pdftotext -layout` for native electronic prescriptions |
+| **Secondary Engine** | Tesseract.js v7.0 with localized English language training weights |
+| **Character Correction** | Heuristic correction for common numerical and medication token misreads |
+| **Knowledge Base** | Fuzzy Levenshtein matching against `rxNormDataset.ts` (8,000+ clinical formulations) |
+| **Parsed Fields** | Medication name, dosage strength, administration frequency, route, RxCUI identifier |
+| **File** | `intellidesk_backend/src/modules/pharmacy/PrescriptionOCRParser.ts` |
+
+---
+
+### 4.8 Drug Interaction Engine & Allergy Safety Sentinel
+
+**Clinical Role:** Protects patients from adverse drug events by analyzing multi-medication interactions and allergy contraindications.
+
+| Attribute | Detail |
+|---|---|
+| **Interaction Matrix** | Multi-index graph of 8,000+ known clinical drug-drug pairs |
+| **Allergy Scanner** | Compares active pharmaceutical ingredients against patient-declared allergen profiles |
+| **Severity Hierarchy** | `CONTRAINDICATED` (hard block), `MAJOR` (requires override), `MODERATE`, `MINOR` |
+| **Orchestration** | `RxSentinelService.ts` coordinates prescription parsing, DDI check, and patient notification |
+| **File** | `intellidesk_backend/src/modules/pharmacy/DrugInteractionEngine.ts` |
+
+---
+
+### 4.9 PFA Crisis Counselor — Local ONNX Psychological First Aid
+
+**Clinical Role:** Provides instantaneous, 100% confidential Psychological First Aid for students experiencing acute emotional crises.
+
+| Attribute | Detail |
+|---|---|
+| **Primary Model** | `Xenova/Qwen1.5-0.5B-Chat` (quantized ONNX running on CPU via WASM) |
+| **Secondary Model** | `onnx-community/Qwen2.5-0.5B-Instruct` (quantized ONNX) |
+| **Tertiary Fallback** | Deterministic Rogerian active-listening engine (zero-latency guarantee) |
+| **Crisis Detection** | `CRITICAL_SELF_HARM_REGEX` flags suicidal ideation or self-harm triggers |
+| **Emergency Injection** | Injects one-tap calling cards for 24/7 helplines (Tele-MANAS 14416, 988 Lifeline) |
+| **Privacy Guarantee** | Local inference ensures zero text payload is transmitted to third-party cloud APIs |
+| **File** | `intellidesk_backend/src/services/crisisCounselorService.ts` |
+
+---
+
+### 4.10 NLP Clinical Sentiment & Medical Entity Pipeline
+
+**Clinical Role:** Ingests unstructured patient messages to extract emotional distress metrics and urgent clinical entities.
+
+| Attribute | Detail |
+|---|---|
+| **Transformer Model** | `Xenova/distilbert-base-uncased-finetuned-sst-2-english` (ONNX) |
+| **Heuristic Fallback** | Regex-driven clinical keyword density scoring |
+| **Extracted Metrics** | `sentimentScore`, `negativeScore`, `isCriticalDistress`, `extractedKeywords[]` |
+| **Clinical Lexicon** | Detects 40+ acute medical markers (seizure, anaphylaxis, overdose, hemorrhage, trauma) |
+| **File** | `intellidesk_backend/src/services/nlpPipeline.ts` |
+
+---
+
+### 4.11 Clinical Counselor — Real-Time Conversational AI
+
+**Clinical Role:** Real-time conversational triage assistant answering medical policy and symptom questions.
+
+| Attribute | Detail |
+|---|---|
+| **Cloud Model** | `gemini-flash-lite-latest` (Google Gemini API) |
+| **Token Budget** | Capped at 50 output tokens to ensure sub-500ms conversational latency |
+| **Safety Interceptor** | Emergency regex triggers bypass LLM generation to display urgent care instructions |
+| **Caching** | 10-minute in-memory LRU response cache for repetitive queries |
+| **File** | `intellidesk_backend/src/services/clinicalCounselorService.ts` |
+
+---
+
+### 4.12 DeepRank — Crisis Severity Indexer & ESI Triage
+
+**Clinical Role:** Computes a continuous Crisis Severity Index (CSI $\in [0, 1]$) and maps the patient into standard Emergency Severity Index (ESI) tiers.
+
+| Attribute | Detail |
+|---|---|
+| **Architecture** | Sequential Dense Neural Network (`@tensorflow/tfjs-node`) |
+| **Input Vector** | `[word_count, urgent_keyword_count, sentiment_score, historical_ticket_count]` |
+| **ESI Mapping** | $\ge 0.85 \rightarrow \text{ESI-1 (Resuscitation)}$, $\ge 0.60 \rightarrow \text{ESI-2 (Emergent)}$, $\ge 0.35 \rightarrow \text{ESI-3 (Urgent)}$, else Routine |
+| **In-Process Retraining** | Fine-tuned live on resolved triage outcomes via Adam optimizer |
+| **File** | `intellidesk_backend/src/services/deepRankModel.ts` |
+
+---
+
+### 4.13 Multimodal Medical Intake Processor — Gemini 2.0 Flash
+
+**Clinical Role:** Comprehensive multimodal parsing of patient text narratives paired with medical bills or clinical photographs.
+
+| Attribute | Detail |
+|---|---|
+| **Cloud Model** | `gemini-2.0-flash` (Google Gemini API) |
+| **Output Schema** | Validated Zod object: `category`, `urgency`, `plainTextSummary`, `requestedAmount`, `isCritical` |
+| **Resilience** | Strict JSON schema enforcement with fallback to structured default intake object |
+| **File** | `intellidesk_backend/src/services/gemini.ts` |
+
+---
+
+### 4.14 HIPAA-Compliant Privacy & PHI Redaction Filter
+
+**Clinical Role:** Redacts protected health information (PHI) before generating external notifications or faculty leave letters.
 
 | Attribute | Detail |
 |---|---|
 | **Cloud Model** | `gemini-1.5-flash` |
-| **Action** | Replaces specific diagnoses with generic phrasing ("a documented medical emergency") |
-| **Validation** | Post-redaction scan — throws `PrivacyViolationError` if sensitive terms persist |
-| **File** | `intellidesk_backend/src/services/gemini.ts` → `redactSensitiveInfo()` |
+| **Action** | Replaces sensitive medical diagnoses with FERPA/HIPAA-compliant phrasing ("a documented medical emergency") |
+| **Verification** | Post-redaction regex audit; throws `PrivacyViolationError` if diagnostic terms remain |
+| **File** | `intellidesk_backend/src/services/gemini.ts` $\rightarrow$ `redactSensitiveInfo()` |
 
 ---
 
-### 4.21 ML Retraining Worker — Continuous Learning Pipeline
+### 4.15 Fraud Sentinel — Multi-Layer Claim Integrity Detection
+
+**Welfare Role:** Safeguards institutional medical relief funds from fraudulent exploitation.
+
+| Layer | Method | Trigger |
+|---|---|---|
+| **Layer A** | SHA-256 cryptographic image hashing | Matches identical submitted medical bills |
+| **Layer B** | 7-day velocity tracking per phone identity | Flags $\ge 2$ claims within 7 days |
+| **Threshold Gaming** | Identifies repeated micro-claims in high-frequency bands | Pattern of repetitive sub-limit claims |
+| **Layer C** | Autoencoder feature reconstruction MSE | Flags feature vectors exceeding $0.75$ MSE threshold |
+
+*Emergency life-safety claims bypass non-critical velocity blocks to guarantee immediate patient access to care.*
+
+---
+
+### 4.16 Anomaly Autoencoder — Feature Reconstruction NN
+
+**Welfare Role:** Learns legitimate claim manifold; high reconstruction error signals anomalous submissions.
 
 | Attribute | Detail |
 |---|---|
-| **Trigger** | BullMQ scheduled job (or manual admin trigger) |
-| **Data Source** | Resolved tickets from Supabase |
-| **Models Updated** | DeepRank (5 epochs), Grant Optimizer (5 epochs) |
-| **Persistence** | Updated weights saved back to `./models/` directory |
+| **Architecture** | Symmetrical Encoder-Decoder Dense Neural Network (TensorFlow.js) |
+| **Input** | 4-feature normalized vector of intake metadata |
+| **Output** | Mean Squared Error (MSE) anomaly score |
+| **File** | `intellidesk_backend/src/services/anomalyModel.ts` |
+
+---
+
+### 4.17 Temporal Attrition LSTM — Longitudinal Health Risk
+
+**Clinical Role:** Evaluates time-series trajectories across consecutive health center visits to detect escalating dropout or health burnout risk.
+
+| Attribute | Detail |
+|---|---|
+| **Architecture** | Recurrent LSTM Neural Network (`@tensorflow/tfjs-node`) |
+| **Input Shape** | Sequential time-series `[batch=1, timeSteps=1, features=4]` |
+| **File** | `intellidesk_backend/src/services/attritionModel.ts` |
+
+---
+
+### 4.18 Grant Optimizer — Monte Carlo Dropout Neural Regression
+
+**Welfare Role:** Calculates optimal emergency medical copay disbursement amount with Bayesian uncertainty quantification.
+
+| Attribute | Detail |
+|---|---|
+| **Architecture** | Dense Neural Network with active Dropout layers |
+| **Uncertainty Quantification** | 20 Monte Carlo forward passes calculate predictive variance and confidence interval |
+| **File** | `intellidesk_backend/src/services/grantOptimizerModel.ts` |
+
+---
+
+### 4.19 Policy Adjudicator & Semantic Search — Gemini RAG
+
+**Welfare Role:** Semantic matching and Chain-of-Thought policy adjudication for institutional health insurance copays.
+
+| Attribute | Detail |
+|---|---|
+| **Embeddings** | `gemini-embedding-001` (768-dimensional vectors) stored in Supabase `pgvector` |
+| **Search Method** | Reciprocal Rank Fusion (RRF) combining vector cosine distance + keyword full-text search |
+| **Adjudicator** | `gemini-1.5-pro` reasoning engine with mandatory policy citation constraints |
+| **File** | `intellidesk_backend/src/services/gemini.ts` |
+
+---
+
+### 4.20 ML Retraining Worker — Continuous In-Process Learning
+
+**Role:** Background worker fine-tuning production models using verified clinical outcomes.
+
+| Attribute | Detail |
+|---|---|
+| **Queue Engine** | BullMQ on Redis |
+| **Retrained Models** | DeepRank CSI and Grant Optimizer (5 epochs each on resolved Supabase tickets) |
 | **File** | `intellidesk_backend/src/workers/mlRetrainingWorker.ts` |
 
 ---
 
 ### Cloud vs Local Model Fallback Map
 
-| Feature | Cloud (Primary) | Local Fallback |
+| Capability | Cloud Primary | Local Edge Fallback |
 |---|---|---|
-| PFA Counselor Chat | (local-first for privacy) | Qwen1.5-0.5B ONNX → Qwen2.5-0.5B ONNX → Rogerian PFA engine |
-| Clinical Chat | Gemini Flash Lite | Rogerian deterministic engine |
-| Claim Intake Parsing | Gemini 2.0 Flash | Safe default triage object |
-| Policy Adjudication | Gemini 1.5 Pro | Escalated (safe default) |
-| Semantic Embeddings | Gemini Embedding-001 | Zero vector (768-d) |
-| Clinical Image Vision | Qwen2.5-VL 72B (HF) | Clinical MobileNet-V3 (TFLite) |
-| CDSS / Differential Dx | Qwen2.5-72B (HF) | ICD-11 Deterministic Engine |
-| Cough Classification | HF Audio Inference | Local TFLite Cough Classifier |
-| NLP Sentiment | DistilBERT ONNX (Xenova) | Keyword regex heuristics |
-| DeepRank CSI | Local TF.js (trained weights) | CSI = 0.5 (neutral) |
-| LSTM Attrition | Local TF.js (trained weights) | Risk = 0.0 (safe) |
-| Anomaly Autoencoder | Local TF.js (trained weights) | Score = 0.0 (no anomaly) |
-| Grant Optimizer | Local TF.js (MC Dropout) | min(requested, $200) |
-| Fraud Sentinel | Local (SHA-256 + DB + Autoencoder) | Hash + velocity only |
-| Privacy Redaction | Gemini 1.5 Flash | Manual review flag |
+| **Clinical Image Vision** | Qwen2.5-VL 72B (Hugging Face) | Clinical MobileNet-V3 (TFLite, On-Device) |
+| **CDSS Differential Dx** | Qwen2.5-72B (Hugging Face) | ICD-11 Deterministic Scoring Engine |
+| **Acoustic Cough Screening** | HF Audio Inference Endpoint | Local CoughClassifier NN (MFCC + TF.js) |
+| **Camera Vitals (rPPG)** | — *(Local Only)* | Butterworth Filter + Video Photoplethysmography |
+| **Prescription Parsing** | Poppler `pdftotext` | Tesseract.js OCR + RxNorm Fuzzy Matcher |
+| **Pharmacy Safety / DDI** | — *(Local Only)* | 8,000+ Drug Pair Contraindication Matrix |
+| **PFA Crisis Chat** | — *(Local-First for Privacy)* | Qwen1.5-0.5B ONNX → Qwen2.5-0.5B ONNX → Rogerian Engine |
+| **Clinical Triage Chat** | Gemini Flash Lite | Deterministic Rogerian Engine |
+| **Clinical Entity & Sentiment** | DistilBERT SST-2 (ONNX) | Clinical Urgent Keyword Regex Heuristics |
+| **Emergency Severity (CSI)** | Local DeepRank NN (TF.js) | Safe Baseline (CSI = 0.5) |
+| **Intake Parsing** | Gemini 2.0 Flash | Structured Default Triage Payload |
+| **PHI / HIPAA Redaction** | Gemini 1.5 Flash | Manual Review Escalation Flag |
+| **Copay Grant Optimization** | Local MC Dropout NN (TF.js) | Standard Capped Grant Function |
+| **Fraud Anomaly Detection** | Local Autoencoder (TF.js) | SHA-256 Hash + Velocity Filter |
+| **Policy Search & RAG** | Gemini Embedding-001 + 1.5 Pro | Manual Administrative Escalation |
 
 ---
 
 ## 5. System Architecture
 
 ```
-+-----------------------------------------------------------------------------+
-|                    MedAccess AI -- Flutter Mobile Client                     |
-|                                                                              |
-|  +---------------------------+     +------------------------------------+    |
-|  |      Patient Portal        |     |      Admin Clinical War Room       |    |
-|  |  Claim Intake (PDF/img)   |     |  ESI Queue (DeepRank sorted)      |    |
-|  |  PFA Chat (Qwen AI)       |     |  Health Fund Liquidity Panel      |    |
-|  |  Copay Status Tracker     |     |  One-Tap Payout Modal             |    |
-|  |  Pharmacy Hub             |     |  Clinical Diagnostics Review      |    |
-|  |  Emergency Helpline Hub   |     |  HIPAA Audit PDF Export           |    |
-|  |  rPPG Vitals Monitor      |     |  Knowledge Base (RAG Search)      |    |
-|  +---------------------------+     +------------------------------------+    |
-+-----------------------------------------------^------------------------------+
-                                                |  REST + WebSocket (Socket.io)
-+-----------------------------------------------v------------------------------+
-|           MedAccess Backend API (Express 5 / TypeScript / ESM)               |
-|  Auth + RBAC (JWT / Supabase)       Claim CRUD + ESI + Status Updates        |
-|  Async Intake -> BullMQ Queue       Multi-Rail Payout Execution               |
-|  PFA Counselor AI (Qwen/Gemini)     Clinical Admin Overrides + Telemetry      |
-|  CDSS Differential Dx Routes        Pharmacy Safety Routes                    |
-|  FHIR R4 Conversion                 HIPAA Audit PDF (PDFKit + SHA-256)        |
-+----------+-------------------------------------------+------------------------+
-           |                                           |
-+----------v-----------------+         +---------------v--------------------+
-|  BullMQ Workers (Redis)    |         |  Supabase PostgreSQL + pgvector    |
-|  Intake Worker             |         |  institutions (multi-tenancy)      |
-|    Poppler PDF OCR         |         |  profiles (RBAC / JWT)             |
-|    Tesseract.js img        |         |  tickets / claims                  |
-|    SHA-256 hashing         |         |  ticket_messages (PFA chat)        |
-|    Fraud Sentinel          |         |  health_funds / vouchers           |
-|    DeepRank CSI            |         |  patient_rosters                   |
-|    LSTM Attrition          |         |  audit_logs (HIPAA trail)          |
-|    Grant Optimizer         |         |  policies (vector(768) embeddings) |
-|    Policy RAG (Gemini)     |         |  RLS enabled on all tables         |
-|    Socket.io emit          |         +------------------------------------+
-|  ML Retraining Worker      |
-|  Notification Worker       |
-|    Email (Nodemailer)      |
-|    SMS (Twilio)            |
-+----------------------------+
-           |
-+----------v-----------------------------------------------------------------+
-|                          ML / AI Layer                                      |
-|                                                                             |
-|  +------------------+  +------------------+  +---------------------------+ |
-|  |   Local TF.js     |  |  ONNX (Xenova)   |  |   Cloud APIs              | |
-|  |  DeepRank DNN     |  |  Qwen1.5-0.5B    |  |  Gemini 2.0 Flash         | |
-|  |  LSTM Attrition   |  |  Qwen2.5-0.5B    |  |  Gemini 1.5 Pro (CoT)    | |
-|  |  Autoencoder      |  |  DistilBERT SST2 |  |  Gemini Flash Lite        | |
-|  |  Grant Optimizer  |  +------------------+  |  Gemini Embedding-001     | |
-|  |  Cough Classifier |                         |  Qwen2.5-VL 72B (HF)     | |
-|  |  Fusion Model     |                         |  Qwen2.5-72B (HF CDSS)   | |
-|  |  MobileNet-V3     |                         +---------------------------+ |
-|  +------------------+                                                        |
-+-----------------------------------------------------------------------------+
-           |
-+----------v-----------------------------------------+
-|   External Services                                  |
-|  RazorpayX (UPI/IMPS INR disbursement)             |
-|  Stripe (USD international payout)                  |
-|  Twilio (SMS for ESI-1 critical alerts)             |
-|  Nodemailer / Resend (email dispatch)               |
-|  Google Places API (nearest facility finder)        |
-|  Firebase FCM (push notifications)                  |
-+------------------------------------------------------+
-```
-
-### Claim Intake Pipeline (BullMQ — 10 Steps)
-
-```
-Job Received (claim_id, raw_message, media_url)
-  Step 1: Receipt Parsing
-          pdftotext → pdf-parse → Tesseract.js OCR fallback
-          extractInvoiceTotal() with INR/USD currency detection
-  Step 2: NLP Feature Extraction
-          word_count, urgent_keyword_count (regex), sentiment_score (DistilBERT ONNX)
-  Step 3: Fraud Sentinel (3-layer)
-          SHA-256 receipt hash → duplicate detection
-          7-day velocity check per patient_phone
-          Autoencoder anomaly score (MSE threshold = 0.75)
-  Step 4: DeepRank CSI Inference
-          predict([word_count, urgent_kw, sentiment, hist_count]) → CSI in [0,1]
-  Step 5: ESI Tier Assignment
-          CSI >= 0.85 → ESI_1 | >= 0.60 → ESI_2 | >= 0.35 → ESI_3 | else ROUTINE
-  Step 6: LSTM Attrition Risk
-          predict(student_history) → dropout_risk_score in [0,1]
-  Step 7: Grant Optimizer (MC Dropout)
-          predictOptimalGrant(metrics) → recommended_amount ± confidence
-  Step 8: Gemini Multimodal Intake (cloud)
-          processMultimodalIntake(text, mediaUrl) → structured triage JSON
-  Step 9: Policy Match (RAG)
-          gemini-embedding-001 → vector search → hybrid_match_policies RPC
-          evaluatePolicyMatch() (Gemini 1.5 Pro CoT) → Auto-Approved / Escalated / Denied
-  Step 10: Supabase Update + Socket.io Broadcast
-           ticket.status = 'Triage Active' + real-time push to admin dashboard
++---------------------------------------------------------------------------------------+
+|                         MedAccess AI -- Flutter Mobile Client                         |
+|                                                                                       |
+|  +-------------------------------------+   +---------------------------------------+  |
+|  |       Patient Clinical Portal       |   |        Admin Clinical War Room        |  |
+|  |  Camera Dermatology / Lesion Scan   |   |  Real-Time ESI Triage Queue (1-5)     |  |
+|  |  Cough Audio Recording (Meyda DSP)  |   |  Grad-CAM Saliency Heatmap Review     |  |
+|  |  Contactless rPPG Vitals Monitor    |   |  CDSS Differential Diagnostic Review  |  |
+|  |  Prescription OCR & DDI Checker     |   |  Clinical ESI Override & Audit Log    |  |
+|  |  PFA Crisis Chat (Qwen ONNX Local)  |   |  Health Fund Liquidity Telemetry      |  |
+|  |  Emergency Copay Status Tracker     |   |  One-Tap Instant Payout Modal         |  |
+|  +-------------------------------------+   +---------------------------------------+  |
++-------------------------------------------^-------------------------------------------+
+                                            |  REST + WebSocket (Socket.io)
++-------------------------------------------v-------------------------------------------+
+|               MedAccess Backend API (Express 5 / TypeScript / ESM)                    |
+|  Auth + RBAC (JWT / Supabase)            Clinical Diagnostics & Vision Ingestion      |
+|  CDSS ICD-11 Differential Engine         Acoustic Cough Analysis Pipeline             |
+|  Pharmacy Safety & RxNorm Matcher        Contactless rPPG Signal Processor            |
+|  PFA Counselor AI (Local ONNX CPU)       FHIR R4 DiagnosticReport Converter           |
+|  Async Triage Pipeline (BullMQ)          HIPAA Audit PDF Generation (PDFKit)          |
++---------------------+-------------------------------------+---------------------------+
+                      |                                     |
++---------------------v-------------+         +-------------v---------------------+
+|    BullMQ Workers (Redis)         |         |  Supabase PostgreSQL + pgvector   |
+|  Clinical Intake Worker           |         |  institutions (multi-tenancy)     |
+|    Poppler / Tesseract.js OCR     |         |  profiles (RBAC: Student/Admin)   |
+|    SHA-256 Receipt Integrity      |         |  tickets / clinical encounters    |
+|    DeepRank CSI & ESI Triage      |         |  ticket_messages (PFA chat)       |
+|    Multimodal Fusion Assessment   |         |  health_funds / emergency copays  |
+|    CDSS Diagnostic Ingestion      |         |  audit_logs (HIPAA audit trail)   |
+|    Socket.io Real-Time Broadcast  |         |  policies (vector(768) pgvector)  |
+|  ML Retraining Worker (TF.js)     |         |  RLS Row-Level Security Enforced  |
+|  Notification Worker (Email/SMS)  |         +-----------------------------------+
++-----------------------------------+
+                      |
++---------------------v-----------------------------------------------------------------+
+|                                     ML / AI Layer                                     |
+|                                                                                       |
+|  +------------------------+  +------------------------+  +--------------------------+ |
+|  |   Local TF.js Node     |  |   ONNX Runtime (WASM)  |  |   Cloud AI APIs          | |
+|  |  Multimodal Fusion NN  |  |  Qwen1.5-0.5B PFA Chat |  |  Qwen2.5-VL 72B Vision   | |
+|  |  Cough Classifier NN   |  |  Qwen2.5-0.5B Instruct |  |  Qwen2.5-72B CDSS Engine | |
+|  |  DeepRank CSI Model    |  |  DistilBERT Sentiment  |  |  Gemini 2.0 Flash Intake | |
+|  |  Anomaly Autoencoder   |  +------------------------+  |  Gemini 1.5 Pro Policy   | |
+|  |  Temporal LSTM Risk    |                              |  Gemini Flash Lite Chat  | |
+|  |  Grant Optimizer NN    |                              |  Gemini Embedding-001    | |
+|  +------------------------+                              +--------------------------+ |
++---------------------------------------------------------------------------------------+
+                      |
++---------------------v-----------------------------------+
+|               External Health & Payment Rails           |
+|  RazorpayX (Instant UPI / IMPS Copay Disbursement)      |
+|  Stripe (USD International Medical Aid)                 |
+|  Twilio (Emergency SMS for ESI-1 Life-Safety Alerts)   |
+|  Nodemailer / Resend (Clinical Encounter Summaries)     |
+|  Google Places API (Nearest Emergency Clinic Locator)   |
+|  Firebase FCM (Urgent Diagnostic Push Notifications)    |
++---------------------------------------------------------+
 ```
 
 ---
@@ -542,367 +484,286 @@ Job Received (claim_id, raw_message, media_url)
 
 ```
 intellidesk/
-├── intellidesk_app/                     # Flutter Mobile Application
+├── intellidesk_app/                     # Flutter Mobile Client
 │   ├── lib/
-│   │   ├── main.dart                    # App entry, Provider tree, route table
+│   │   ├── main.dart                    # Entry point, Provider tree, route table
 │   │   ├── models/
-│   │   │   ├── claim.dart               # Medical claim (fromJson/toJson)
-│   │   │   ├── claim_message.dart       # PFA chat turn entity
-│   │   │   ├── health_fund.dart         # Welfare fund balance
-│   │   │   └── emergency_helpline.dart  # Crisis hotline directory
+│   │   │   ├── claim.dart               # Clinical ticket & claim entity
+│   │   │   ├── claim_message.dart       # PFA chat turn model
+│   │   │   ├── health_fund.dart         # Copay fund model
+│   │   │   └── emergency_helpline.dart  # Crisis hotlines
 │   │   ├── services/
-│   │   │   ├── clinical_api_service.dart     # REST client
-│   │   │   ├── socket_service.dart           # Socket.io room manager
-│   │   │   └── offline_sync_manager.dart     # SharedPreferences fallback
-│   │   ├── providers/                   # ViewModels (ChangeNotifier MVVM)
-│   │   │   ├── auth_provider.dart       # Session, role, JWT
-│   │   │   ├── claims_provider.dart     # Triage queue + ESI filter
-│   │   │   ├── clinical_chat_provider.dart   # PFA conversation state
-│   │   │   ├── war_room_provider.dart   # KPI telemetry
-│   │   │   └── ticket_provider.dart     # Patient-side tracking
+│   │   │   ├── clinical_api_service.dart     # Diagnostic & REST API client
+│   │   │   ├── socket_service.dart           # Real-time WebSocket manager
+│   │   │   └── offline_sync_manager.dart     # On-device offline cache
+│   │   ├── providers/
+│   │   │   ├── auth_provider.dart            # Session, JWT, RBAC
+│   │   │   ├── claims_provider.dart          # Clinical triage queue & filters
+│   │   │   ├── clinical_chat_provider.dart   # PFA conversational state
+│   │   │   ├── war_room_provider.dart        # Clinical telemetry & ESI stats
+│   │   │   └── ticket_provider.dart          # Patient status tracker
 │   │   ├── screens/
 │   │   │   ├── patient/
-│   │   │   │   ├── claim_intake_screen.dart       # PDF/image upload
-│   │   │   │   ├── clinical_chat_screen.dart      # PFA chat UI
-│   │   │   │   ├── claim_status_screen.dart       # ESI badge + payout tracker
-│   │   │   │   ├── emergency_hub_screen.dart      # Crisis hotlines
-│   │   │   │   ├── health_records_screen.dart     # Medical history
-│   │   │   │   ├── pharmacy_hub_screen.dart       # Prescription & Rx safety
+│   │   │   │   ├── claim_intake_screen.dart       # Photo, audio, bill upload
+│   │   │   │   ├── clinical_chat_screen.dart      # PFA chat interface
+│   │   │   │   ├── claim_status_screen.dart       # ESI tier & copay tracker
+│   │   │   │   ├── emergency_hub_screen.dart      # 24/7 crisis hotlines
+│   │   │   │   ├── health_records_screen.dart     # Longitudinal medical history
+│   │   │   │   ├── pharmacy_hub_screen.dart       # Rx parser & interaction checker
 │   │   │   │   └── patient_clinical_dashboard.dart
 │   │   │   └── admin/
-│   │   │       ├── admin_war_room_screen.dart           # Triage queue + payout
+│   │   │       ├── admin_war_room_screen.dart           # Triage queue & payout
+│   │   │       ├── admin_clinical_diagnoses_screen.dart # Diagnostic AI & Grad-CAM
 │   │   │       ├── admin_health_funds_screen.dart       # Fund management
 │   │   │       ├── admin_knowledge_base_screen.dart     # Policy RAG search
-│   │   │       ├── admin_clinical_diagnoses_screen.dart # AI diagnostic review
 │   │   │       └── admin_main_screen.dart
-│   │   └── theme/app_theme.dart        # Clinical design system, ESI color tokens
+│   │   └── theme/app_theme.dart        # Clinical design system & ESI tokens
 │   └── pubspec.yaml
 │
-├── intellidesk_backend/                 # Node.js Backend (Express 5 / TypeScript)
+├── intellidesk_backend/                 # Node.js Diagnostic & Triage Backend
 │   ├── src/
-│   │   ├── server.ts                    # Express bootstrap + ML model init
-│   │   ├── services/                    # Core ML & business service layer
-│   │   │   ├── deepRankModel.ts         # DeepRank CSI Neural Network
-│   │   │   ├── attritionModel.ts        # LSTM Dropout Risk
-│   │   │   ├── anomalyModel.ts          # Autoencoder Fraud Detection
-│   │   │   ├── grantOptimizerModel.ts   # MC Dropout Grant Predictor
-│   │   │   ├── fraudSentinel.ts         # 3-layer Fraud Detection
-│   │   │   ├── crisisCounselorService.ts    # Qwen ONNX + Rogerian PFA
-│   │   │   ├── clinicalCounselorService.ts  # Gemini Flash Lite Chat
-│   │   │   ├── gemini.ts                # All Gemini API integrations
-│   │   │   ├── nlpPipeline.ts           # DistilBERT sentiment analysis
-│   │   │   ├── receiptParser.ts         # PDF/OCR receipt extraction
-│   │   │   ├── disbursementService.ts   # RazorpayX payouts
-│   │   │   ├── payoutService.ts         # Stripe + voucher engine
-│   │   │   ├── pdfReportService.ts      # HIPAA audit PDF (PDFKit)
-│   │   │   ├── socketManager.ts         # Socket.io room management
-│   │   │   └── voucherEngine.ts         # Campus voucher generation
+│   │   ├── server.ts                    # Bootstrap, Express & ML init
 │   │   ├── modules/
 │   │   │   ├── cdss/                    # Clinical Decision Support System
-│   │   │   │   ├── CDSSService.ts           # Main orchestrator
-│   │   │   │   ├── DifferentialDiagnosisEngine.ts  # ICD-11 scoring
-│   │   │   │   ├── ICD11ConceptStore.ts     # WHO ICD-11 knowledge base
-│   │   │   │   ├── QwenInferenceService.ts  # Qwen2.5-72B cloud inference
-│   │   │   │   └── TreatmentPathwayAdvisor.ts
+│   │   │   │   ├── CDSSService.ts                  # CDSS coordinator
+│   │   │   │   ├── DifferentialDiagnosisEngine.ts  # ICD-11 logit scoring
+│   │   │   │   ├── ICD11ConceptStore.ts            # WHO ICD-11 knowledge base
+│   │   │   │   ├── QwenInferenceService.ts         # Qwen2.5-72B cloud service
+│   │   │   │   └── TreatmentPathwayAdvisor.ts      # Clinical pathway advisor
 │   │   │   ├── diagnostics/
 │   │   │   │   ├── vision/
-│   │   │   │   │   ├── CloudVisionClassifier.ts  # Qwen2.5-VL 72B
-│   │   │   │   │   ├── clinicalMobileNet.ts      # Local MobileNet-V3
+│   │   │   │   │   ├── CloudVisionClassifier.ts    # Qwen2.5-VL 72B vision
+│   │   │   │   │   ├── clinicalMobileNet.ts        # Local MobileNet-V3 fallback
 │   │   │   │   │   └── VisionDiagnosticService.ts
 │   │   │   │   ├── audio/
-│   │   │   │   │   ├── CoughClassifier.ts         # TFLite cough detection
-│   │   │   │   │   ├── AudioFeatureExtractor.ts   # MFCC features (Meyda.js)
-│   │   │   │   │   └── CloudAudioClassifier.ts    # HF Audio API
+│   │   │   │   │   ├── CoughClassifier.ts          # Cough neural network
+│   │   │   │   │   ├── AudioFeatureExtractor.ts    # Meyda.js MFCC pipeline
+│   │   │   │   │   └── CloudAudioClassifier.ts     # HF audio endpoint
+│   │   │   │   ├── vitals/
+│   │   │   │   │   ├── rPPGSignalProcessor.ts      # Camera heart rate extraction
+│   │   │   │   │   ├── ButterworthFilter.ts        # Bandpass filter (0.75-3.5 Hz)
+│   │   │   │   │   └── PhysiologicalRedFlagSentinel.ts
 │   │   │   │   ├── fusion/
-│   │   │   │   │   ├── MultimodalFusionModel.ts   # 168-d late-fusion DNN
+│   │   │   │   │   ├── MultimodalFusionModel.ts    # 168-d late-fusion DNN
 │   │   │   │   │   ├── diseasePredictionModel.ts
 │   │   │   │   │   └── vectorAssembler.ts
 │   │   │   │   ├── explainability/
-│   │   │   │   │   ├── gradCamGenerator.ts        # Grad-CAM heatmaps
+│   │   │   │   │   ├── gradCamGenerator.ts         # Grad-CAM heatmaps
 │   │   │   │   │   ├── featureImportance.ts
 │   │   │   │   │   └── uncertaintyEngine.ts
-│   │   │   │   ├── vitals/
-│   │   │   │   │   ├── rPPGSignalProcessor.ts     # Camera-based heart rate
-│   │   │   │   │   ├── ButterworthFilter.ts
-│   │   │   │   │   └── PhysiologicalRedFlagSentinel.ts
 │   │   │   │   ├── fhir/
-│   │   │   │   │   ├── FHIRConverterService.ts    # HL7 FHIR R4 export
+│   │   │   │   │   ├── FHIRConverterService.ts     # HL7 FHIR R4 Bundle generator
 │   │   │   │   │   └── ReferralLetterGenerator.ts
 │   │   │   │   └── progression/
-│   │   │   │       └── ScreeningDeltaAnalyzer.ts  # Longitudinal tracking
+│   │   │   │       └── ScreeningDeltaAnalyzer.ts   # Lesion healing tracker
 │   │   │   └── pharmacy/
-│   │   │       ├── PrescriptionOCRParser.ts       # Handwritten Rx OCR
-│   │   │       ├── DrugInteractionEngine.ts        # 8,000+ drug pairs
-│   │   │       ├── AllergySafetySentinel.ts
-│   │   │       ├── fuzzyMatcher.ts                # RxNorm fuzzy matching
-│   │   │       └── rxNormDataset.ts               # Local drug database
+│   │   │       ├── PrescriptionOCRParser.ts        # Handwritten Rx OCR
+│   │   │       ├── DrugInteractionEngine.ts        # 8,000+ drug pair DDI
+│   │   │       ├── AllergySafetySentinel.ts        # Allergy contraindication
+│   │   │       ├── fuzzyMatcher.ts                 # Levenshtein RxNorm matcher
+│   │   │       └── rxNormDataset.ts                # RxNorm local database
+│   │   ├── services/
+│   │   │   ├── crisisCounselorService.ts    # Local Qwen ONNX PFA chat
+│   │   │   ├── clinicalCounselorService.ts  # Gemini Flash Lite chat
+│   │   │   ├── deepRankModel.ts             # DeepRank ESI / CSI model
+│   │   │   ├── nlpPipeline.ts               # DistilBERT clinical sentiment
+│   │   │   ├── gemini.ts                    # Gemini multimodal APIs & RAG
+│   │   │   ├── receiptParser.ts             # PDF / bill OCR parser
+│   │   │   ├── disbursementService.ts       # RazorpayX payout service
+│   │   │   ├── payoutService.ts             # Stripe & voucher engine
+│   │   │   ├── pdfReportService.ts          # HIPAA audit report generator
+│   │   │   ├── fraudSentinel.ts             # 3-layer claim integrity check
+│   │   │   ├── anomalyModel.ts              # Autoencoder anomaly model
+│   │   │   ├── attritionModel.ts            # Temporal LSTM risk model
+│   │   │   └── grantOptimizerModel.ts       # MC Dropout copay optimizer
 │   │   ├── workers/
-│   │   │   ├── intakeWorker.ts          # 10-step BullMQ claim pipeline
-│   │   │   ├── mlRetrainingWorker.ts    # Continuous model fine-tuning
-│   │   │   └── notificationWorker.ts    # Email + SMS dispatch
-│   │   ├── controllers/
-│   │   ├── routes/
-│   │   ├── middleware/                  # Auth, RBAC, tenant scoping
-│   │   ├── config/                      # Supabase client config
-│   │   └── ml/                          # Training scripts
-│   │       ├── deep_rank.ts
-│   │       ├── lstm.ts
-│   │       ├── autoencoder.ts
-│   │       └── train_all.ts
-│   ├── models/                          # Trained model weights (auto-generated)
-│   │   ├── deep_rank/model.json
-│   │   ├── lstm/model.json
-│   │   ├── autoencoder/model.json
-│   │   ├── grant_optimizer/model.json
-│   │   ├── cough_classifier/model.json
-│   │   └── multimodal_fusion/model.json
-│   ├── eng.traineddata                  # Tesseract English model (5 MB)
+│   │   │   ├── intakeWorker.ts              # 10-step BullMQ intake pipeline
+│   │   │   ├── mlRetrainingWorker.ts        # In-process TF.js continuous retraining
+│   │   │   └── notificationWorker.ts        # Email + Twilio SMS dispatch
+│   │   ├── ml/                              # Training scripts
+│   │   │   ├── deep_rank.ts
+│   │   │   ├── lstm.ts
+│   │   │   ├── autoencoder.ts
+│   │   │   └── train_all.ts
+│   │   └── models/                          # Generated TF.js model weights
+│   ├── eng.traineddata                      # Tesseract English weights
 │   ├── Dockerfile
 │   ├── docker-compose.yml
 │   └── package.json
 │
-├── models/cdss/                         # CDSS model artifacts
-├── screenshots/                         # App screenshots + architecture diagrams
-├── supabase_core_schema.sql             # Full PostgreSQL schema with RLS
-├── supabase_setup.sql                   # Initial setup + extensions
-├── train_cdss_model.py                  # Python CDSS training script
-├── sample_policies/                     # Sample institutional policy PDFs
-└── ARCHITECTURE.md                      # Detailed architecture reference
+├── models/cdss/                             # CDSS knowledge graph artifacts
+├── supabase_core_schema.sql                 # PostgreSQL tables + RLS
+├── supabase_setup.sql                       # Extensions & vector setup
+├── train_cdss_model.py                      # Offline CDSS training script
+└── ARCHITECTURE.md                          # Architecture specification
 ```
 
 ---
 
 ## 7. Technology Stack
 
-### Frontend
+### Clinical & Diagnostic AI Stack
 
-| Category | Technology | Notes |
+| Component | Framework / Library | Role & Justification |
 |---|---|---|
-| **Framework** | Flutter (Dart) SDK ^3.10.7 | Cross-platform (Android, iOS, Web, Desktop) |
-| **State Management** | Provider + ChangeNotifier | MVVM architecture |
-| **HTTP Client** | `http` | REST API calls |
-| **Real-Time** | `socket_io_client` | WebSocket rooms per institution |
-| **On-Device ML** | `tflite_flutter` | Local TFLite model inference |
-| **Charts** | `fl_chart` | ESI distribution, fund utilization |
-| **Camera & Media** | `camera`, `image_picker`, `file_picker` | Claim photo + PDF upload |
-| **Audio Recording** | `record` | Cough audio capture |
-| **QR Code** | `qr_flutter` | Campus voucher display |
-| **Geolocation** | `geolocator` | Nearest facility finder |
-| **Notifications** | `flutter_local_notifications` | Push alerts for ESI-1 claims |
-| **Offline Storage** | `shared_preferences` | Claim data caching |
-| **Fonts** | `google_fonts` | Modern clinical typography |
-| **URL Launch** | `url_launcher` | Crisis hotline tel: links |
-| **Connectivity** | `connectivity_plus` | Network state detection |
-| **Permissions** | `permission_handler` | Camera, microphone, storage |
+| **VLM Vision Classifier** | `Qwen/Qwen2.5-VL-72B-Instruct` | Hospital-grade multimodal classification of dermatology, lesions, and ocular conditions |
+| **Local Vision Fallback** | Clinical MobileNet-V3 (TFLite) | Zero-latency, on-device edge fallback when network connection is severed |
+| **CDSS Diagnostic LLM** | `Qwen/Qwen2.5-72B-Instruct` | WHO ICD-11 evidence-based differential diagnosis and clinical triage recommendations |
+| **Deterministic CDSS Engine** | `DifferentialDiagnosisEngine` | Logit scoring ($T=1.25$) over calibrated ICD-11 disease priors |
+| **Acoustic Cough ML** | `@tensorflow/tfjs-node` + Meyda.js | 16-d MFCC feature extraction + 4-class neural network respiratory screening |
+| **Contactless Vitals** | Node.js + Butterworth DSP | 30 Hz RGB video decomposition isolating heart rate (BPM) and SpO2 |
+| **Prescription OCR** | Poppler `pdftotext` + Tesseract.js | Dual-engine OCR with character sanitization and 8,000+ entry RxNorm fuzzy matcher |
+| **Drug Safety Engine** | `DrugInteractionEngine` | In-memory 8,000+ drug pair contraindication and interaction lookup matrix |
+| **Local Crisis Chat (PFA)** | `@xenova/transformers` (ONNX) | CPU-quantized Qwen1.5-0.5B running on-device for 100% confidential mental health triage |
+| **Clinical Sentiment NLP** | DistilBERT SST-2 (ONNX) | Distress quantification and medical urgency regex entity extraction |
+| **Clinical ESI Triage** | `@tensorflow/tfjs-node` | DeepRank Crisis Severity Index (CSI) neural network mapping to ESI tiers 1–5 |
+| **Visual Explainability** | Grad-CAM | Gradient backpropagation generating visual saliency overlays for diagnostic transparency |
+| **Interoperability** | HL7 FHIR R4 Converter | Exports clinical encounters to standard FHIR `DiagnosticReport` Bundles |
 
-### Backend
+### Frontend (Flutter Client)
 
-| Category | Technology | Notes |
+| Category | Technology | Usage |
 |---|---|---|
-| **Runtime** | Node.js (ESM modules) | — |
-| **Framework** | Express 5 / TypeScript v7.0.2 | Strict mode |
-| **Database** | Supabase PostgreSQL + pgvector | Row-Level Security, vector(768) |
-| **DB Client** | `@supabase/supabase-js` v2 | Direct DB client |
-| **Queue System** | BullMQ + Redis | Async claim processing pipeline |
-| **Redis Client** | ioredis v6 | BullMQ job store |
-| **Real-Time** | Socket.io v4 | Bi-directional WebSocket |
-| **File Upload** | Multer v2 | PDF/image multipart upload |
-| **PDF Parsing** | pdf-parse + Poppler pdftotext | Layout-preserving extraction |
-| **OCR** | Tesseract.js v7 + eng.traineddata | 5MB English language model |
-| **PDF Generation** | PDFKit | HIPAA audit reports |
-| **Image Processing** | sharp | Clinical image preprocessing |
-| **Email** | Nodemailer + Resend | Claim status notifications |
-| **SMS** | Twilio v6 | Critical ESI-1 SMS alerts |
-| **Validation** | Zod v4 | API request/response schema |
-| **Auth** | Supabase Auth + JWT | RBAC (STUDENT / ADMIN / AUDITOR) |
-| **Containerization** | Docker + docker-compose | Redis + backend services |
-| **ORM Tooling** | Prisma v7 | Schema migrations |
+| **Framework** | Flutter (Dart SDK ^3.10.7) | Cross-platform client (Android, iOS, Web, Desktop) |
+| **State Management** | Provider + ChangeNotifier | Clean MVVM architecture separating clinical UI from API logic |
+| **Edge ML** | `tflite_flutter` | Local on-device execution of quantized TFLite models |
+| **Acoustic Capture** | `record` | 16kHz uncompressed audio recording for cough screening |
+| **Camera & Media** | `camera`, `image_picker` | High-resolution capture for dermatology and rPPG vitals |
+| **Real-Time** | `socket_io_client` | Real-time bi-directional clinical war room telemetry |
+| **Offline Cache** | `shared_preferences` | Offline symptom logging with automatic sync on reconnection |
 
-### ML & AI
+### Backend & Cloud Infrastructure
 
-| Model / Framework | Type | Role |
+| Category | Technology | Usage |
 |---|---|---|
-| **TensorFlow.js + tfjs-node** v4.22 | Local Neural Network | DeepRank, LSTM, Autoencoder, Grant Optimizer, Cough Classifier, Multimodal Fusion |
-| **@xenova/transformers** v2.17 | ONNX Runtime (Node.js) | DistilBERT sentiment, Qwen1.5/2.5 PFA chat |
-| **Qwen1.5-0.5B-Chat** | Quantized ONNX LLM | Primary PFA counselor (on-device CPU) |
-| **Qwen2.5-0.5B-Instruct** | Quantized ONNX LLM | Secondary PFA counselor fallback |
-| **Qwen/Qwen2.5-VL-72B-Instruct** | Cloud VLM (Hugging Face Router) | Clinical image classification |
-| **Qwen/Qwen2.5-72B-Instruct** | Cloud LLM (Hugging Face Router) | CDSS differential diagnosis |
-| **DistilBERT SST-2** | ONNX Transformer | Clinical NLP sentiment analysis |
-| **Gemini 2.0 Flash** | Cloud LLM (Google) | Multimodal claim intake parsing |
-| **Gemini 2.5 Flash** | Cloud LLM (Google) | Multimodal voice/image input |
-| **Gemini 1.5 Pro** | Cloud LLM (Google) | Policy adjudication (Chain-of-Thought) |
-| **Gemini Flash Lite** | Cloud LLM (Google) | Real-time clinical chat (50 tokens/call) |
-| **Gemini Embedding-001** | Cloud Embeddings (Google) | 768-d semantic policy embeddings |
-| **Clinical MobileNet-V3** | Local TFLite | Vision fallback (10-class clinical) |
-| **Meyda.js** | Audio DSP Library | MFCC feature extraction for cough analysis |
-| **tflite_flutter** | Flutter TFLite Plugin | On-device mobile inference |
-| **Grad-CAM** | XAI Method | Visual saliency heatmaps for clinical transparency |
-| **Monte Carlo Dropout** | Uncertainty Quantification | Epistemic variance in predictions |
-| **pgvector** | PostgreSQL Extension | Semantic policy RAG vector search |
-| **Butterworth Filter** | DSP Algorithm | rPPG signal bandpass filtering (0.75–3.5 Hz) |
-
-### Payment & External APIs
-
-| Service | Purpose |
-|---|---|
-| **RazorpayX** | UPI + IMPS INR disbursement |
-| **Stripe** | USD international payout |
-| **Twilio** | SMS for ESI-1 critical alerts |
-| **Google Places API** | Nearest emergency facility lookup |
-| **Firebase FCM** | Push notification delivery |
-| **Hugging Face Inference Router** | Cloud Qwen model hosting |
-| **Supabase** | Managed PostgreSQL + Auth + Storage + pgvector |
-
-### DevOps & Infrastructure
-
-| Tool | Purpose |
-|---|---|
-| Docker + docker-compose | Containerized backend + Redis |
-| Redis 7 Alpine | BullMQ job queue store |
-| Prisma v7 | Database schema tooling |
-| tsx | TypeScript execution (dev) |
-| Nodemon | Hot-reload dev server |
+| **Runtime & Framework** | Node.js (ESM) + Express 5 | High-throughput asynchronous backend service |
+| **Database** | Supabase PostgreSQL + `pgvector` | Relational clinical records with Row-Level Security and vector search |
+| **Queue & Workers** | BullMQ + Redis 7 | 10-step asynchronous intake pipeline and continuous ML retraining |
+| **Document Processing** | `sharp`, `pdf-parse`, PDFKit | Image preprocessing and tamper-evident HIPAA compliance audit PDFs |
+| **Copay Disbursement** | RazorpayX (UPI/IMPS), Stripe | Multi-rail emergency copay and medical welfare disbursement |
+| **Emergency Alerts** | Twilio, Nodemailer, Resend | Instant SMS dispatch for ESI-1 life-safety alerts and email reports |
 
 ---
 
 ## 8. API Reference
 
-### Auth
-| Method | Route | Description |
-|---|---|---|
-| `POST` | `/api/v1/auth/signup` | Register student or admin |
-| `POST` | `/api/v1/auth/login` | Authenticate, receive JWT |
-| `GET` | `/api/v1/auth/profile` | Get authenticated user profile |
+### Clinical Diagnostics & CDSS
 
-### Claim Intake
 | Method | Route | Description |
 |---|---|---|
-| `POST` | `/api/v1/intake/web` | Submit new claim (multipart: text + PDF/image) → BullMQ |
-| `GET` | `/api/v1/claims` | List claims (filter: ESI, status, keyword) |
-| `GET` | `/api/v1/claims/:id` | Full claim + all ML scores + triage breakdown |
+| `POST` | `/api/v1/diagnostics/vision` | Upload clinical image $\rightarrow$ Qwen2.5-VL 72B / MobileNet assessment + Grad-CAM |
+| `POST` | `/api/v1/diagnostics/audio` | Ingest cough audio $\rightarrow$ 16-d MFCC extraction $\rightarrow$ 4-class cough classification |
+| `POST` | `/api/v1/diagnostics/vitals` | Ingest facial video frame sequence $\rightarrow$ rPPG pulse extraction & vitals red flags |
+| `POST` | `/api/v1/cdss/evaluate` | Ingest symptom payload $\rightarrow$ WHO ICD-11 differential diagnosis & FHIR R4 bundle |
 
-### Clinical Admin (ADMIN role)
-| Method | Route | Description |
-|---|---|---|
-| `POST` | `/api/v1/claims/:id/disburse` | Execute RazorpayX / Stripe payout |
-| `POST` | `/api/v1/claims/:id/override` | ESI or fraud flag override with notes |
-| `GET` | `/api/v1/admin/telemetry` | KPI dashboard: fund liquidity, ESI distribution |
-| `GET` | `/api/v1/admin/reports` | Download HIPAA compliance audit PDF |
-| `GET` | `/api/v1/admin/knowledge` | Institutional policy knowledge base (RAG) |
+### Pharmacy & Medication Safety
 
-### PFA Chat
 | Method | Route | Description |
 |---|---|---|
-| `POST` | `/api/v1/chat` | Send message → Qwen PFA AI reply |
-| `GET` | `/api/v1/chat/:ticketId/messages` | Full PFA chat history for a claim |
+| `POST` | `/api/v1/pharmacy/parse` | Ingest prescription image $\rightarrow$ OCR extraction $\rightarrow$ RxNorm canonical matching |
+| `POST` | `/api/v1/pharmacy/interactions` | Ingest medication list $\rightarrow$ check 8,000+ drug-drug interactions & allergy profile |
 
-### Clinical Diagnostics
-| Method | Route | Description |
-|---|---|---|
-| `POST` | `/api/v1/diagnostics/vision` | Upload clinical image → Qwen2.5-VL / MobileNet |
-| `POST` | `/api/v1/diagnostics/audio` | Audio recording → cough classification |
-| `POST` | `/api/v1/diagnostics/vitals` | rPPG frame sequence → heart rate analysis |
-| `POST` | `/api/v1/cdss/evaluate` | Symptom payload → ICD-11 differential diagnosis |
+### Psychological First Aid (PFA) & Crisis Chat
 
-### Pharmacy
 | Method | Route | Description |
 |---|---|---|
-| `POST` | `/api/v1/pharmacy/parse` | Prescription → OCR + drug extraction + RxNorm |
-| `POST` | `/api/v1/pharmacy/interactions` | Check drug-drug interaction for a medication list |
+| `POST` | `/api/v1/chat` | Send message $\rightarrow$ on-device Qwen PFA reply + self-harm crisis interception |
+| `GET` | `/api/v1/chat/:ticketId/messages` | Retrieve confidential PFA chat history for a clinical claim |
 
-### Health
+### Clinical Triage & Intake
+
 | Method | Route | Description |
 |---|---|---|
-| `GET` | `/health` | Service status + DB + all ML model load status |
+| `POST` | `/api/v1/intake/web` | Submit clinical request (narrative + photos/bills) $\rightarrow$ BullMQ 10-step pipeline |
+| `GET` | `/api/v1/claims` | List clinical claims (filter by ESI tier, status, keyword) |
+| `GET` | `/api/v1/claims/:id` | Fetch complete clinical claim + diagnostic scores + triage tier |
+
+### Clinical Admin War Room
+
+| Method | Route | Description |
+|---|---|---|
+| `POST` | `/api/v1/claims/:id/override` | Override AI-assigned ESI tier with documented clinical justification |
+| `POST` | `/api/v1/claims/:id/disburse` | Disburse approved emergency copay relief via RazorpayX or Stripe |
+| `GET` | `/api/v1/admin/telemetry` | Telemetry dashboard: ESI distribution, diagnostic volume, fund liquidity |
+| `GET` | `/api/v1/admin/reports` | Generate and download tamper-evident HIPAA compliance audit PDF |
 
 ---
 
 ## 9. Database Schema
 
-All tables have **Row-Level Security (RLS)** enabled.
+All database tables are governed by strict **Row-Level Security (RLS)** in PostgreSQL to maintain HIPAA and FERPA isolation.
 
-### `institutions` — Multi-Tenancy Root
-| Column | Type | Notes |
+### `tickets` — Primary Clinical & Welfare Encounter Record
+| Column | Type | Description |
 |---|---|---|
-| `id` | TEXT (PK) | Slug e.g. `campus-health-001` |
-| `name` | TEXT | Display name |
-| `domain` | TEXT | Email domain whitelist |
-| `currency` | TEXT | `INR` or `USD` |
-
-### `profiles` — Auth & RBAC
-| Column | Type | Notes |
-|---|---|---|
-| `id` | UUID (PK) | References `auth.users.id` |
-| `role` | TEXT | `STUDENT` or `ADMIN` or `AUDITOR` |
-| `institution_id` | TEXT (FK) | Tenant scoping |
-
-### `tickets` — Core Clinical Claim Record
-| Column | Type | Notes |
-|---|---|---|
-| `urgency_level` | TEXT | ESI level assigned by DeepRank |
-| `crisis_severity_index` | NUMERIC (0-1) | DeepRank output |
-| `dropout_risk_score` | NUMERIC (0-1) | LSTM Attrition output |
-| `recommended_grant_amount` | NUMERIC | Grant Optimizer output |
-| `fraud_risk_score` | NUMERIC (0-1) | Fraud Sentinel score |
-| `receipt_image_hash` | TEXT | SHA-256 for deduplication |
-| `anomaly_reconstruction_score` | NUMERIC | Autoencoder MSE |
-| `embedding` | vector(768) | Gemini Embedding-001 for RAG |
+| `id` | UUID (PK) | Unique encounter identifier |
+| `urgency_level` | TEXT | ESI triage level (ESI-1 to ESI-5) computed by DeepRank |
+| `crisis_severity_index` | NUMERIC (0–1) | Continuous severity score generated by DeepRank |
+| `dropout_risk_score` | NUMERIC (0–1) | Longitudinal health burnout/attrition risk |
+| `recommended_grant_amount`| NUMERIC | Emergency copay relief amount calculated by Grant Optimizer |
+| `fraud_risk_score` | NUMERIC (0–1) | Multi-layer fraud sentinel score |
+| `receipt_image_hash` | TEXT | SHA-256 hash for medical bill deduplication |
+| `anomaly_reconstruction_score`| NUMERIC | Autoencoder feature reconstruction MSE |
+| `embedding` | vector(768) | Gemini Embedding-001 vector representation |
 | `payout_method` | TEXT | UPI / BANK / VOUCHER |
 
-### `ticket_messages` — PFA Chat History
-| Column | Type | Notes |
+### `ticket_messages` — Confidential PFA & Triage Log
+| Column | Type | Description |
 |---|---|---|
-| `sender` | TEXT | STUDENT or COUNSELOR_AI or HUMAN_ADMIN |
-| `is_crisis_response` | BOOLEAN | True if self-harm keywords detected |
-| `suggested_resources` | JSONB | Emergency hotline cards array |
+| `id` | UUID (PK) | Message identifier |
+| `sender` | TEXT | `STUDENT`, `COUNSELOR_AI`, or `HUMAN_ADMIN` |
+| `is_crisis_response` | BOOLEAN | True if self-harm or acute distress detected |
+| `suggested_resources` | JSONB | Immediate emergency helpline cards |
 
-### `audit_logs` — HIPAA Audit Trail
-| Column | Type | Notes |
+### `audit_logs` — HIPAA Compliance Trail
+| Column | Type | Description |
 |---|---|---|
-| `action_type` | TEXT | DISBURSEMENT, ESI_OVERRIDE, FRAUD_FLAG |
-| `actor_type` | TEXT | SYSTEM / ADMIN / AI |
-| `details` | JSONB | Full structured audit payload |
+| `id` | UUID (PK) | Audit entry identifier |
+| `action_type` | TEXT | `ESI_OVERRIDE`, `DISBURSEMENT`, `FRAUD_FLAG` |
+| `actor_type` | TEXT | `CLINICIAN`, `ADMIN`, or `AI_SYSTEM` |
+| `details` | JSONB | Complete payload including clinical override justification |
 
 ---
 
 ## 10. Background Workers
 
-### Intake Worker (`intakeWorker.ts`) — `clinical-intake-queue`
-Primary 10-step ML processing pipeline executed asynchronously for every submitted claim (see Section 5 diagram).
+### Clinical Intake Worker (`intakeWorker.ts`)
+Processes all submitted clinical requests through a 10-step asynchronous queue:
+1. **Multimodal Extraction** — parses uploaded medical bills/prescriptions using Poppler and Tesseract.js.
+2. **Clinical NLP Analysis** — extracts sentiment and medical emergency entities using DistilBERT ONNX.
+3. **Integrity Sentinel** — runs SHA-256 hash verification and Autoencoder anomaly scoring.
+4. **DeepRank CSI Scoring** — calculates continuous severity and assigns ESI triage level (1–5).
+5. **Attrition Risk Scoring** — evaluates longitudinal health burnout via Temporal LSTM.
+6. **Copay Optimization** — computes recommended emergency copay relief with MC Dropout confidence bounds.
+7. **Multimodal Intake Parsing** — structures narrative via Gemini 2.0 Flash with clinical category tags.
+8. **Policy Adjudication** — performs RRF hybrid vector search for institutional copay guidelines.
+9. **Record Persistence** — updates Supabase ticket with full diagnostic telemetry.
+10. **WebSocket Broadcast** — pushes real-time ESI-sorted encounter to the clinician war room.
 
 ### ML Retraining Worker (`mlRetrainingWorker.ts`)
-- Fetches resolved tickets from Supabase as labeled training data
-- Fine-tunes DeepRank (5 epochs) and Grant Optimizer (5 epochs)
-- Saves updated weights to `./models/` — enables continuous learning from real outcomes
-
-### Notification Worker (`notificationWorker.ts`) — `notification-queue`
-- Email via Nodemailer + Resend for claim status changes
-- SMS via Twilio for critical ESI-1 alerts
-- Queued asynchronously — does not block claim processing
+- Runs continuously on a scheduled BullMQ interval.
+- Fetches verified clinical outcomes from Supabase.
+- Performs in-process fine-tuning for DeepRank CSI and Grant Optimizer (5 epochs each using Adam).
+- Persists updated neural network weights directly to disk.
 
 ---
 
 ## 11. Security Architecture
 
 ```
-Request → CORS → JWT Middleware (requireAuth)
-                        |
-              requireRole(['ADMIN']) -- blocks non-admin routes
-                        |
-              tenantScopeMiddleware -- injects institution_id from JWT
-                        |
-              Supabase RLS -- enforces data isolation at the database level
+Client Request → CORS → JWT Auth (requireAuth)
+                              |
+                     Role Check (requireRole(['ADMIN', 'CLINICIAN']))
+                              |
+                     Tenant Middleware (injects institution_id from JWT)
+                              |
+                     Supabase Row-Level Security (enforces data isolation)
 ```
 
-| Feature | Implementation |
-|---|---|
-| **HIPAA Audit Trail** | Every disbursement, override, fraud decision in `audit_logs` with full JSONB payload |
-| **Receipt Integrity** | SHA-256 hash stored at intake time, checked on every new submission |
-| **Tamper-Evident PDF** | SHA-256 checksum of report content printed on every HIPAA audit PDF |
-| **FERPA Compliance** | AI-powered diagnosis redaction (Gemini 1.5 Flash) before professor email dispatch |
-| **Life-Safety Bypass** | Crisis claims exempt from velocity/threshold fraud checks |
-| **RLS Isolation** | Every DB table has per-institution Row-Level Security policies |
+- **HIPAA-Aligned Audit Trail** — every clinical decision, diagnosis override, and copay disbursement is immutably logged with structured JSONB telemetry.
+- **Automated PHI De-Identification** — Gemini 1.5 Flash strips protected health information before generating notifications or external leave letters.
+- **Cryptographic Tamper-Evidence** — all generated clinical audit PDFs feature an embedded SHA-256 checksum of the underlying medical data.
+- **Emergency Life-Safety Bypass** — acute life-safety and mental health crisis triggers bypass all non-critical rate limits and fraud checks.
 
 ---
 
@@ -928,17 +789,11 @@ services:
     ports: ["6379:6379"]
 ```
 
-### ML Model Training (One-Time Setup)
+### ML Training & Model Weights
 ```bash
 cd intellidesk_backend
-npm run train:ml   # Train DeepRank, LSTM, Autoencoder, Grant Optimizer, Cough, Fusion
-npm run seed:all   # Seed institutional policies, funds, and audit logs
-```
-
-### Development
-```bash
-cd intellidesk_backend && npm install && npm run dev   # Backend on :3000
-cd intellidesk_app && flutter pub get && flutter run   # Flutter App
+npm run train:ml   # Trains DeepRank, LSTM, Autoencoder, Grant Optimizer, Cough Classifier, Fusion
+npm run seed:all   # Seeds institutional policies, health funds, and ICD-11 priors
 ```
 
 ---
@@ -947,25 +802,21 @@ cd intellidesk_app && flutter pub get && flutter run   # Flutter App
 
 | Variable | Service | Description |
 |---|---|---|
-| `SUPABASE_URL` | Supabase | Project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase | Backend service role key (bypasses RLS) |
-| `SUPABASE_ANON_KEY` | Supabase | Flutter client anon key |
-| `GEMINI_API_KEY` | Google Gemini | Gemini 2.0 Flash / 1.5 Pro / Embedding-001 |
-| `HF_TOKEN` | Hugging Face | Qwen2.5-VL 72B vision + Qwen2.5-72B CDSS |
-| `REDIS_URL` | Redis | BullMQ connection string |
-| `RAZORPAY_KEY_ID` | RazorpayX | INR UPI / IMPS payout key |
-| `RAZORPAY_KEY_SECRET` | RazorpayX | RazorpayX secret |
-| `RAZORPAYX_ACCOUNT_NUMBER` | RazorpayX | Fund account number |
-| `STRIPE_SECRET_KEY` | Stripe | USD international payout |
-| `TWILIO_ACCOUNT_SID` | Twilio | SMS account SID |
-| `TWILIO_AUTH_TOKEN` | Twilio | SMS auth token |
-| `TWILIO_PHONE_NUMBER` | Twilio | Sender phone number |
-| `GOOGLE_PLACES_API_KEY` | Google Places | Nearest clinic/hospital lookup |
-| `FIREBASE_PROJECT_ID` | Firebase | FCM push notifications |
-| `FIREBASE_CLIENT_EMAIL` | Firebase | Service account email |
-| `FIREBASE_PRIVATE_KEY` | Firebase | Service account private key |
-| `JWT_SECRET` | Backend | JWT signing secret |
-| `PORT` | Backend | HTTP port (default: 3000) |
+| `SUPABASE_URL` | Supabase | Project API endpoint |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase | Service role key for backend operations |
+| `SUPABASE_ANON_KEY` | Supabase | Anon key for Flutter client |
+| `GEMINI_API_KEY` | Google AI Studio | Gemini 2.0 Flash / 1.5 Pro / Embedding-001 |
+| `HF_TOKEN` | Hugging Face | Qwen2.5-VL 72B vision & Qwen2.5-72B CDSS |
+| `REDIS_URL` | Redis | BullMQ asynchronous queue connection |
+| `RAZORPAY_KEY_ID` | RazorpayX | Instant UPI / IMPS copay payout key |
+| `RAZORPAY_KEY_SECRET` | RazorpayX | RazorpayX account secret |
+| `STRIPE_SECRET_KEY` | Stripe | International medical aid payment key |
+| `TWILIO_ACCOUNT_SID` | Twilio | SMS notification account SID |
+| `TWILIO_AUTH_TOKEN` | Twilio | SMS authentication token |
+| `TWILIO_PHONE_NUMBER` | Twilio | Sender phone number for ESI-1 alerts |
+| `GOOGLE_PLACES_API_KEY` | Google Places | Nearest emergency hospital and clinic locator |
+| `JWT_SECRET` | Backend | Secret used for signing authentication tokens |
+| `PORT` | Backend | Server port (default: 3000) |
 
 ---
 
@@ -974,37 +825,38 @@ cd intellidesk_app && flutter pub get && flutter run   # Flutter App
 ### Prerequisites
 - Node.js 20+ with npm
 - Flutter SDK 3.10+
-- Redis 7 (or Docker)
-- Supabase project (free tier sufficient)
-- Gemini API key (Google AI Studio — free tier available)
-- Hugging Face token (free tier — for cloud vision/CDSS features)
+- Redis 7 (local or Docker container)
+- Supabase account with PostgreSQL instance
+- Google Gemini API key
+- Hugging Face API token (for 72B vision and CDSS features)
 
 ### Quick Start
+
 ```bash
+# 1. Clone repository
 git clone <repo-url> && cd intellidesk
 
-# Backend setup
+# 2. Configure & initialize backend
 cd intellidesk_backend
 cp .env.example .env
-# Fill in: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GEMINI_API_KEY, REDIS_URL
+# Set SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GEMINI_API_KEY, HF_TOKEN, REDIS_URL
 npm install
 
-# Database migrations
-# Execute supabase_core_schema.sql in your Supabase SQL editor
+# 3. Apply database schema
+# Run supabase_core_schema.sql in your Supabase SQL editor
 
-# Train local ML models
+# 4. Train local ML models & seed initial clinical data
 npm run train:ml
 npm run seed:all
 
-# Start backend
+# 5. Launch backend server
 npm run dev
 
-# Flutter App (new terminal)
+# 6. Launch Flutter mobile client (in a new terminal)
 cd ../intellidesk_app
-flutter pub get && flutter run
+flutter pub get
+flutter run
 ```
-
-> **Note:** Local ONNX models (Qwen1.5-0.5B-Chat, DistilBERT) are downloaded automatically on first run via `@xenova/transformers`. Internet required on first launch only.
 
 ---
 
@@ -1012,12 +864,12 @@ flutter pub get && flutter run
 
 | Event | Direction | Payload |
 |---|---|---|
-| `join-institution` | Client → Server | `{ institutionId }` |
-| `ticket-created` | Server → Client | Full ticket object |
-| `ticket-updated` | Server → Client | `{ ticketId, status, esiLevel, csi }` |
-| `payout-completed` | Server → Client | `{ ticketId, txnRef, amount }` |
-| `fraud-flagged` | Server → Client | `{ ticketId, flagReasons }` |
+| `join-institution` | Client $\rightarrow$ Server | `{ institutionId }` |
+| `ticket-created` | Server $\rightarrow$ Client | Full clinical encounter object |
+| `ticket-updated` | Server $\rightarrow$ Client | `{ ticketId, status, esiLevel, csi }` |
+| `payout-completed` | Server $\rightarrow$ Client | `{ ticketId, txnRef, amount }` |
+| `fraud-flagged` | Server $\rightarrow$ Client | `{ ticketId, flagReasons }` |
 
 ---
 
-*Built with patience, perseverance and dedication.*
+*Built with clinical rigor, engineering excellence, and patient-first care.*

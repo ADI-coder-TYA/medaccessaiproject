@@ -19,7 +19,6 @@ The MedAccess AI backend is an enterprise-grade, event-driven medical intelligen
 | **Real-Time Engine** | Socket.io v4 | WebSocket rooms segmented per institution tenant |
 | **Digital Signal Processing** | Meyda.js + Custom Butterworth | MFCC acoustic extraction & 0.75–3.5 Hz bandpass pulse filtering |
 | **OCR & Imaging** | Poppler `pdftotext` + Tesseract.js + `sharp` | Handwritten Rx digitization, bill parsing, and clinical image preprocessing |
-| **Report Generation** | PDFKit | Tamper-evident clinical encounter reports with SHA-256 cryptographic hashes |
 
 ---
 
@@ -87,7 +86,6 @@ intellidesk_backend/
 │   │   ├── disbursementService.ts      # RazorpayX UPI & IMPS payouts
 │   │   ├── payoutService.ts            # Stripe international & campus vouchers
 │   │   ├── receiptParser.ts            # Bill total extraction & currency detection
-│   │   ├── pdfReportService.ts         # Clinical report generator
 │   │   ├── socketManager.ts            # Socket.io room broadcaster
 │   │   ├── dbService.ts                # Database health & telemetry check
 │   │   └── storageBootstrap.ts         # Supabase storage bucket auto-provisioning
@@ -96,9 +94,8 @@ intellidesk_backend/
 │   │   ├── asyncIntake.ts              # Multipart submission enqueuing to BullMQ
 │   │   ├── claims.ts                   # Claim CRUD & triage queue endpoints
 │   │   ├── chat.ts                     # PFA crisis counseling chat endpoints
-│   │   ├── admin.ts                    # Admin overrides, audit trail, payouts
+│   │   ├── admin.ts                    # Admin overrides, telemetry, payouts
 │   │   ├── telemetry.ts                # Real-time ESI & fund analytics
-│   │   ├── reports.ts                  # Audit PDF download endpoints
 │   │   └── knowledge.ts                # Institutional policy RAG semantic search
 │   ├── workers/                        # Distributed BullMQ background workers
 │   │   ├── intakeWorker.ts             # 10-step asynchronous intake pipeline
@@ -199,7 +196,6 @@ The backend initializes sequentially to ensure zero-crash resilience:
   - Layer C: Feature reconstruction anomaly detection via Autoencoder MSE (threshold = 0.75).
   - *Emergency life-safety claims automatically bypass velocity checks.*
 - **`disbursementService.ts` & `payoutService.ts`**: Multi-rail disbursement executing instant UPI/IMPS via RazorpayX, USD payouts via Stripe, or generating campus clinic QR vouchers.
-- **`pdfReportService.ts`**: Generates clinical encounter reports with cryptographic SHA-256 tamper-evident checksums.
 
 ---
 
@@ -240,7 +236,6 @@ The backend initializes sequentially to ensure zero-crash resilience:
 | `POST` | `/api/v1/claims/:id/override` | `ADMIN` | Override AI-assigned ESI tier with mandatory clinician documentation |
 | `POST` | `/api/v1/claims/:id/disburse` | `ADMIN` | Execute instant emergency copay disbursement via RazorpayX or Stripe |
 | `GET` | `/api/v1/admin/telemetry` | `ADMIN` | Dashboard telemetry: ESI breakdown, diagnostic counts, fund liquidity |
-| `GET` | `/api/v1/admin/reports` | `ADMIN` | Download clinical encounter report PDF |
 | `GET` | `/api/v1/admin/knowledge` | `ADMIN` | Semantic search (RAG) over institutional healthcare policies |
 
 ---
@@ -284,7 +279,6 @@ Client Request ──► CORS ──► JWT Auth Middleware (requireAuth)
                         Supabase PostgreSQL (Row-Level Security Policies)
 ```
 
-- **Row-Level Security (RLS)**: Enforced across all PostgreSQL tables (`tickets`, `profiles`, `audit_logs`, `health_funds`). Queries without valid institutional tenant scoping are rejected at the database level.
-- **Clinical Activity Logging**: Every clinician override, diagnosis modification, and copay disbursement generates an immutable record in `audit_logs` containing actor ID, timestamp, and full structured JSONB payload.
-- **Cryptographic Tamper-Evidence**: Exported audit PDFs embed a calculated SHA-256 hash of the generated report content.
+- **Row-Level Security (RLS)**: Enforced across all PostgreSQL tables (`tickets`, `profiles`, `activity_logs`, `health_funds`). Queries without valid institutional tenant scoping are rejected at the database level.
+- **Clinical Decision Logging**: Every clinician override, diagnosis modification, and copay disbursement generates a record in `activity_logs` containing actor ID, timestamp, and full structured JSONB payload.
 - **FERPA Compliance**: Clinical diagnosis redaction replaces acute medical conditions with generalized medical necessity phrasing prior to sending notices to university faculty.

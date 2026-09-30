@@ -32,7 +32,7 @@ MedAccess AI is architected as an offline-resilient, hybrid edge-cloud medical p
 │  /api/v1/chat              Confidential Psychological First Aid (Qwen ONNX Local)      │
 │  /api/v1/intake/web        Asynchronous Claim Ingestion $\rightarrow$ BullMQ Processing Queue   │
 │  /api/v1/claims            Clinical Triage CRUD, CSI Filtering & Encounter Telemetry   │
-│  /api/v1/admin             Clinician Overrides, Telemetry Dashboards, Audit Logs       │
+│  /api/v1/admin             Clinician Overrides & Real-Time Telemetry Dashboards        │
 │  /api/v1/claims/:id/disburse Instant Multi-Rail Copay Disbursement (RazorpayX/Stripe) │
 └──────────────┬──────────────────────────────────────────┬──────────────────────────────┘
                │                                          │
@@ -46,7 +46,7 @@ MedAccess AI is architected as an offline-resilient, hybrid edge-cloud medical p
 │  • SHA-256 Receipt Deduplication Hash    │   │  tickets (clinical encounters & ESI)    │
 │  • Fraud Sentinel & Autoencoder MSE      │   │  ticket_messages (PFA chat history)     │
 │  • DeepRank CSI Prediction & ESI Tier    │   │  health_funds & vouchers (copay pools)  │
-│  • Temporal Attrition LSTM Health Risk   │   │  audit_logs (clinical activity logs)     │
+│  • Temporal Attrition LSTM Health Risk   │   │  activity_logs (clinical event records) │
 │  • Grant Optimizer (MC Dropout Bounds)   │   │  policies (pgvector 768-d embeddings)   │
 │  • Gemini Multimodal & RAG Matching      │   │  (Row-Level Security active on all DB)  │
 │  • Socket.io Real-Time Broadcast         │   └─────────────────────────────────────────┘
@@ -169,10 +169,10 @@ Every database table is protected by **Row-Level Security (RLS)**. Multi-tenancy
 | `is_crisis_response`| BOOLEAN | DEFAULT FALSE | Flagged true on self-harm detection |
 | `suggested_resources`| JSONB | | Array of 24/7 crisis hotline cards |
 
-### 3.5 `audit_logs` — Clinical Activity Log
+### 3.5 `activity_logs` — System Event Logs
 | Column | Type | Constraints | Description |
 |---|---|---|---|
-| `id` | UUID | PRIMARY KEY | Audit event identifier |
+| `id` | UUID | PRIMARY KEY | Event record identifier |
 | `institution_id` | TEXT | NOT NULL | Tenant scoping |
 | `ticket_id` | UUID | | Associated encounter ID |
 | `action_type` | TEXT | NOT NULL | `ESI_OVERRIDE`, `DIAGNOSTIC_CONFIRM`, `DISBURSEMENT` |
@@ -190,7 +190,7 @@ Job Enqueued (claim_id, raw_message, media_url)
          │
          ├─ Step 1: Receipt / Document Parsing (Poppler pdftotext / Tesseract OCR)
          ├─ Step 2: Clinical NLP Extraction (DistilBERT sentiment + Urgent RegEx)
-         ├─ Step 3: Fraud Sentinel Audit (SHA-256 hash + 7-day velocity + Autoencoder)
+         ├─ Step 3: Fraud Sentinel Check (SHA-256 hash + 7-day velocity + Autoencoder)
          ├─ Step 4: DeepRank CSI Inference (Computes Crisis Severity Index in [0, 1])
          ├─ Step 5: ESI Tier Assignment (Maps CSI to ESI-1 through ESI-5)
          ├─ Step 6: Temporal Attrition Risk (Evaluates longitudinal health burnout via LSTM)
@@ -249,7 +249,6 @@ intellidesk_app/lib/
 
 ## 6. Security, Compliance & Governance
 
-- **Data Isolation & Governance:** Row-Level Security ensures tenant isolation. Every diagnostic and override decision is written to an immutable `audit_logs` record containing full structured JSONB context.
-- **Tamper-Evident Verification:** Exported audit PDFs embed a calculated SHA-256 hash of the generated report content.
+- **Data Isolation & Governance:** Row-Level Security ensures tenant isolation. Every diagnostic and override decision is written to a structured event record containing full JSONB context.
 - **FERPA Redaction:** Gemini 1.5 Flash strips acute diagnostic conditions from professor notification letters, replacing them with generic medical excuse phrasing.
 - **Crisis Life-Safety Bypass:** Suicidal ideation or acute life-safety keywords immediately bypass non-critical velocity and rate-limit restrictions.

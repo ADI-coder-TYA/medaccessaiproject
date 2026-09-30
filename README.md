@@ -310,7 +310,7 @@ Fallback: Clinical Photo → MobileNet-V3 TFLite → 10-Class Top-K Probabilitie
 |---|---|
 | **Cloud Model** | `gemini-1.5-flash` |
 | **Action** | Replaces sensitive medical diagnoses with FERPA-compliant phrasing ("a documented medical emergency") |
-| **Verification** | Post-redaction regex audit; throws `PrivacyViolationError` if diagnostic terms remain |
+| **Verification** | Post-redaction regex scan; throws `PrivacyViolationError` if diagnostic terms remain |
 | **File** | `intellidesk_backend/src/services/gemini.ts` $\rightarrow$ `redactSensitiveInfo()` |
 
 ---
@@ -425,7 +425,7 @@ Fallback: Clinical Photo → MobileNet-V3 TFLite → 10-Class Top-K Probabilitie
 |  |  Camera Dermatology / Lesion Scan   |   |  Real-Time ESI Triage Queue (1-5)     |  |
 |  |  Cough Audio Recording (Meyda DSP)  |   |  Grad-CAM Saliency Heatmap Review     |  |
 |  |  Contactless rPPG Vitals Monitor    |   |  CDSS Differential Diagnostic Review  |  |
-|  |  Prescription OCR & DDI Checker     |   |  Clinical ESI Override & Audit Log    |  |
+|  |  Prescription OCR & DDI Checker     |   |  Clinical ESI Override & Telemetry    |  |
 |  |  PFA Crisis Chat (Qwen ONNX Local)  |   |  Health Fund Liquidity Telemetry      |  |
 |  |  Emergency Copay Status Tracker     |   |  One-Tap Instant Payout Modal         |  |
 |  +-------------------------------------+   +---------------------------------------+  |
@@ -437,7 +437,7 @@ Fallback: Clinical Photo → MobileNet-V3 TFLite → 10-Class Top-K Probabilitie
 |  CDSS ICD-11 Differential Engine         Acoustic Cough Analysis Pipeline             |
 |  Pharmacy Safety & RxNorm Matcher        Contactless rPPG Signal Processor            |
 |  PFA Counselor AI (Local ONNX CPU)       FHIR R4 DiagnosticReport Converter           |
-|  Async Triage Pipeline (BullMQ)          Clinical Encounter Report Generator (PDFKit) |
+|  Async Triage Pipeline (BullMQ)          FHIR R4 DiagnosticReport Converter           |
 +---------------------+-------------------------------------+---------------------------+
                       |                                     |
 +---------------------v-------------+         +-------------v---------------------+
@@ -447,7 +447,7 @@ Fallback: Clinical Photo → MobileNet-V3 TFLite → 10-Class Top-K Probabilitie
 |    SHA-256 Receipt Integrity      |         |  tickets / clinical encounters    |
 |    DeepRank CSI & ESI Triage      |         |  ticket_messages (PFA chat)       |
 |    Multimodal Fusion Assessment   |         |  health_funds / emergency copays  |
-|    CDSS Diagnostic Ingestion      |         |  audit_logs (clinical activity trail) |
+|    CDSS Diagnostic Ingestion      |         |  system event & triage logs           |
 |    Socket.io Real-Time Broadcast  |         |  policies (vector(768) pgvector)  |
 |  ML Retraining Worker (TF.js)     |         |  RLS Row-Level Security Enforced  |
 |  Notification Worker (Email/SMS)  |         +-----------------------------------+
@@ -571,7 +571,6 @@ intellidesk/
 │   │   │   ├── receiptParser.ts             # PDF / bill OCR parser
 │   │   │   ├── disbursementService.ts       # RazorpayX payout service
 │   │   │   ├── payoutService.ts             # Stripe & voucher engine
-│   │   │   ├── pdfReportService.ts          # Clinical report generator
 │   │   │   ├── fraudSentinel.ts             # 3-layer claim integrity check
 │   │   │   ├── anomalyModel.ts              # Autoencoder anomaly model
 │   │   │   ├── attritionModel.ts            # Temporal LSTM risk model
@@ -639,7 +638,7 @@ intellidesk/
 | **Runtime & Framework** | Node.js (ESM) + Express 5 | High-throughput asynchronous backend service |
 | **Database** | Supabase PostgreSQL + `pgvector` | Relational clinical records with Row-Level Security and vector search |
 | **Queue & Workers** | BullMQ + Redis 7 | 10-step asynchronous intake pipeline and continuous ML retraining |
-| **Document Processing** | `sharp`, `pdf-parse`, PDFKit | Image preprocessing and tamper-evident clinical encounter reports |
+| **Document Processing** | `sharp`, `pdf-parse` | Image preprocessing, PDF layout extraction & OCR |
 | **Copay Disbursement** | RazorpayX (UPI/IMPS), Stripe | Multi-rail emergency copay and medical welfare disbursement |
 | **Emergency Alerts** | Twilio, Nodemailer, Resend | Instant SMS dispatch for ESI-1 life-safety alerts and email reports |
 
@@ -685,7 +684,6 @@ intellidesk/
 | `POST` | `/api/v1/claims/:id/override` | Override AI-assigned ESI tier with documented clinical justification |
 | `POST` | `/api/v1/claims/:id/disburse` | Disburse approved emergency copay relief via RazorpayX or Stripe |
 | `GET` | `/api/v1/admin/telemetry` | Telemetry dashboard: ESI distribution, diagnostic volume, fund liquidity |
-| `GET` | `/api/v1/admin/reports` | Generate and download clinical encounter report |
 
 ---
 
@@ -715,10 +713,10 @@ All database tables are governed by strict **Row-Level Security (RLS)** in Postg
 | `is_crisis_response` | BOOLEAN | True if self-harm or acute distress detected |
 | `suggested_resources` | JSONB | Immediate emergency helpline cards |
 
-### `audit_logs` — Clinical Activity Trail
+### `activity_logs` — System Event Logs
 | Column | Type | Description |
 |---|---|---|
-| `id` | UUID (PK) | Audit entry identifier |
+| `id` | UUID (PK) | Event record identifier |
 | `action_type` | TEXT | `ESI_OVERRIDE`, `DISBURSEMENT`, `FRAUD_FLAG` |
 | `actor_type` | TEXT | `CLINICIAN`, `ADMIN`, or `AI_SYSTEM` |
 | `details` | JSONB | Complete payload including clinical override justification |
@@ -760,9 +758,8 @@ Client Request → CORS → JWT Auth (requireAuth)
                      Supabase Row-Level Security (enforces data isolation)
 ```
 
-- **Clinical Activity Trail** — every clinical decision, diagnosis override, and copay disbursement is immutably logged with structured JSONB telemetry.
+- **Clinical Decision Logging** — every clinical decision, diagnosis confirmation, and copay disbursement is logged with structured JSONB telemetry.
 - **Automated PHI De-Identification** — Gemini 1.5 Flash strips protected health information before generating notifications or external leave letters.
-- **Cryptographic Tamper-Evidence** — all generated clinical audit PDFs feature an embedded SHA-256 checksum of the underlying medical data.
 - **Emergency Life-Safety Bypass** — acute life-safety and mental health crisis triggers bypass all non-critical rate limits and fraud checks.
 
 ---

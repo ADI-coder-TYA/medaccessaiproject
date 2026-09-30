@@ -199,7 +199,7 @@ The primary diagnostic evaluation workbench for clinical officers:
 - **CDSS Differential Panel:** Calibrated probability bars for WHO ICD-11 differential candidates with logit confidence scores.
 - **Acoustic Spectrogram & Waveform:** Visual player for cough audio samples with 4-class model probabilities and wheeze detection.
 - **Contactless Vitals Inspector:** Real-time pulse waveform curve with calculated BPM, SpO2 estimate, and physiological red flags.
-- **Clinician Override Action:** One-tap mechanism to accept, modify, or reject AI diagnostic suggestions with mandatory audit comments.
+- **Clinician Override Action:** One-tap mechanism to accept, modify, or reject AI diagnostic suggestions with mandatory clinician notes.
 
 #### 2. `AdminWarRoomScreen`
 **File:** `admin_war_room_screen.dart` (22 KB)

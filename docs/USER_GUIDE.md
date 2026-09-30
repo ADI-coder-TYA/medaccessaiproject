@@ -1,350 +1,310 @@
-# MedAccess AI — User Guide
+# MedAccess AI — Clinical & User Operational Guide
 
-> **Real-world usage for patients, students, and clinical administrators.**  
-> This guide walks through every major workflow with step-by-step instructions.
+> **Real-world operational manual for patients, students, and clinical practitioners.**  
+> Step-by-step clinical workflows covering multimodal computer vision diagnostics, acoustic cough screening, contactless rPPG vitals, WHO ICD-11 clinical decision support (CDSS), pharmacy safety intelligence, confidential Psychological First Aid (PFA), and emergency copay triage.
 
 ---
 
-## Who Uses MedAccess AI?
+## 📑 User Roles & Permissions
 
-| User | Role | Primary Goal |
+| Role | Access Level | Primary Clinical & Operational Capabilities |
 |---|---|---|
-| **Patient / Student** | `STUDENT` role | Submit emergency medical claims, access PFA chat, track copay status |
-| **Clinical Administrator / CMO** | `ADMIN` role | Triage queue, approve disbursements, audit compliance |
-| **Auditor** | `AUDITOR` role | Read-only access to audit logs and compliance reports |
+| **Patient / Student** | `STUDENT` | Camera dermatology scans, cough audio analysis, contactless rPPG vitals, prescription OCR & DDI checks, confidential PFA chat, emergency copay relief |
+| **Clinician / Triage Officer** | `ADMIN` | Real-time ESI emergency triage queue, Grad-CAM visual explainability reviews, WHO ICD-11 CDSS evaluation, prescription approval, copay disbursement |
+| **Medical Auditor / CMO** | `AUDITOR` | Read-only compliance review, immutable HIPAA audit trail analysis, cryptographic SHA-256 report verification |
 
 ---
 
-## Scenario 1: Student Submits an Emergency Medical Claim
+## Workflow 1: Patient Performs a Dermatology & Lesion Vision Scan
 
-### Situation
-Alex is a university student who was rushed to the ER with acute appendicitis. She has a hospital invoice for ₹12,500 and needs emergency copay relief immediately.
+### Clinical Context
+Sarah notices a rapidly spreading erythematous skin rash on her forearm accompanied by localized itching and mild heat. She wants an immediate preliminary assessment before visiting the health center.
 
-### Steps
+### Step-by-Step Instructions
 
-**1. Open the MedAccess AI App**
-- Launch the app on your phone or browser
-- Sign in with your campus credentials
+**1. Open Patient Clinical Dashboard**
+- Launch the MedAccess AI app on your smartphone.
+- Sign in with your university credentials.
+- In the top action bar, tap **"Scan Lesion / Rash"** (or open the **Dermatology Vision** tile).
 
-**2. Tap "Submit Emergency Claim"** (Claim Intake screen)
-- You'll see a form with two fields:
-  - **Describe your emergency:** Write what happened and why you need urgent financial help
-  - **Attach hospital invoice:** Tap the paperclip icon to attach your hospital bill (PDF or photo)
+**2. Capture Clinical Image**
+- Hold the phone camera 10–15 cm from the skin under good lighting.
+- Ensure the rash is in clear focus without glare or motion blur.
+- Tap the capture button (or select an existing photo from your gallery).
+- Select the anatomical site: **"Forearm / Arm"**.
 
-**3. Fill in the form**
+**3. Automated Multimodal Processing**
+The app automatically performs:
+- Image normalization and orientation correction via `sharp`.
+- Dispatch to **Qwen2.5-VL 72B** multimodal cloud vision classifier (or on-device **Clinical MobileNet-V3** if offline).
+- Generation of a **Grad-CAM Saliency Heatmap**.
+
+**4. View Diagnostic Evaluation**
+Within 2–4 seconds, the diagnostic results screen displays:
 ```
-Emergency Description:
-"I was admitted to City Hospital last night with acute appendicitis and had emergency surgery.
-My bill is ₹12,500 and I cannot pay the hospital before discharge. I need emergency copay
-assistance immediately."
+Condition:               Contact Dermatitis (Moderate Severity)
+Primary Site:            Forearm (Right)
+Confidence:              92.4%
+Pathological Findings:   Well-demarcated erythematous plaque, micro-vesicles, mild edema
 
-Attached: hospital_invoice_cityhosp_aug15.pdf
+Differential Diagnoses:
+  1. Acute Contact Dermatitis (82.1%)
+  2. Nummular Eczema (11.3%)
+  3. Tinea Corporis (6.6%)
+
+Recommended Action:      Cold compress, topical hydrocortisone 1%, avoid allergen contact.
+                         Flagged for clinical consultation at campus health.
 ```
 
-**4. Tap "Submit Claim"**
-
-The system will immediately:
-- Show a **"Processing..."** animation
-- Return a **Claim ID** (e.g., `MED-2026-0842`)
-- Begin automated triage in the background
-
-**5. Watch real-time status updates**
-
-Within 30 seconds on the **Claim Status** screen:
-- 🟡 `Submitted` → 🔵 `Triage Active`
-- Your **ESI Level** appears: `ESI 2 – Emergent` (orange badge)
-- **Crisis Severity Index:** `0.71 / 1.00`
-- **Recommended Copay Grant:** ₹10,000 (80% coverage)
-- **Estimated response time:** < 10 minutes
-
-**6. Receive approval**
-
-Once the admin approves:
-- You get a push notification: *"Your emergency copay of ₹10,000 has been approved and sent to your UPI address"*
-- The **Claim Status** screen shows:
-  - ✅ `Disbursed`
-  - **Transaction Reference:** `pout_abc12345`
-  - **Payout Method:** UPI (instant)
-
-> **Typical end-to-end time for ESI-2:** 8–12 minutes from submission to UPI receipt
+**5. Inspect Grad-CAM Heatmap**
+- Tap **"View Visual Explainability"**.
+- A false-color heatmap overlays the image: bright red and yellow highlights pinpoint the concentrated inflammatory boundary, confirming the model focused on genuine cutaneous pathology rather than background skin or lighting artifacts.
+- Tap **"Save to Health Records"** to automatically attach the encounter to your permanent longitudinal profile.
 
 ---
 
-## Scenario 2: Patient in Psychological Crisis Uses PFA Chat
+## Workflow 2: Patient Conducts Acoustic Cough Respiratory Screening
 
-### Situation
-Rahul is experiencing severe exam stress and financial anxiety. He's feeling overwhelmed and doesn't know where to turn.
+### Clinical Context
+Marcus has had a persistent nocturnal cough for 4 days and feels mild chest tightness. He wants to know if his cough exhibits wet, dry, or whooping characteristics.
 
-### Steps
+### Step-by-Step Instructions
 
-**1. Open "Talk to Counselor"** (PFA Chat screen)
+**1. Access Acoustic Screening**
+- From the **Patient Clinical Dashboard**, tap **"Acoustic Cough Check"**.
+- Position the phone microphone approximately 20 cm from your mouth.
+- Ensure the surrounding room is quiet.
 
-**2. Start typing**
+**2. Record Cough Sample**
+- Tap the red **"Record Cough"** microphone button.
+- Cough naturally 2 to 3 times over a 5-second window.
+- The app visualizes the incoming 16kHz uncompressed acoustic waveform in real time.
+
+**3. Digital Signal Processing (DSP) & Inference**
+The app instantly extracts 16 Mel-Frequency Cepstral Coefficients (MFCCs) using Meyda.js DSP and executes the **CoughClassifier Neural Network**:
 ```
-Rahul: "I can't take this anymore. My rent is due, I failed two exams, and I don't
-know how to keep going."
-```
+Cough Classification Breakdown:
+  • Wet / Productive Cough:   74.2%  ███████████████░░░░░
+  • Dry / Irritative Cough:   18.1%  ████░░░░░░░░░░░░░░░░
+  • Normal / Non-Pathologic:   5.4%  █░░░░░░░░░░░░░░░░░░░
+  • Whooping Signature:        2.3%  ░░░░░░░░░░░░░░░░░░░░
 
-**3. Immediate AI response** (within 1–2 seconds):
-```
-Counselor AI: "I hear how much weight you are carrying right now, and everything you
-are feeling makes complete sense. Take a slow breath with me—I am right here with
-you. You don't have to face this alone, and university support services are actively
-here for you."
-```
-
-**4. Grant assistance offer**
-
-Since Rahul mentioned rent, the AI detects a financial hardship signal:
-```
-Counselor AI: "I hear how stressful this housing situation is. Would you like me to
-submit an official Emergency Housing Grant ticket for university welfare review?"
-
-[Yes, submit ticket]  [Not yet]
+Acoustic Alert Status:       HIGH-FREQUENCY WHEEZE DETECTED
+Clinical Interpretation:     Acoustic signatures suggest lower respiratory tract secretions.
+                             Wheeze indicator indicates mild bronchial constriction.
 ```
 
-**5. Tap "Yes, submit ticket"**
-
-An emergency welfare ticket is automatically created and routed to the admin queue — Rahul doesn't need to fill out any additional forms.
+**4. Next Steps**
+- If high-frequency wheeze or whooping signatures are identified, the app surfaces an **"Escalate to Urgent Care"** prompt.
+- With one tap, Marcus routes the acoustic findings directly to the campus health center triage queue.
 
 ---
 
-### Crisis Protocol (Immediate Life-Safety)
+## Workflow 3: Contactless Camera Vitals (rPPG Photoplethysmography)
 
-If a student types anything matching crisis keywords (e.g., *"I want to die"*, *"I can't go on"*):
+### Clinical Context
+Priya feels dizzy and lightheaded after intense exertion and wants to check her resting heart rate and physiological stability without a smartwatch or cuff.
 
-**Immediate actions (< 500ms):**
-1. Crisis response message displayed with grounding technique
-2. Emergency resource cards slide up automatically:
+### Step-by-Step Instructions
 
+**1. Open rPPG Vitals Monitor**
+- In the **Patient Clinical Dashboard**, tap **"Camera Vitals (rPPG)"**.
+- Position your face inside the on-screen oval guide.
+- Sit still and avoid talking for 15 seconds under steady ambient lighting.
+
+**2. Video Photoplethysmography Extraction**
+- The app camera samples micro-vascular green-channel light absorption at 30 Hz.
+- A 4th-order zero-phase **Butterworth Bandpass Filter** ($0.75–3.5\text{ Hz}$) removes motion drift and isolates the arterial pulse wave.
+
+**3. Real-Time Physiological Output**
 ```
-🚨 IMMEDIATE SUPPORT AVAILABLE
+Heart Rate:              108 BPM (Mild Tachycardia)
+Confidence Score:        94.8%
+Signal Quality Index:    HIGH (Uniform 30.0 Hz Resampled)
+Estimated SpO2:          98%
 
-📞 Tele-MANAS (India)     14416      [Call Now]
-📞 988 Crisis Lifeline    988        [Call Now]
-📞 Vandrevala Foundation  +91 9999 666 555  [Call Now]
-🏥 MedAccess Emergency Desk  1800-MED-ACCESS  [Call Now]
-```
-
-3. The conversation is flagged `is_crisis_response: true` in the database
-4. Admin war room receives a real-time alert for human follow-up
-
----
-
-## Scenario 3: Clinical Administrator Processes the Triage Queue
-
-### Situation
-Dr. Chen is the Chief Medical Officer at campus health. She opens the Admin War Room each morning to clear the overnight queue.
-
-### Steps
-
-**1. Log in as Admin**
-```
-Email:    dr.chen@medaccess.ai
-Password: admin123 (demo)
-```
-
-**2. Admin War Room opens**
-
-The triage queue shows claims sorted by **Crisis Severity Index (highest first)**:
-
-```
-🔴 ESI 1 – CRITICAL    CSI: 0.91  |  Alex J.  |  ₹45,000  |  Fracture + hemorrhage
-🟠 ESI 2 – Emergent    CSI: 0.71  |  Rahul S. |  ₹12,500  |  Appendicitis
-🟡 ESI 3 – Urgent      CSI: 0.48  |  Priya M. |  ₹8,200   |  Severe migraine + CT scan
-🟢 Routine             CSI: 0.22  |  James K. |  ₹2,100   |  Routine pharmacy refill
-```
-
-**3. Click the ESI-1 claim (Alex J.)**
-
-A detail sheet slides up showing:
-```
-Patient:       Alex J.
-Clinical Need: Fracture + hemorrhage (ER admission)
-Bill Amount:   ₹45,000 (verified via OCR from PDF invoice)
-ESI Level:     ESI_1_CRITICAL
-CSI Score:     0.91  ████████████████████  91%
-Dropout Risk:  0.67  ████████████░░░░░░░░  67%
-Fraud Risk:    LOW (0.12) — No flags detected
-Matched Policy: "Emergency Trauma & Surgical Care Policy v2.3"
-```
-
-**4. Approve and disburse**
-
-Click **"Approve & Disburse"**:
-```
-Amount:         ₹36,000   (auto-filled: 80% of ₹45,000 bill)
-                [Edit amount]
-
-Payout Method:  ○ UPI (instant)   ● Bank Transfer   ○ Voucher
-UPI Address:    alex.j@okaxis   [auto-filled from profile]
-
-Clinical Notes: Verified trauma via hospital admission record
-
-[Cancel]    [Confirm Payout ₹36,000]
-```
-
-Click **"Confirm Payout"** → RazorpayX processes the IMPS transfer instantly.
-
-**5. Confirmation**
-```
-✅ Payout Successful
-Transaction Reference: pout_xyz98765
-₹36,000 sent via Bank Transfer (IMPS)
-Fund Pool: Emergency Medical Fund — Remaining: ₹2,34,000
-```
-
-The patient's claim status updates to `Disbursed` in real time and a push notification is sent to their phone.
-
----
-
-## Scenario 4: Handling a Flagged (Potential Fraud) Claim
-
-### Situation
-A claim comes in that the Fraud Sentinel has flagged for a duplicate receipt.
-
-### What the Admin Sees
-
-```
-⚠️ FRAUD FLAG — Manual Review Required
-Claim: #MED-2026-0901 | James K. | ₹4,500
-
-Fraud Risk Score: 0.72  HIGH
-
-Flags:
-  • DUPLICATE_RECEIPT_DETECTED: This receipt image was already submitted
-    on Claim #MED-2026-0789 (submitted 3 days ago)
-  • PATIENT_HIGH_CLAIM_VELOCITY: 3 claims submitted in 7 days
-```
-
-### Admin Options
-
-```
-[Override: Approve as ESI-2]    [Reject Claim]    [Request Patient Clarification]
-```
-
-- **Override** → Admin adds clinical notes explaining why override is justified → logged in audit trail
-- **Reject** → Claim closed, patient notified with reason
-- **Request Clarification** → Auto-message sent to patient via chat
-
----
-
-## Scenario 5: Generating a HIPAA Compliance Audit Report
-
-### Situation
-The hospital board requests a monthly audit report for August 2026.
-
-### Steps
-
-**1. Navigate to Compliance Audit** (admin sidebar)
-
-**2. Set date range**
-```
-Start Date: 01 Aug 2026
-End Date:   31 Aug 2026
-Institution: Campus Health Medical Center
-```
-
-**3. Preview the audit log**
-
-The screen shows a paginated table:
-```
-Date        | Claim ID | Patient | ESI Level | Amount  | Outcome   | Admin
-2026-08-01  | MED-0810 | Alex J. | ESI-2     | ₹10,000 | Disbursed | Dr. Chen
-2026-08-02  | MED-0812 | Rahul S.| Routine   | ₹2,000  | Approved  | System
-2026-08-03  | MED-0815 | James K.| Flagged   | —       | Rejected  | Dr. Chen
-...
-```
-
-**4. Download PDF Report**
-
-Tap **"Generate & Download Audit PDF"** → A HIPAA-formatted PDF is generated with:
-- Institution letterhead
-- Complete adjudication log
-- ML score transparency section (CSI, fraud scores for each claim)
-- Disbursement ledger with RazorpayX/Stripe transaction references
-- SHA-256 tamper-evident checksum printed at the bottom
-
-```
-Report Integrity Checksum (SHA-256):
-a3f9d2c1e4b8f6a7d0e5c9b2f1a8e3d6c7b4a0f9e2d5c8b3a6f0e4d7c1b5a9
+Physiological Sentinel:  ⚠️ ELEVATED RESTING HEART RATE DETECTED (>100 BPM)
+Guidance:                Rest seated for 5 minutes, hydrate, and re-test.
 ```
 
 ---
 
-## Scenario 6: Admin Reviews Institutional Health Fund Liquidity
+## Workflow 4: Prescription OCR & Drug-Drug Interaction (DDI) Safety
 
-### Situation
-Dr. Chen wants to ensure the Emergency Medical Fund won't run dry before month-end.
+### Clinical Context
+David is taking an SSRI antidepressant (Sertraline) and receives a new handwritten prescription from an external clinic for migraine relief (Sumatriptan). He wants to verify that the combination is safe before taking both.
 
-### Steps
+### Step-by-Step Instructions
 
-**1. Navigate to Health Funds** (admin sidebar)
+**1. Open Pharmacy Hub**
+- In the app bottom navigation, tap **"Pharmacy Hub"**.
+- Tap **"Scan New Prescription"**.
 
-**2. View fund breakdown**
+**2. Photograph Prescription**
+- Capture a clear photo of the physician's handwritten or typed prescription script.
+- The hybrid Poppler/Tesseract OCR engine extracts the text and applies character error sanitization (correcting common OCR confusions like O/0, I/1).
+- The **fuzzy RxNorm matcher** maps the medication to standardized identifiers:
+  - Extracted: `Sumatriptan 50mg oral tablet` $\rightarrow$ **RxCUI: 313146**
+
+**3. Automated Drug-Drug Interaction (DDI) Cross-Check**
+The **DrugInteractionEngine** checks David's active medication list (Sertraline) against the newly scanned prescription (Sumatriptan) across 8,000+ interaction pairs:
 
 ```
-Emergency Medical Copay Fund        INR
-████████████████░░░░░░░░░░░░  58% utilized
-  Budget:     ₹5,00,000
-  Disbursed:  ₹2,90,000
-  Available:  ₹2,10,000
+🚨 PHARMACY SAFETY CONTRAINDICATION DETECTED
 
-Pharmacy & Prescription Fund        INR
-████░░░░░░░░░░░░░░░░░░░░░░░░  22% utilized
-  Budget:     ₹1,00,000
-  Disbursed:  ₹22,000
-  Available:  ₹78,000
+Severity:       MAJOR INTERACTION (SEROTONIN SYNDROME HAZARD)
+Drug 1:         Sertraline (SSRI Antidepressant)
+Drug 2:         Sumatriptan (5-HT1 Receptor Agonist)
 
-Mental Health Emergency Fund        INR
-██████████░░░░░░░░░░░░░░░░░░  38% utilized
-  Budget:     ₹2,00,000
-  Disbursed:  ₹76,000
-  Available:  ₹1,24,000
+Clinical Mechanism:
+Both medications elevate central nervous system serotonergic activity. Concomitant
+administration increases the risk of Serotonin Toxicity (tremor, hyperthermia, rigidity).
+
+Recommendation:
+DO NOT INGEST TOGETHER without direct physician consultation.
+Alternative migraine abortive therapies (e.g., NSAIDs, acetaminophen) recommended.
 ```
 
-**3. View telemetry**
-
-Navigate to **Telemetry Dashboard** for:
-- ESI distribution pie chart (this month)
-- Daily claim volume bar chart
-- Average time-to-payout trend line
-- Fraud flag rate
+**4. Clinical Resolution**
+- David taps **"Share Contraindication Report with Clinician"**.
+- An encrypted summary is pushed directly to the campus health pharmacy desk for immediate medication substitution.
 
 ---
 
-## Frequently Asked Questions
+## Workflow 5: Confidential Psychological First Aid (PFA) & Crisis Triage
 
-**Q: How fast does a critical (ESI-1) patient receive funds?**  
-A: For ESI-1 cases with UPI, the end-to-end time from claim submission to funds in the patient's account is typically **under 2 minutes** after admin approval. The AI triage completes in ~30 seconds; the remaining time is the one-tap admin review.
+### Clinical Context
+Ananya is experiencing severe academic burnout, sleep deprivation, and overwhelming emotional distress. She needs a confidential space to process her feelings at 2:00 AM.
 
-**Q: What if I don't have a hospital invoice?**  
-A: You can submit a plain-text description of your emergency. The system will still perform NLP-based ESI triage and flag the claim for receipt follow-up. An admin can manually enter the bill amount.
+### Step-by-Step Instructions
 
-**Q: Is my medical information private?**  
-A: Yes. All data is partitioned per institution with Row-Level Security at the database level. Patient data is never shared across institutions. The AI counselor (Qwen) runs **entirely locally** on the server — your messages are never sent to any external API.
+**1. Open Clinical Chat**
+- Tap **"Talk to Counselor"** in the app menu.
+- Note the privacy banner: *"100% on-device AI model. No messages leave your device without your explicit permission."*
 
-**Q: What if the PFA AI gives a bad response?**  
-A: The system has a multi-layer safety net:
-1. Crisis keyword detection triggers the Rogerian rule engine (not AI generation) for life-safety messages
-2. AI output validation filters out disclaimers, repetition, and prompt regurgitation
-3. All responses are logged for admin review
-4. Human admins can always intervene in any chat thread
+**2. Chat with PFA AI**
+- Ananya begins typing:
+  ```
+  Ananya: "I can't take this pressure anymore. I haven't slept in three days and I feel
+  like giving up completely."
+  ```
+- Within 800 milliseconds, the local **Qwen1.5-0.5B ONNX** model responds using Rogerian reflective listening:
+  ```
+  Counselor AI: "I hear how exhausted and overwhelmed you are right now. Carrying that
+  kind of pressure alone for days is so draining. Let's take a slow breath together.
+  You are safe here, and university support services are actively here for you."
+  ```
 
-**Q: Can I receive USD payouts?**  
-A: Yes. If your institution is configured with `currency: 'USD'`, disbursements use Stripe Instant Payouts to a linked US bank account or debit card.
+**3. Life-Safety Crisis Protocol**
+If messages contain acute self-harm triggers (e.g., *"I want to end my life"*):
+- **Immediate Interception (<300ms):**
+  - Conversation triggers `CRITICAL_SELF_HARM_REGEX`.
+  - The local AI halts open-ended generation and displays a gentle grounding exercise.
+  - A slide-up card stack displays **One-Tap 24/7 Crisis Helplines**:
+    - **Tele-MANAS (India):** `14416` [Call Now]
+    - **988 Suicide & Crisis Lifeline (US):** `988` [Call Now]
+    - **Vandrevala Foundation:** `+91 9999 666 555` [Call Now]
+    - **Campus Emergency Triage Desk:** `1800-MED-ACCESS` [Call Now]
 
-**Q: What is the EDU-GRANT voucher code?**  
-A: If RazorpayX/Stripe APIs are unavailable (offline mode or sandbox), the system generates a digital voucher code (e.g., `EDU-GRANT-XB7K2M`) that can be redeemed at the campus finance office or hospital billing desk.
+**4. Proactive Welfare Relief**
+If the conversation reveals financial hardship (e.g., medical bills, rent distress):
+- The AI proactively asks: *"Would you like me to submit an Emergency Health Grant ticket for campus welfare review?"*
+- Tapping **"Yes, Submit Ticket"** generates an automated emergency claim without requiring forms.
 
 ---
 
-## Support & Emergency Contacts
+## Workflow 6: Emergency Copay Relief & Medical Welfare Disbursement
 
-| Resource | Contact |
-|---|---|
-| **Tele-MANAS (India, 24/7)** | `14416` or `1800-891-4416` |
-| **988 Suicide & Crisis Lifeline (US, 24/7)** | `988` |
-| **Vandrevala Foundation (India, 24/7)** | `+91 9999 666 555` |
-| **MedAccess Emergency Desk** | `1800-MED-ACCESS` |
-| **Technical Support** | `support@medaccess.ai` |
+### Clinical Context
+Alex was admitted to the hospital with a sports fracture and acute surgical copay of ₹14,000 that must be settled upon discharge.
+
+### Step-by-Step Instructions
+
+**1. Submit Emergency Claim**
+- Open **Claim Intake Screen**.
+- Enter a brief summary: *"Admitted to City Hospital for radial fracture surgery. Need emergency copay assistance for hospital discharge."*
+- Attach the hospital bill PDF. Tap **"Submit Claim"**.
+
+**2. Background Automated Triage (30 Seconds)**
+The 10-step BullMQ intake worker runs:
+- Tesseract.js / Poppler parses invoice total: `₹14,000`.
+- Fraud Sentinel verifies receipt image hash (SHA-256) and evaluates Autoencoder reconstruction score ($	ext{MSE} = 0.11$, normal).
+- **DeepRank Neural Network** evaluates narrative and medical keywords:
+  - Crisis Severity Index (CSI): **0.78** $ightarrow$ **ESI-2 Emergent**.
+- **Grant Optimizer** calculates recommended grant with Monte Carlo Dropout uncertainty:
+  - Recommended Amount: **₹11,200** (80% coverage) $pm 	ext{₹450}$ variance.
+
+**3. Real-Time Tracking**
+- Alex's status screen updates from 🟡 `Submitted` $ightarrow$ 🔵 `Triage Active` with an orange **ESI-2 Emergent** badge.
+
+**4. Instant Disbursement**
+- Once the campus medical administrator approves the case in the War Room:
+- Funds are transferred via RazorpayX (UPI/IMPS) or Stripe in under 2 minutes.
+- Alex receives a push alert with transaction reference `pout_8492048` and hospital discharge receipt PDF.
+
+---
+
+## Workflow 7: Clinician Manages War Room, Grad-CAM & CDSS
+
+### Clinical Context
+Dr. Chen, Chief Medical Officer, reviews active overnight emergency cases and AI diagnostic findings from the campus health center war room.
+
+### Step-by-Step Instructions
+
+**1. Log In to Admin War Room**
+- Launch MedAccess AI and log in with clinician credentials (`role: 'ADMIN'`).
+- The triage queue displays real-time encounters ordered strictly by **Crisis Severity Index (highest urgency first)**.
+
+**2. Evaluate ESI-1 and ESI-2 Cases**
+- Dr. Chen clicks the top case (Alex J., Fracture + Surgical Copay, CSI: 0.78).
+- The slide-up clinical panel displays:
+  - Bill Total: `₹14,000` (OCR-verified).
+  - DeepRank ESI Level: `ESI_2_EMERGENT`.
+  - Fraud Sentinel Risk: `0.08 (LOW)`.
+  - Grant Optimizer: Recommended `₹11,200`.
+- Dr. Chen taps **"Approve & Disburse"** $ightarrow$ selects Instant UPI payout $ightarrow$ confirms.
+
+**3. Inspect Multimodal Diagnostic Encounters**
+- Dr. Chen opens **"Clinical Diagnoses Review"** tab:
+  - **Dermatology Review:** Views Sarah's contact dermatitis encounter. Inspects the original photo alongside the **Grad-CAM Saliency Heatmap**. Verifies the red heatmap focuses strictly on localized forearm erythema.
+  - **CDSS Differential Panel:** Inspects WHO ICD-11 calibrated probabilities:
+    - *L23.9 Allergic contact dermatitis:* **82.1%** ($z = 14.2$, $T = 1.25$).
+  - **Acoustic Audio Player:** Listens to Marcus's cough audio; inspects the MFCC spectrogram showing wheeze frequency peaks.
+- Dr. Chen confirms the AI recommendations and clicks **"Export HL7 FHIR R4 Bundle"** to sync with the university hospital EMR.
+
+**4. Generate Monthly HIPAA Audit Report**
+- Navigate to **"Compliance Audit"** in the sidebar.
+- Select date range: `01 Aug 2026 - 31 Aug 2026`.
+- Click **"Generate Audit PDF"**.
+- System compiles an institutional report containing all ESI decisions, overrides, and fund ledgers, complete with an embedded **SHA-256 cryptographic tamper-evident checksum**.
+
+---
+
+## Frequently Asked Questions (FAQ)
+
+**Q: Are camera photos and voice recordings sent to external cloud companies?**  
+A: No. Privacy is prioritized by design:
+- Local offline models (Clinical MobileNet-V3, TFLite CoughClassifier, and Xenova Qwen ONNX) execute **entirely on-device**.
+- Cloud VLM calls (Qwen2.5-VL 72B) only execute when network is available and clinical detail requires 72B-parameter resolution. All Protected Health Information (PHI) is automatically redacted before API transmission.
+
+**Q: Can clinicians override AI diagnosis and triage recommendations?**  
+A: Yes. MedAccess AI is strictly an **AI-First, Human-in-the-Loop** system. Clinicians can override any diagnostic classification or ESI level at any time with documented clinical rationale, which is immutably logged in the HIPAA audit trail.
+
+**Q: What happens if there is no internet connection at the health center?**  
+A: The mobile client uses the **OfflineSyncEngine**:
+- Clinical MobileNet-V3 evaluates dermatology images on-device.
+- The 4th-order zero-phase Butterworth filter computes rPPG vitals locally.
+- PFA chat uses the local on-device Qwen ONNX model.
+- Screenings and notes are cached in encrypted local storage and sync to the server immediately upon reconnection.
+
+---
+
+## Emergency Support Contacts
+
+| Service | Contact Information | Availability |
+|---|---|---|
+| **Tele-MANAS (National Mental Health, India)** | `14416` / `1800-891-4416` | 24 Hours / 7 Days |
+| **988 Suicide & Crisis Lifeline (US & Canada)** | `988` (Call or Text) | 24 Hours / 7 Days |
+| **Vandrevala Foundation Helplines** | `+91 9999 666 555` | 24 Hours / 7 Days |
+| **MedAccess Campus Emergency Desk** | `1800-MED-ACCESS` | 24 Hours / 7 Days |
+| **Technical & EMR Integration Support** | `support@medaccess.ai` | Office Hours |

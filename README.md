@@ -1,4 +1,4 @@
-# 🏥 IntelliDesk EduAccess — MedAccess AI
+# 🏥 MedAccess AI
 
 > **AI-powered student health emergency & welfare platform** — clinical triage, multimodal diagnostics, psychological first aid, pharmacy safety, and emergency fund disbursement, all in one system.
 
@@ -6,7 +6,7 @@
 
 ## 📑 Table of Contents
 
-1. [What is IntelliDesk?](#1-what-is-intellidesk)
+1. [What is MedAccessAI?](#1-what-is-intellidesk)
 2. [Real-World Use Cases](#2-real-world-use-cases)
 3. [Feature Overview](#3-feature-overview)
 4. [🤖 ML & AI Systems — Deep Dive](#4--ml--ai-systems--deep-dive)
@@ -23,9 +23,9 @@
 
 ---
 
-## 1. What is IntelliDesk?
+## 1. What is MedAccessAI?
 
-**IntelliDesk EduAccess (MedAccess AI)** is a full-stack, AI-first medical welfare platform built for university campuses. It bridges the gap between a student experiencing a health or financial crisis and institutional support — using cutting-edge on-device ML models, cloud LLMs, and real-time infrastructure.
+**MedAccess AI** is a full-stack, AI-first medical welfare platform built for university campuses. It bridges the gap between a student experiencing a health or financial crisis and institutional support — using cutting-edge on-device ML models, cloud LLMs, and real-time infrastructure.
 
 | Role | Portal | Core Workflow |
 |---|---|---|

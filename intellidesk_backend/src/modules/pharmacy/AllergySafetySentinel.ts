@@ -78,7 +78,7 @@ export class AllergySafetySentinel {
             const patientAllergyList = patientAllergies.map(a => a.allergenGroup);
 
             // Dynamically query safe, non-cross-reactive alternatives via NIH NLM RxNav / Clinical KB
-            let suggestedAlternatives = [];
+            let suggestedAlternatives: any[] = [];
             try {
               suggestedAlternatives = await AlternativeMedicationService.getAlternativesForAllergy(
                 normalizedGroup || rawGroup,

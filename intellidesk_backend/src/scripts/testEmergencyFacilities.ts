@@ -91,6 +91,40 @@ async function runEmergencyFacilityTests() {
   assert(traumaCenter!.isOpen24Hours === true, 'Trauma Center is open 24 hours');
   assert(traumaCenter!.capabilities.length >= 2, `Capabilities list populated: ${traumaCenter?.capabilities.join(', ')}`);
 
+  // -------------------------------------------------------------
+  // TEST 5: Dynamic Differentiated Clinical Capabilities
+  // -------------------------------------------------------------
+  console.log('\n--- TEST 5: Dynamic Clinical Capability Derivation ---');
+
+  const pediatricCaps = EmergencyFacilityService.deriveCapabilities(
+    'Children Hospital of Philadelphia Emergency Wing',
+    'Emergency Department',
+    ['hospital'],
+    true
+  );
+  assert(pediatricCaps.includes('Pediatric ER'), 'Pediatric hospital receives Pediatric ER capability');
+
+  const cardiacCaps = EmergencyFacilityService.deriveCapabilities(
+    'Midtown Heart & Vascular Institute',
+    'Emergency Department',
+    ['hospital'],
+    true
+  );
+  assert(cardiacCaps.includes('Cardiac Catheterization'), 'Cardiac center receives Cardiac Catheterization capability');
+
+  const generalCaps = EmergencyFacilityService.deriveCapabilities(
+    'City General Hospital',
+    'Emergency Department',
+    ['hospital'],
+    true
+  );
+  // Ensure generalCaps and cardiacCaps are not identical
+  const areIdentical = generalCaps.length === cardiacCaps.length && generalCaps.every((c, i) => c === cardiacCaps[i]);
+  assert(!areIdentical, 'Distinct hospitals have distinct, differentiated clinical capabilities');
+  console.log(`   [Pediatric Caps] ${pediatricCaps.join(' | ')}`);
+  console.log(`   [Cardiac Caps]   ${cardiacCaps.join(' | ')}`);
+  console.log(`   [General Caps]   ${generalCaps.join(' | ')}`);
+
   console.log('\n================================================================');
   console.log(`📊 Emergency Facility Test Summary: ${passed} passed, ${failed} failed`);
   console.log('================================================================\n');

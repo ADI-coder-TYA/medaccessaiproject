@@ -209,7 +209,7 @@ Doctor's Signature: Dr. R. Sharma
   assert(allergyConflicts1[0].allergenGroup === 'PENICILLINS', 'Conflict allergen group is PENICILLINS');
   assert(allergyConflicts1[0].severity === 'HIGH_RISK_ALLERGY', 'Severity is HIGH_RISK_ALLERGY');
   assert(Array.isArray(allergyConflicts1[0].suggestedAlternatives) && allergyConflicts1[0].suggestedAlternatives.length > 0, 'Alternatives generated via NLM RxNav / Clinical Guideline');
-  console.log(`   [Live Alternatives Verified] Generated ${allergyConflicts1[0].suggestedAlternatives.length} alternative(s): ${allergyConflicts1[0].suggestedAlternatives.map(a => a.activeIngredient + ' (' + a.source + ')').join(', ')}`);
+  console.log(`   [Live Alternatives Verified] Generated ${allergyConflicts1[0]?.suggestedAlternatives?.length || 0} alternative(s): ${(allergyConflicts1[0]?.suggestedAlternatives || []).map((a: any) => a.activeIngredient + ' (' + a.source + ')').join(', ')}`);
 
   // 2. Cross-reactivity brand/child match (Augmentin)
   const allergyConflicts2 = await AllergySafetySentinel.evaluateAllergies(['Augmentin 625mg'], patientAllergies);

@@ -143,6 +143,44 @@ class DDIPairResult {
   };
 }
 
+class AlternativeMedicationOption {
+  final String activeIngredient;
+  final String? brandName;
+  final String drugClass;
+  final String rationale;
+  final String source;
+  final String? rxcui;
+
+  const AlternativeMedicationOption({
+    required this.activeIngredient,
+    this.brandName,
+    required this.drugClass,
+    required this.rationale,
+    required this.source,
+    this.rxcui,
+  });
+
+  factory AlternativeMedicationOption.fromJson(Map<String, dynamic> json) {
+    return AlternativeMedicationOption(
+      activeIngredient: json['activeIngredient'] ?? json['active_ingredient'] ?? '',
+      brandName: json['brandName'] ?? json['brand_name'],
+      drugClass: json['drugClass'] ?? json['drug_class'] ?? '',
+      rationale: json['rationale'] ?? '',
+      source: json['source'] ?? 'CLINICAL_GUIDELINE',
+      rxcui: json['rxcui']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'activeIngredient': activeIngredient,
+    'brandName': brandName,
+    'drugClass': drugClass,
+    'rationale': rationale,
+    'source': source,
+    'rxcui': rxcui,
+  };
+}
+
 class AllergyConflictResult {
   final String allergenGroup;
   final String matchedDrug;
@@ -150,6 +188,7 @@ class AllergyConflictResult {
   final String? patientReaction;
   final String severity;
   final String alertMessage;
+  final List<AlternativeMedicationOption> suggestedAlternatives;
 
   const AllergyConflictResult({
     required this.allergenGroup,
@@ -158,9 +197,20 @@ class AllergyConflictResult {
     this.patientReaction,
     required this.severity,
     required this.alertMessage,
+    this.suggestedAlternatives = const [],
   });
 
   factory AllergyConflictResult.fromJson(Map<String, dynamic> json) {
+    final rawAlts = json['suggestedAlternatives'] ?? json['suggested_alternatives'];
+    final List<AlternativeMedicationOption> alts = [];
+    if (rawAlts is List) {
+      for (final a in rawAlts) {
+        if (a is Map<String, dynamic>) {
+          alts.add(AlternativeMedicationOption.fromJson(a));
+        }
+      }
+    }
+
     return AllergyConflictResult(
       allergenGroup: json['allergenGroup'] ?? json['allergen_group'] ?? '',
       matchedDrug: json['matchedDrug'] ?? json['matched_drug'] ?? '',
@@ -168,6 +218,7 @@ class AllergyConflictResult {
       patientReaction: json['patientReaction'] ?? json['patient_reaction'],
       severity: json['severity'] ?? 'HIGH_RISK_ALLERGY',
       alertMessage: json['alertMessage'] ?? json['alert_message'] ?? '',
+      suggestedAlternatives: alts,
     );
   }
 
@@ -178,8 +229,10 @@ class AllergyConflictResult {
     'patientReaction': patientReaction,
     'severity': severity,
     'alertMessage': alertMessage,
+    'suggestedAlternatives': suggestedAlternatives.map((a) => a.toJson()).toList(),
   };
 }
+
 
 class RxScanSummary {
   final String? id;

@@ -1,6 +1,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { supabase } from '../config/supabase.js';
 import { getIO } from './socketManager.js';
+import { PatientClinicalRagService } from './patientClinicalRagService.js';
+
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 // gemini-flash-lite-latest: lowest token footprint and highest rate limit ceiling
@@ -130,7 +132,7 @@ export async function generateClinicalCounselorResponse(
 
   let counselorReply = '';
 
-  // Step B: Token-budgeted Flash Lite API call with rate-limit protection
+  // Step B: Multi-entity Clinical Claims RAG Retrieval & Flash Lite API call
   if (process.env.GEMINI_API_KEY) {
     const lastCall = claimLastCall.get(claimId) || 0;
     const now = Date.now();
@@ -142,7 +144,15 @@ export async function generateClinicalCounselorResponse(
     } else {
       claimLastCall.set(claimId, now);
       try {
-        const prompt = `${COMPACT_SYSTEM_PROMPT}\nPatient: "${patientMessage.slice(0, 200)}"\nResponse:`;
+        let ragContextBlock = '';
+        try {
+          const ragContext = await PatientClinicalRagService.retrieveClaimContext(claimId);
+          ragContextBlock = PatientClinicalRagService.formatRagContextForPrompt(ragContext, 'CLAIM_TRIAGE');
+        } catch (ragErr) {
+          console.warn(`[MedAccess Counselor] Claim RAG notice:`, ragErr);
+        }
+
+        const prompt = `${COMPACT_SYSTEM_PROMPT}\n${ragContextBlock}\nPatient: "${patientMessage.slice(0, 300)}"\nResponse:`;
         const genPromise = flashLiteModel.generateContent(prompt);
         const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('AI generation timeout')), 2200)
@@ -161,6 +171,7 @@ export async function generateClinicalCounselorResponse(
       }
     }
   }
+
 
   // Validate reply text
   const lower = counselorReply.toLowerCase();

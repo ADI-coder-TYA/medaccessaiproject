@@ -74,7 +74,7 @@ class RemoteBackendInferenceEngine implements InferenceEngineInterface {
       uri,
       headers: ApiConfig.patientHeaders,
       body: body,
-    ).timeout(const Duration(seconds: 60)); // Safety timeout — vision inference can take ~15-30s
+    ).timeout(const Duration(seconds: 180)); // Safety timeout for Cloud Qwen 2.5-VL 72B inference
 
     if (response.statusCode != 200) {
       throw Exception('Diagnostic analysis failed (${response.statusCode}): ${response.body}');

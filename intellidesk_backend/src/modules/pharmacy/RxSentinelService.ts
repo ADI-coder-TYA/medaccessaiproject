@@ -59,10 +59,11 @@ export class RxSentinelService {
     }
 
     // 4. Allergy Safety Evaluation (Guardrail 2)
-    const allergyConflicts = AllergySafetySentinel.evaluateAllergies(
+    const allergyConflicts = await AllergySafetySentinel.evaluateAllergies(
       extractedIngredients,
       patientAllergies
     );
+
 
     // 5. Drug-Drug Interaction Evaluation
     const ddiWarnings = DrugInteractionEngine.evaluateInteractions(
@@ -120,10 +121,11 @@ export class RxSentinelService {
     );
 
     // Evaluate drug-allergy contraindications across all active medications
-    const allergyConflicts = AllergySafetySentinel.evaluateAllergies(
+    const allergyConflicts = await AllergySafetySentinel.evaluateAllergies(
       activeIngredients,
       allergies
     );
+
 
     const hasSevereDDI = ddiWarnings.some(d => d.severity === 'CONTRAINDICATED_SEVERE');
     const hasAllergyConflict = allergyConflicts.length > 0;

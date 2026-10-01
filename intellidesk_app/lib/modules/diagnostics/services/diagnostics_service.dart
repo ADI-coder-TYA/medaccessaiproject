@@ -49,48 +49,36 @@ class DiagnosticsService {
         ? imageFile
         : (imageFile is List ? imageFile.cast<int>() : null);
 
-    // 1. Check network connectivity for automatic on-device routing
-    final isDeviceOffline = await LocalInferenceService.isOffline();
-
-    if (_currentMode == ExecutionMode.localTflite || isDeviceOffline) {
-      List<double>? visionEmbeddings;
-      if (imageFile != null) {
-        visionEmbeddings = await _localInferenceService.extractVisualEmbeddings(imageFile);
+    // 1. Online Backend Execution (Qwen 2.5-VL 72B SOTA)
+    if (_currentMode != ExecutionMode.localTflite) {
+      try {
+        debugPrint('🚀 [DiagnosticsService] Transmitting to Cloud Qwen 2.5-VL / Multimodal Engine...');
+        return await _remoteEngine.runMultimodalInference(
+          symptomVector,
+          imageUrl: imageUrl,
+          audioBytes: audioBytes,
+          audioFeatures: audioFeatures,
+          imageBytes: imageBytes,
+        );
+      } catch (e) {
+        debugPrint('⚠️ [DiagnosticsService] Cloud Qwen 2.5-VL inference error: $e — falling back to local MobileNet-V3');
       }
-      return await _localInferenceService.runMultimodalInference(
-        symptomVector,
-        visionEmbeddings: visionEmbeddings,
-        imageUrl: imageUrl,
-        audioBytes: audioBytes,
-        audioFeatures: audioFeatures,
-        imageBytes: imageBytes,
-      );
     }
 
-    // 2. Online Backend Execution with Automatic Edge Fallback
-    try {
-      return await _remoteEngine.runMultimodalInference(
-        symptomVector,
-        imageUrl: imageUrl,
-        audioBytes: audioBytes,
-        audioFeatures: audioFeatures,
-        imageBytes: imageBytes,
-      );
-    } catch (e) {
-      // Automatic edge fallback if cloud inference errors or connection fails
-      List<double>? visionEmbeddings;
-      if (imageFile != null) {
-        visionEmbeddings = await _localInferenceService.extractVisualEmbeddings(imageFile);
-      }
-      return await _localInferenceService.runMultimodalInference(
-        symptomVector,
-        visionEmbeddings: visionEmbeddings,
-        imageUrl: imageUrl,
-        audioBytes: audioBytes,
-        audioFeatures: audioFeatures,
-        imageBytes: imageBytes,
-      );
+    // 2. On-Device Fallback (Clinical MobileNet-V3)
+    debugPrint('🩺 [DiagnosticsService] Running Local On-Device Inference fallback...');
+    List<double>? visionEmbeddings;
+    if (imageFile != null) {
+      visionEmbeddings = await _localInferenceService.extractVisualEmbeddings(imageFile);
     }
+    return await _localInferenceService.runMultimodalInference(
+      symptomVector,
+      visionEmbeddings: visionEmbeddings,
+      imageUrl: imageUrl,
+      audioBytes: audioBytes,
+      audioFeatures: audioFeatures,
+      imageBytes: imageBytes,
+    );
   }
 
   /// Classifies audio via backend /api/v1/diagnostics/audio/classify endpoint

@@ -13,8 +13,10 @@ import { evaluateLifeSafety } from '../services/safetyGuardrails.js';
 import { classifyCategoryDynamic } from '../utils/categoryClassifier.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { PharmacyDbService } from '../modules/pharmacy/pharmacyDbService.js';
+import { PatientClinicalRagService } from '../services/patientClinicalRagService.js';
 
 const chatRouter = Router();
+
 
 const ChatMessageSchema = z.object({
   ticketId: z.string().uuid().optional().nullable(),
@@ -292,36 +294,19 @@ chatRouter.post('/mental-health', async (req: Request, res: Response) => {
 
     const isCrisis = CRITICAL_SELF_HARM_REGEX.test(message);
 
-    // Fetch real patient data for personalised context
+    // Multi-entity Clinical Patient RAG Retrieval
     let patientContextBlock = '';
     try {
-      const [allergies, medications] = await Promise.all([
-        PharmacyDbService.getPatientAllergies(patientId),
-        PharmacyDbService.getPatientMedications(patientId),
-      ]);
-
-      const allergyList =
-        allergies.length > 0
-          ? allergies
-              .map(a => `${a.allergenGroup}${a.reactionDescription ? ` (Reaction: ${a.reactionDescription})` : ''}`)
-              .join(', ')
-          : 'No known drug allergies on record';
-
-      const medList =
-        medications.length > 0
-          ? medications
-              .map(m => `${m.medicationName}${m.dosage ? ` — ${m.dosage}` : ''}`)
-              .join('; ')
-          : 'No active medications on record';
-
-      patientContextBlock = `\n\n[PATIENT HEALTH CONTEXT — use this to personalise responses if relevant]\nActive Medications: ${medList}\nKnown Drug Allergies: ${allergyList}\n[END PATIENT HEALTH CONTEXT]`;
-    } catch (_) {
-      // Non-fatal: continue without patient data
+      const ragContext = await PatientClinicalRagService.retrievePatientContext(patientId);
+      patientContextBlock = PatientClinicalRagService.formatRagContextForPrompt(ragContext, 'MENTAL_HEALTH');
+    } catch (ragErr) {
+      console.warn('[MentalHealthChat] RAG retrieval notice:', ragErr);
     }
 
-    const systemWithContext = MENTAL_HEALTH_SYSTEM_PROMPT + patientContextBlock;
+    const systemWithContext = `${MENTAL_HEALTH_SYSTEM_PROMPT}\n\n${patientContextBlock}`;
 
     let reply = '';
+
 
     if (!process.env.GEMINI_API_KEY) {
       reply = isCrisis

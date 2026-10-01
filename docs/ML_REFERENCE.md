@@ -149,34 +149,61 @@ Extracts cardiovascular metrics from standard smartphone selfie video without we
 
 ---
 
-### 2.7 Prescription OCR & RxNorm Fuzzy Matcher
+### 2.7 Prescription OCR & Open ML Vision Pipeline
 **Source Files:**
 - OCR Parser: `intellidesk_backend/src/modules/pharmacy/PrescriptionOCRParser.ts`
 - Fuzzy Matcher: `intellidesk_backend/src/modules/pharmacy/fuzzyMatcher.ts`
 - RxNorm Store: `intellidesk_backend/src/modules/pharmacy/rxNormDataset.ts`
 
-#### Extraction & Normalization
-1. **Dual-Engine OCR:** Uses Poppler `pdftotext -layout` for structured electronic PDFs; falls back to Tesseract.js v7.0 for photographs.
-2. **Token Sanitization:** Applies heuristic regex rules to fix common OCR token corruptions (e.g., replacing 'O' with '0' in dosage numerical values, fixing 'mg' vs 'mcg').
-3. **Levenshtein Fuzzy Matching:** Compares extracted drug names against 8,000+ canonical entries in `rxNormDataset.ts`. Calculates similarity ratio:
+#### Multi-Tier Extraction & Normalization
+1. **Open-Weight Vision ML Router:** Primary tier evaluates prescription images using hosted Vision-Language Models (`zai-org/GLM-4.6V-Flash`, `Qwen/Qwen2.5-VL-72B-Instruct`, `deepseek-ai/DeepSeek-V4-Flash-Vision-Exp` via Hugging Face Inference Router).
+2. **Local PDF & Tesseract Fallback:** Secondary parser uses Poppler `pdftotext -layout` for clean digital PDFs; falls back to localized Tesseract.js v7.0 with OCR word confidence scoring.
+3. **Clinical Token Sanitization:** Heuristic regex pipeline fixes optical character confusions:
+   - Alphanumeric swaps: `5O0mg` → `500mg`, `1O0mg` → `100mg`.
+   - Frequency patterns: `I-0-1`, `l-0-1` → `1-0-1`.
+   - Shorthand fractions: `5/7` → `5 days`.
+4. **Levenshtein Fuzzy Matching:** Compares extracted drug names against 8,000+ canonical entries in `rxNormDataset.ts`. Calculates similarity ratio:
    $$\text{similarity} = 1 - \frac{\text{Levenshtein}(s_1, s_2)}{\max(|s_1|, |s_2|)}$$
-   Matches with similarity $\ge 0.82$ are mapped to canonical RxNorm Concept Unique Identifiers (RxCUIs).
+   Matches with similarity $\ge 0.75$ map to canonical RxNorm Concept Unique Identifiers (RxCUIs).
 
 ---
 
-### 2.8 Drug Interaction Engine & Allergy Safety Sentinel
+### 2.8 Dynamic Alternative Prescribing & Drug Interaction Safety
 **Source Files:**
+- Alternative Prescribing: `intellidesk_backend/src/modules/pharmacy/AlternativeMedicationService.ts`
 - DDI Matrix: `intellidesk_backend/src/modules/pharmacy/DrugInteractionEngine.ts`
 - Allergy Sentinel: `intellidesk_backend/src/modules/pharmacy/AllergySafetySentinel.ts`
 
-#### Safety Evaluation
-- Maintains an in-memory graph of 8,000+ known clinical drug-drug pairs.
-- Classifies multi-drug interactions into 4 severity tiers:
-  - `CONTRAINDICATED`: Extreme adverse risk (e.g., Monoamine Oxidase Inhibitors + SSRIs). Blocks automated dispensing.
-  - `MAJOR`: Significant clinical hazard requiring physician review.
-  - `MODERATE`: Physiological interaction requiring patient monitoring.
-  - `MINOR`: Slight pharmacokinetic effect.
-- Cross-references patient allergy records against drug active ingredients and chemical classes.
+#### Safety & Dynamic Substitution
+1. **Live Clinical API Integration:** Integrates with the **NIH National Library of Medicine (NLM) RxNav & RxClass REST API** to resolve active RxCUIs and anatomical therapeutic classes (ATC).
+2. **Non-Cross-Reactive Substitution:** When an allergy contraindication is detected (e.g. Penicillin allergy), `AlternativeMedicationService` queries non-cross-reactive pharmacological classes (e.g. Macrolides, Lincosamides), verifies against patient's other allergies, and dynamically attaches verified substitutes with clinical rationale and RxCUI provenance.
+3. **8,000+ Drug Interaction Graph:** Classifies multi-drug regimens into 5 calibrated severity tiers:
+   - `CONTRAINDICATED_SEVERE`: Extreme clinical danger (e.g., Warfarin + Aspirin hemorrhage, Sildenafil + Nitroglycerin fatal hypotension). Hard block requiring clinical review.
+   - `MAJOR`: Significant clinical hazard requiring physician override.
+   - `MODERATE_MONITOR`: Physiological interaction requiring active monitoring (e.g. Ciprofloxacin + Calcium chelation).
+   - `MINOR`: Slight pharmacokinetic effect.
+   - `SAFE`: Zero clinical conflict detected.
+
+---
+
+### 2.9 Clinical Patient-RAG Architecture (Retrieval-Augmented Generation)
+**Source Files:**
+- RAG Retriever: `intellidesk_backend/src/services/patientClinicalRagService.ts`
+- Mental Health Chat: `intellidesk_backend/src/routes/chat.ts`
+- Clinical Copay Chat: `intellidesk_backend/src/services/clinicalCounselorService.ts`
+
+#### RAG Architecture & Context Synthesis
+1. **Multi-Entity Parallel Retrieval:** Dynamically pulls patient records across 5 Supabase tables:
+   - Demographics & Emergency Contacts (`profiles`)
+   - Active Prescriptions & Dosages (`patient_medications`)
+   - Documented Allergen Groups & Reactions (`patient_allergies`)
+   - Contactless rPPG Vitals & Physiological Alerts (`health_screenings`)
+   - Emergency Copay Allocations & Invoice Amounts (`claims`)
+2. **Domain-Tuned Prompt Synthesis:** Converts clinical vectors into concise, token-budgeted prompt blocks:
+   - `MENTAL_HEALTH`: Injects physiological vitals (pulse, stress index) and current therapy so counselors provide deep, empathetic clinical responses without raw data leakage.
+   - `CLAIM_TRIAGE`: Injects exact claim status, billed sums, and medical categories so copay assistants directly resolve student financial anxiety.
+3. **Privacy & Crisis Guardrails:** Zero cross-tenant data leakage. Critical life-safety regex patterns (`CRITICAL_SELF_HARM_REGEX`, `LIFE_SAFETY_REGEX`) immediately bypass conversational RAG to trigger one-tap crisis hotline intervention cards.
+
 
 ---
 

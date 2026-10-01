@@ -103,9 +103,87 @@ export async function extractTextFromPdfBuffer(buffer: Buffer): Promise<string> 
 }
 
 /**
- * Runs Tesseract OCR on image buffer (PNG, JPEG, WebP).
+ * Open ML Model OCR via Hugging Face Vision router (e.g. Qwen2.5-VL / GLM-4.6V-Flash).
+ * Gracefully times out or falls back to local Tesseract OCR on rate limits.
+ */
+export async function extractTextViaHuggingFaceVision(buffer: Buffer): Promise<string> {
+  const hfToken = process.env.HF_TOKEN || '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';
+  if (!hfToken) return '';
+
+  const visionModels = [
+    'zai-org/GLM-4.6V-Flash',
+    'Qwen/Qwen2.5-VL-72B-Instruct',
+    'deepseek-ai/DeepSeek-V4-Flash-Vision-Exp'
+  ];
+
+  const base64Data = buffer.toString('base64');
+  const mimeType = buffer.slice(0, 4).toString('hex') === '89504e47' ? 'image/png' : 'image/jpeg';
+  const dataUrl = `data:${mimeType};base64,${base64Data}`;
+
+  for (const model of visionModels) {
+    try {
+      const response = await axios.post(
+        'https://router.huggingface.co/v1/chat/completions',
+        {
+          model,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: 'You are an expert clinical pharmacist and medical OCR system. Read and extract all handwritten and printed text from this doctor prescription image accurately. Transcribe all medication names, dosages, strengths, frequencies, durations, and clinical instructions exactly as written. Return ONLY the extracted text lines.'
+                },
+                {
+                  type: 'image_url',
+                  image_url: { url: dataUrl }
+                }
+              ]
+            }
+          ],
+          max_tokens: 500,
+          temperature: 0.1
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${hfToken}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 10000
+        }
+      );
+
+      const content = response.data?.choices?.[0]?.message?.content;
+      if (content && typeof content === 'string' && content.trim().length > 5) {
+        console.log(`[Prescription OCR] ML Vision OCR Success using HuggingFace (${model})`);
+        return content.trim();
+      }
+    } catch (err: any) {
+      // If 429 or timeout, proceed to next or fallback
+      console.warn(`[Prescription OCR] HuggingFace ML model ${model} unavailable:`, err?.response?.status || err?.message);
+    }
+  }
+
+  return '';
+}
+
+/**
+ * Universal image text extractor:
+ * 1. Primary: HuggingFace Open Vision ML Model (cloud AI)
+ * 2. Fallback: Local Tesseract OCR engine
  */
 export async function extractTextFromImageBuffer(buffer: Buffer): Promise<string> {
+  // 1. Try Hugging Face Open ML Vision Model first
+  try {
+    const mlText = await extractTextViaHuggingFaceVision(buffer);
+    if (mlText && mlText.length > 10) {
+      return mlText;
+    }
+  } catch (mlErr) {
+    console.warn('[Prescription OCR] HF ML Vision primary extractor caught error:', mlErr);
+  }
+
+  // 2. Fallback to local Tesseract OCR engine
   const tempPath = path.join(os.tmpdir(), `rx_img_${Date.now()}_${Math.random().toString(36).substring(7)}.png`);
   try {
     await fs.writeFile(tempPath, buffer);
@@ -117,12 +195,13 @@ export async function extractTextFromImageBuffer(buffer: Buffer): Promise<string
       await worker.terminate().catch(() => {});
     }
   } catch (ocrErr: any) {
-    console.warn('[Prescription OCR] Tesseract OCR warning:', ocrErr?.message || ocrErr);
+    console.warn('[Prescription OCR] Local Tesseract OCR fallback warning:', ocrErr?.message || ocrErr);
     return '';
   } finally {
     await fs.unlink(tempPath).catch(() => {});
   }
 }
+
 
 /**
  * Universal text extractor for files, buffers, URLs, and text strings.

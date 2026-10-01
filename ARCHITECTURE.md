@@ -28,12 +28,14 @@ MedAccess AI is architected as an offline-resilient, hybrid edge-cloud medical p
 │  /api/v1/auth              JWT Authentication & Tenant Scoping                         │
 │  /api/v1/diagnostics       Multimodal Vision (Qwen2.5-VL), Cough ML, rPPG Vitals       │
 │  /api/v1/cdss              WHO ICD-11 Differential Engine & HL7 FHIR R4 Converter      │
-│  /api/v1/pharmacy          Prescription OCR Parser & 8,000+ DDI / Allergy Sentinel     │
-│  /api/v1/chat              Confidential Psychological First Aid (Qwen ONNX Local)      │
+│  /api/v1/pharmacy          Open-ML Prescription OCR, 8,000+ DDI & NLM RxNav Alt Engine│
+│  /api/v1/chat              Patient-RAG Mental Health & Confidential PFA Chat           │
+│  /api/v1/claims/:id/messages Patient-RAG Emergency Copay Dialogue & Status Assistant     │
 │  /api/v1/intake/web        Asynchronous Claim Ingestion $\rightarrow$ BullMQ Processing Queue   │
 │  /api/v1/claims            Clinical Triage CRUD, CSI Filtering & Encounter Telemetry   │
 │  /api/v1/admin             Clinician Overrides & Real-Time Telemetry Dashboards        │
 │  /api/v1/claims/:id/disburse Instant Multi-Rail Copay Disbursement (RazorpayX/Stripe) │
+
 └──────────────┬──────────────────────────────────────────┬──────────────────────────────┘
                │                                          │
     Job Events │ BullMQ (Redis 7)                  Query  │ SQL / RLS

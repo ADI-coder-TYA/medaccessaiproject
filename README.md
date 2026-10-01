@@ -83,15 +83,20 @@
 - **Physiological Red-Flag Sentinel** — automated boundary monitoring detecting acute tachycardia ($>110\text{ BPM}$), bradycardia ($<50\text{ BPM}$), and hypoxia indicators.
 
 ### 💊 Pharmacy Safety & RxSentinel
-- **Handwritten Prescription OCR** — hybrid Poppler `pdftotext` + Tesseract.js engine with custom alphanumeric sanitization (correcting common OCR confusions like O/0, I/1).
+- **Handwritten Prescription Open-ML OCR** — hybrid architecture combining open-weight Vision-Language Models (`GLM-4.6V-Flash`, `Qwen2.5-VL-72B`, `DeepSeek-V4-Flash-Vision` via Hugging Face router) with localized Poppler `pdftotext` and Tesseract.js sanitization fallback (correcting clinical token swaps like O/0, I/1).
 - **RxNorm Semantic Normalizer** — fuzzy string matcher resolving brand names and colloquial spellings to standardized RxNorm Concept Unique Identifiers (RxCUIs).
 - **8,000+ Drug-Drug Interaction Matrix** — instant cross-referencing of multi-drug regimens classifying interactions as `CONTRAINDICATED`, `MAJOR`, `MODERATE`, or `MINOR`.
-- **Allergy Safety Sentinel** — cross-checks newly prescribed substances against patient allergy records to prevent anaphylaxis.
+- **Dynamic Evidence-Based Alternative Prescribing** — integrated with the **NIH National Library of Medicine (NLM) RxNav & RxClass REST API** to resolve active RxCUIs and anatomical therapeutic classes (ATC). When allergy contraindications occur, dynamically fetches and recommends safe, non-cross-reactive alternatives with clinical rationale.
+- **Allergy Safety Sentinel** — cross-checks newly prescribed substances against patient allergy records with allergen cross-reactivity tree analysis to prevent anaphylaxis.
 
-### 🧠 Psychological First Aid (PFA) & Crisis Triage
+### 🧠 Psychological First Aid (PFA), Clinical Chatbots & Patient-RAG
+- **Clinical Patient-RAG Architecture (`PatientClinicalRagService`)** — retrieves and synthesizes multi-entity clinical dossiers from Supabase (demographics, active medications, recorded allergies, recent rPPG vitals, and emergency copay claims) to supply deep, clinically-tailored context to chatbots without privacy compromise.
+- **Personalized Mental Health Counselor (`/api/v1/chat/mental-health`)** — combines Gemini Flash with Patient-RAG retrieval, empathetically addressing patient emotional distress while taking active medications, allergies, and recent screening vitals into account.
+- **Emergency Copay & Medical Claim Assistant (`/api/v1/claims/:id/messages`)** — injects live claim amounts, copay relief allocations, and clinical category into multi-turn dialogue with token throttling and memory caching.
 - **Local ONNX Qwen Chat Engine** — runs `Xenova/Qwen1.5-0.5B-Chat` completely on-device without network transmission, ensuring absolute privacy for sensitive mental health conversations.
-- **Life-Safety & Crisis Regex** — instant pattern matching detecting suicide and self-harm keywords, overriding conversation flow to present immediate 24/7 hotlines.
+- **Life-Safety & Crisis Regex** — instant pattern matching detecting suicide and self-harm keywords, overriding conversation flow to present immediate 24/7 hotlines (Tele-MANAS 14416, 988 Lifeline, Vandrevala).
 - **Rogerian PFA Fallback** — deterministic, non-judgmental reflective listening engine providing continuous availability under zero-memory constraints.
+
 
 ### 📋 Clinical ESI Triage & Emergency Copay Support
 - **DeepRank Emergency Severity Index (ESI)** — assigns Crisis Severity Index (CSI $\in [0, 1]$) and triage tiers (ESI-1 Resuscitation down to ESI-5 Routine).
@@ -202,32 +207,51 @@ Fallback: Clinical Photo → MobileNet-V3 TFLite → 10-Class Top-K Probabilitie
 
 ---
 
-### 4.7 Prescription OCR Parser & RxNorm Normalizer
+### 4.7 Prescription OCR Parser & Open ML Vision Pipeline
 
 **Clinical Role:** Digitize handwritten and typed prescriptions, resolving medication names to canonical clinical drug databases.
 
 | Attribute | Detail |
 |---|---|
-| **Primary Engine** | Poppler `pdftotext -layout` for native electronic prescriptions |
-| **Secondary Engine** | Tesseract.js v7.0 with localized English language training weights |
-| **Character Correction** | Heuristic correction for common numerical and medication token misreads |
+| **Primary Cloud ML Model** | Open-weight Vision-Language Models (`zai-org/GLM-4.6V-Flash`, `Qwen/Qwen2.5-VL-72B-Instruct`, `deepseek-ai/DeepSeek-V4-Flash-Vision-Exp` via Hugging Face Router) |
+| **Secondary Engine (PDF)** | Poppler `pdftotext -layout` for native electronic prescriptions |
+| **Local Offline Fallback** | Tesseract.js v7.0 with localized English language training weights |
+| **Character Correction** | Heuristic sanitization swapping OCR token confusions (e.g. `5O0mg` → `500mg`, `I-0-1` → `1-0-1`) |
 | **Knowledge Base** | Fuzzy Levenshtein matching against `rxNormDataset.ts` (8,000+ clinical formulations) |
-| **Parsed Fields** | Medication name, dosage strength, administration frequency, route, RxCUI identifier |
+| **Parsed Fields** | Medication name, dosage strength, administration frequency, duration, RxCUI identifier |
 | **File** | `intellidesk_backend/src/modules/pharmacy/PrescriptionOCRParser.ts` |
 
 ---
 
-### 4.8 Drug Interaction Engine & Allergy Safety Sentinel
+### 4.8 Drug Interaction Engine & Dynamic Evidence-Based Alternative Prescribing
 
-**Clinical Role:** Protects patients from adverse drug events by analyzing multi-medication interactions and allergy contraindications.
+**Clinical Role:** Protects patients from adverse drug events, flags cross-reactive allergen contraindications, and dynamically generates safe alternative medications backed by live clinical APIs.
 
 | Attribute | Detail |
 |---|---|
+| **Live Clinical API** | **NIH NLM RxNav REST API** (`https://rxnav.nlm.nih.gov/REST/`) & **RxClass API** |
+| **Dynamic Alternative Engine** | `AlternativeMedicationService.ts` queries live RxCUIs and ATC classes to generate safe, non-cross-reactive substitutes for contraindicated medications |
 | **Interaction Matrix** | Multi-index graph of 8,000+ known clinical drug-drug pairs |
-| **Allergy Scanner** | Compares active pharmaceutical ingredients against patient-declared allergen profiles |
-| **Severity Hierarchy** | `CONTRAINDICATED` (hard block), `MAJOR` (requires override), `MODERATE`, `MINOR` |
-| **Orchestration** | `RxSentinelService.ts` coordinates prescription parsing, DDI check, and patient notification |
-| **File** | `intellidesk_backend/src/modules/pharmacy/DrugInteractionEngine.ts` |
+| **Allergy Scanner** | `AllergySafetySentinel.ts` evaluates prescribed substances against patient allergy records using an allergen cross-reactivity tree |
+| **Severity Hierarchy** | `CONTRAINDICATED_SEVERE` (hard block), `MAJOR`, `MODERATE_MONITOR`, `MINOR`, `SAFE` |
+| **Orchestration** | `RxSentinelService.ts` coordinates prescription parsing, DDI check, allergy conflicts, and patient notifications |
+| **Files** | `intellidesk_backend/src/modules/pharmacy/AlternativeMedicationService.ts`, `AllergySafetySentinel.ts`, `DrugInteractionEngine.ts` |
+
+---
+
+### 4.9 Clinical Patient-RAG Architecture (Retrieval-Augmented Generation)
+
+**Clinical Role:** Supplies multi-entity longitudinal patient data to both conversational assistants (Mental Health Counselor & Claim Copay Assistant) to deliver personalized, safe, and context-aware responses.
+
+| Attribute | Detail |
+|---|---|
+| **Retriever Service** | `PatientClinicalRagService.ts` |
+| **Data Entities Retrieved** | `profiles` (demographics), `patient_medications` (active therapy), `patient_allergies` (hypersensitivities), `health_screenings` (rPPG vitals & risk indices), `claims` (copay status & amounts) |
+| **Prompt Synthesis** | Domain-tuned context formatting (`MENTAL_HEALTH` vs. `CLAIM_TRIAGE`) ensuring token efficiency |
+| **Clinical Privacy** | Zero data leakage; context strictly scoped to the authenticated patient and claim session |
+| **Crisis Override** | Life-safety regex triggers immediate emergency hotline cards, bypassing non-urgent conversational paths |
+| **Files** | `intellidesk_backend/src/services/patientClinicalRagService.ts`, `intellidesk_backend/src/routes/chat.ts`, `intellidesk_backend/src/services/clinicalCounselorService.ts` |
+
 
 ---
 

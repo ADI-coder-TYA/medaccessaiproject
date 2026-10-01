@@ -22,6 +22,15 @@ export interface DDIPairResult {
   mitigationAdvice: string;
 }
 
+export interface AlternativeMedicationOption {
+  activeIngredient: string;
+  brandName?: string;
+  drugClass: string;
+  rationale: string;
+  source: 'NLM_RXNAV' | 'OPEN_FDA' | 'CLINICAL_GUIDELINE';
+  rxcui?: string;
+}
+
 export interface AllergyConflictResult {
   allergenGroup: string;
   matchedDrug: string;
@@ -29,7 +38,9 @@ export interface AllergyConflictResult {
   patientReaction?: string;
   severity: 'HIGH_RISK_ALLERGY' | 'CROSS_REACTIVITY_WARNING';
   alertMessage: string;
+  suggestedAlternatives?: AlternativeMedicationOption[];
 }
+
 
 export interface RxScanSummary {
   id?: string;

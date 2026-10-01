@@ -8,7 +8,7 @@ class ApiConfig {
   ApiConfig._(); // Prevent instantiation
 
   /// Local machine LAN IP address for physical device Wi-Fi debugging
-  static const String serverIp = '172.22.15.48';
+  static const String serverIp = '172.22.14.105';
   static const String serverPort = '3000';
   static String? _detectedHost;
   static String? customHost;

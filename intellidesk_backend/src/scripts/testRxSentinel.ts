@@ -204,22 +204,25 @@ Doctor's Signature: Dr. R. Sharma
   ];
 
   // 1. Direct derivative match (Amoxicillin)
-  const allergyConflicts1 = AllergySafetySentinel.evaluateAllergies(['Amoxicillin 500mg'], patientAllergies);
+  const allergyConflicts1 = await AllergySafetySentinel.evaluateAllergies(['Amoxicillin 500mg'], patientAllergies);
   assert(allergyConflicts1.length === 1, 'Detected direct Penicillin allergy conflict for Amoxicillin');
   assert(allergyConflicts1[0].allergenGroup === 'PENICILLINS', 'Conflict allergen group is PENICILLINS');
   assert(allergyConflicts1[0].severity === 'HIGH_RISK_ALLERGY', 'Severity is HIGH_RISK_ALLERGY');
+  assert(Array.isArray(allergyConflicts1[0].suggestedAlternatives) && allergyConflicts1[0].suggestedAlternatives.length > 0, 'Alternatives generated via NLM RxNav / Clinical Guideline');
+  console.log(`   [Live Alternatives Verified] Generated ${allergyConflicts1[0].suggestedAlternatives.length} alternative(s): ${allergyConflicts1[0].suggestedAlternatives.map(a => a.activeIngredient + ' (' + a.source + ')').join(', ')}`);
 
   // 2. Cross-reactivity brand/child match (Augmentin)
-  const allergyConflicts2 = AllergySafetySentinel.evaluateAllergies(['Augmentin 625mg'], patientAllergies);
+  const allergyConflicts2 = await AllergySafetySentinel.evaluateAllergies(['Augmentin 625mg'], patientAllergies);
   assert(allergyConflicts2.length === 1, 'Cross-reactivity mapped Augmentin to PENICILLINS allergy');
 
   // 3. Sulfa derivative match (Bactrim)
-  const allergyConflicts3 = AllergySafetySentinel.evaluateAllergies(['Bactrim DS'], patientAllergies);
+  const allergyConflicts3 = await AllergySafetySentinel.evaluateAllergies(['Bactrim DS'], patientAllergies);
   assert(allergyConflicts3.length === 1, 'Cross-reactivity mapped Bactrim to SULFA allergy');
 
   // 4. Safe non-matching medication
-  const safeAllergyCheck = AllergySafetySentinel.evaluateAllergies(['Acetaminophen 500mg', 'Atorvastatin 20mg'], patientAllergies);
+  const safeAllergyCheck = await AllergySafetySentinel.evaluateAllergies(['Acetaminophen 500mg', 'Atorvastatin 20mg'], patientAllergies);
   assert(safeAllergyCheck.length === 0, 'No false-positive allergy conflicts for Acetaminophen or Atorvastatin');
+
 
   // -------------------------------------------------------------
   // TEST 6: RxSentinel Pipeline & Patient Safety Flag Override (Guardrail 3)

@@ -416,11 +416,78 @@ class _PrescriptionReviewModalState extends State<PrescriptionReviewModal> {
                               style: const TextStyle(color: Color(0xFFB91C1C), fontSize: 11.5),
                             ),
                           ],
+                          if (c.suggestedAlternatives.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFF86EFAC)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.check_circle_outline, color: Color(0xFF16A34A), size: 16),
+                                      const SizedBox(width: 6),
+                                      const Text(
+                                        'Suggested Safe Alternatives (NIH NLM RxNav):',
+                                        style: TextStyle(
+                                          color: Color(0xFF15803D),
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  ...c.suggestedAlternatives.map(
+                                    (alt) => Padding(
+                                      padding: const EdgeInsets.only(bottom: 4),
+                                      child: Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text('• ', style: TextStyle(color: Color(0xFF15803D), fontWeight: FontWeight.bold)),
+                                          Expanded(
+                                            child: RichText(
+                                              text: TextSpan(
+                                                style: const TextStyle(fontSize: 11, color: Color(0xFF334155)),
+                                                children: [
+                                                  TextSpan(
+                                                    text: '${alt.activeIngredient} ',
+                                                    style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                                                  ),
+                                                  if (alt.brandName != null)
+                                                    TextSpan(
+                                                      text: '(${alt.brandName}) ',
+                                                      style: const TextStyle(fontStyle: FontStyle.italic, color: Color(0xFF64748B)),
+                                                    ),
+                                                  TextSpan(text: '— ${alt.rationale} '),
+                                                  if (alt.rxcui != null)
+                                                    TextSpan(
+                                                      text: '[RxCUI: ${alt.rxcui}]',
+                                                      style: const TextStyle(fontSize: 10, color: Color(0xFF0284C7), fontWeight: FontWeight.w600),
+                                                    ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
                   ),
                 ],
+
 
                 // 3. Drug-Drug Interactions Section
                 if (widget.summary.ddiWarnings.isNotEmpty) ...[

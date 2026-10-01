@@ -1,16 +1,19 @@
 import { AllergenGroup, AllergyConflictResult, PatientAllergy } from './types.js';
 import { ALLERGEN_CROSS_REACTIVITY_MAP } from './rxNormDataset.js';
 import { findBestRxNormMatch } from './fuzzyMatcher.js';
+import { AlternativeMedicationService } from './AlternativeMedicationService.js';
 
 export class AllergySafetySentinel {
   /**
    * Technical Guardrail 2: Cross-Reactivity Allergen Evaluation
    * Evaluates newly prescribed medications against patient allergy records.
+   * Dynamically attaches evidence-based safe alternative medications via NIH NLM RxNav.
    */
-  public static evaluateAllergies(
+  public static async evaluateAllergies(
     prescribedDrugs: string[],
     patientAllergies: PatientAllergy[] = []
-  ): AllergyConflictResult[] {
+  ): Promise<AllergyConflictResult[]> {
+
     if (!prescribedDrugs.length || !patientAllergies.length) {
       return [];
     }
@@ -71,13 +74,29 @@ export class AllergySafetySentinel {
           if (!seenConflicts.has(conflictKey)) {
             seenConflicts.add(conflictKey);
 
+            const activeDrugName = match.activeIngredient || rawDrug;
+            const patientAllergyList = patientAllergies.map(a => a.allergenGroup);
+
+            // Dynamically query safe, non-cross-reactive alternatives via NIH NLM RxNav / Clinical KB
+            let suggestedAlternatives = [];
+            try {
+              suggestedAlternatives = await AlternativeMedicationService.getAlternativesForAllergy(
+                normalizedGroup || rawGroup,
+                activeDrugName,
+                patientAllergyList
+              );
+            } catch (altErr) {
+              console.warn('[AllergySafetySentinel] Alternative lookup warning:', altErr);
+            }
+
             conflicts.push({
               allergenGroup: rawGroup,
               matchedDrug: rawDrug,
-              activeIngredient: match.activeIngredient || rawDrug,
+              activeIngredient: activeDrugName,
               patientReaction: reaction,
               severity: 'HIGH_RISK_ALLERGY',
-              alertMessage: `CRITICAL ALLERGY ALERT: Patient has documented allergy to "${rawGroup}" (${reaction}). Prescribed medication "${match.activeIngredient || rawDrug}" belongs to this allergen class or exhibits high cross-reactivity!`
+              alertMessage: `CRITICAL ALLERGY ALERT: Patient has documented allergy to "${rawGroup}" (${reaction}). Prescribed medication "${activeDrugName}" belongs to this allergen class or exhibits high cross-reactivity!`,
+              suggestedAlternatives
             });
           }
         }
@@ -87,3 +106,4 @@ export class AllergySafetySentinel {
     return conflicts;
   }
 }
+

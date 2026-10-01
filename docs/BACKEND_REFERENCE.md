@@ -170,15 +170,19 @@ The backend initializes sequentially to ensure zero-crash resilience:
   - `gradCamGenerator.ts`: Computes gradient of the predicted class score with respect to convolutional feature maps, producing normalized 2D saliency heatmaps.
 
 ### 4.3 Pharmacy & Medication Safety (`src/modules/pharmacy/`)
-- **`PrescriptionOCRParser.ts`**: Extracts raw text using Poppler `pdftotext` for clean PDFs or Tesseract.js v7 for camera photographs. Includes rule-based sanitization for common OCR confusions (e.g., replacing 'O' with '0' in dosage numbers).
+- **`PrescriptionOCRParser.ts`**: Multi-tiered prescription digitizer. Primary: Open-weight Vision-Language Models (`GLM-4.6V-Flash`, `Qwen2.5-VL-72B`, `DeepSeek-V4-Flash-Vision` via Hugging Face Router). Secondary: Poppler `pdftotext` for clean electronic PDFs. Fallback: Local Tesseract.js v7. Includes rule-based sanitization for common OCR clinical confusions (e.g., replacing 'O' with '0' in dosage numbers, 'I' with '1' in frequencies).
 - **`fuzzyMatcher.ts` & `rxNormDataset.ts`**: Maps noisy drug strings to standardized RxNorm Concept Unique Identifiers (RxCUIs) using Levenshtein distance metrics.
-- **`DrugInteractionEngine.ts`**: In-memory hash map indexing 8,000+ known clinical drug-drug interactions. Evaluates incoming regimens and classifies severity into `CONTRAINDICATED`, `MAJOR`, `MODERATE`, or `MINOR`.
-- **`AllergySafetySentinel.ts`**: Intersects extracted drug ingredients with the patient's recorded allergen profile.
+- **`DrugInteractionEngine.ts`**: In-memory hash map indexing 8,000+ known clinical drug-drug interactions. Evaluates incoming regimens and classifies severity into `CONTRAINDICATED_SEVERE`, `MAJOR`, `MODERATE_MONITOR`, `MINOR`, or `SAFE`.
+- **`AllergySafetySentinel.ts`**: Intersects extracted drug ingredients with the patient's recorded allergen profile using cross-reactivity tree analysis.
+- **`AlternativeMedicationService.ts`**: Live integration with the **NIH National Library of Medicine (NLM) RxNav REST API** and **RxClass API**. Dynamically resolves RxCUIs and anatomical therapeutic classes (ATC). Generates safe, non-cross-reactive alternatives with clinical provenance tags when allergen contraindications occur.
+- **`RxSentinelService.ts`**: Master orchestrator coordinating OCR extraction, fuzzy RxNorm mapping, allergy conflicts, dynamic alternative resolution, DDI warnings, and database persistence.
 
 ---
 
 ## 5. Core Services Architecture (`src/services/`)
 
+- **`patientClinicalRagService.ts`**: Unified Clinical Patient RAG (Retrieval-Augmented Generation) Service. Queries Supabase across `profiles`, `patient_medications`, `patient_allergies`, `health_screenings` (rPPG vitals), and `claims` to synthesize context-rich, privacy-preserved prompt blocks tailored for both the Mental Health Counselor and the Emergency Claim Copay Assistant.
+- **`clinicalCounselorService.ts`**: Multi-turn clinical copay counselor. Injects live claim RAG context into Gemini Flash Lite prompts with per-session rate throttling, memory response caching, and local Rogerian Psychological First Aid (PFA) fallbacks.
 - **`deepRankModel.ts`**: Neural network evaluating crisis text. Computes Crisis Severity Index (CSI $\in [0, 1]$) and maps to ESI triage levels:
   - $\text{CSI} \ge 0.85 \rightarrow \text{ESI-1 (Critical / Resuscitation)}$
   - $\text{CSI} \ge 0.60 \rightarrow \text{ESI-2 (Emergent)}$
@@ -196,6 +200,7 @@ The backend initializes sequentially to ensure zero-crash resilience:
   - Layer C: Feature reconstruction anomaly detection via Autoencoder MSE (threshold = 0.75).
   - *Emergency life-safety claims automatically bypass velocity checks.*
 - **`disbursementService.ts` & `payoutService.ts`**: Multi-rail disbursement executing instant UPI/IMPS via RazorpayX, USD payouts via Stripe, or generating campus clinic QR vouchers.
+
 
 ---
 

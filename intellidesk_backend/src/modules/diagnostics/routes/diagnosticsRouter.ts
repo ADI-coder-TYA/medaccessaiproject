@@ -245,6 +245,7 @@ router.post('/analyze', async (req: Request, res: Response) => {
         symptoms: cdssSymptoms,
         visionFindings: cdssVisionFindings,
         temperature: 1.25,
+        useCloudModel: effectiveImageUrl ? false : true,
       });
       console.log(`✅ [Diagnostics API] CDSS report generated: ${cdssEvaluation.primaryICD11Code} - ${cdssEvaluation.primaryICD11Title}`);
       HealthScreeningsDbService.attachCdssEvaluation(savedScreening.id, cdssEvaluation);

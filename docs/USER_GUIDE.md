@@ -229,12 +229,14 @@ The 10-step BullMQ intake worker runs:
 - Tesseract.js / Poppler parses invoice total: `₹14,000`.
 - Fraud Sentinel verifies receipt image hash (SHA-256) and evaluates Autoencoder reconstruction score ($	ext{MSE} = 0.11$, normal).
 - **DeepRank Neural Network** evaluates narrative and medical keywords:
-  - Crisis Severity Index (CSI): **0.78** $ightarrow$ **ESI-2 Emergent**.
+  - Crisis Severity Index (CSI): **0.78** $
+ightarrow$ **ESI-2 Emergent**.
 - **Grant Optimizer** calculates recommended grant with Monte Carlo Dropout uncertainty:
   - Recommended Amount: **₹11,200** (80% coverage) $pm 	ext{₹450}$ variance.
 
 **3. Real-Time Tracking**
-- Alex's status screen updates from 🟡 `Submitted` $ightarrow$ 🔵 `Triage Active` with an orange **ESI-2 Emergent** badge.
+- Alex's status screen updates from 🟡 `Submitted` $
+ightarrow$ 🔵 `Triage Active` with an orange **ESI-2 Emergent** badge.
 
 **4. Instant Disbursement**
 - Once the campus medical administrator approves the case in the War Room:
@@ -261,7 +263,9 @@ Dr. Chen, Chief Medical Officer, reviews active overnight emergency cases and AI
   - DeepRank ESI Level: `ESI_2_EMERGENT`.
   - Fraud Sentinel Risk: `0.08 (LOW)`.
   - Grant Optimizer: Recommended `₹11,200`.
-- Dr. Chen taps **"Approve & Disburse"** $ightarrow$ selects Instant UPI payout $ightarrow$ confirms.
+- Dr. Chen taps **"Approve & Disburse"** $
+ightarrow$ selects Instant UPI payout $
+ightarrow$ confirms.
 
 **3. Inspect Multimodal Diagnostic Encounters**
 - Dr. Chen opens **"Clinical Diagnoses Review"** tab:
@@ -286,7 +290,7 @@ Priya has completed a multimodal screening for severe migraine and elevated bloo
 
 **1. Inspect Emergency Medical Passport**
 - On the **Patient Clinical Dashboard**, the **Emergency Medical Passport** card displays:
-  - **Allergies:** Verified allergen status (`PENICILLINS` or `NKDA - None`).
+  - **Allergies:** Verified allergen status.
   - **Medications:** Active prescription count with real-time status.
   - **Emergency Contact:** Direct contact phone number linked to user profile.
   - **Care Status:** Clinical stability indicator.
@@ -299,7 +303,7 @@ Priya has completed a multimodal screening for severe migraine and elevated bloo
 - Tap **"Export / Share Clinical Referral"** in the diagnostic report.
 - The `ClinicalReportShareSheet` opens. Tap **"Download Referral Letter (PDF)"**.
 - The backend compiles a vector PDF with:
-  - Patient demographics & institutional ID (`PAT-2026-002`)
+  - Patient demographics & institutional ID
   - Vital signs standardized to LOINC codes: Body Temp (`8310-5`), HR (`8867-4`), BP (`8480-6`), SpO2 (`2708-6`), Pain Scale (`72514-3`)
   - Multimodal risk score with 95% Bayesian confidence intervals
   - Recommended clinical directives & attending physician signature block

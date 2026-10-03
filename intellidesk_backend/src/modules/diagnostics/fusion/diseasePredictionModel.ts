@@ -361,7 +361,7 @@ export class DiseasePredictionModel {
       try {
         const symptoms = (symptomData?.symptoms || []).join(', ');
         const loc = (symptomData as any)?.anatomicalLocation || symptomData?.bodyLocation || 'systemic';
-        const notes = symptomData?.additionalNotes || '';
+        const notes = symptomData?.clinicalNotes || (symptomData as any)?.clinical_notes || symptomData?.additionalNotes || (symptomData as any)?.notes || '';
         const patientText = `Patient presenting with ${symptoms} in anatomical location ${loc}. Clinical notes: ${notes}`;
 
         const output = await this.hfPipeline(patientText, { pooling: 'mean', normalize: true });
@@ -503,7 +503,7 @@ export class DiseasePredictionModel {
       try {
         const symptoms = (symptomData?.symptoms || []).join(', ');
         const loc = (symptomData as any)?.anatomicalLocation || symptomData?.bodyLocation || 'systemic';
-        const notes = symptomData?.additionalNotes || '';
+        const notes = symptomData?.clinicalNotes || (symptomData as any)?.clinical_notes || symptomData?.additionalNotes || (symptomData as any)?.notes || '';
         const patientText = `Patient presenting with ${symptoms} in anatomical location ${loc}. Clinical notes: ${notes}`;
 
         const output = await this.hfPipeline(patientText, { pooling: 'mean', normalize: true });

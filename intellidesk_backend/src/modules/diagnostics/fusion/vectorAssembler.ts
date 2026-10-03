@@ -101,10 +101,11 @@ export class VectorAssembler {
 
     // Indices 8..31: 24 Clinical Symptom Keywords (presence/frequency normalized [0.0, 1.0])
     const rawAnatomical = ((symptomData as any).anatomicalLocation || symptomData.bodyLocation || '').toLowerCase();
+    const notesText = symptomData.clinicalNotes || (symptomData as any).clinical_notes || symptomData.additionalNotes || (symptomData as any).notes || '';
     const symptomsText = [
       ...(symptomData.symptoms || []),
       rawAnatomical,
-      symptomData.additionalNotes || ''
+      notesText
     ].join(' ').toLowerCase();
 
     for (let i = 0; i < SYMPTOM_VOCABULARY.length; i++) {

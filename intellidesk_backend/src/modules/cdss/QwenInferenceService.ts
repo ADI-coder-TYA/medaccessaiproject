@@ -59,11 +59,20 @@ export class QwenInferenceService {
     const bodyLoc = (payload as any).anatomicalLocation || (payload.symptoms as any)?.anatomicalLocation || payload.symptoms?.bodyLocation || 'unspecified';
     const visionCount = payload.visionFindings?.length || 0;
     const hasAudio = Boolean(payload.audioClassification);
+    const clinicalNotes = payload.symptoms?.clinicalNotes ||
+      payload.symptoms?.clinical_notes ||
+      payload.symptoms?.additionalNotes ||
+      payload.symptoms?.notes ||
+      payload.clinicalNotes ||
+      payload.clinical_notes ||
+      payload.additionalNotes ||
+      '';
 
     console.log(`🤖 [QwenCDSS] Initiating cloud disease prediction:
   - Patient: ${payload.patientId || 'anonymous'}
   - Body Location: ${bodyLoc}
   - Symptoms: ${symptomCount} items
+  - Clinical Notes: "${clinicalNotes ? (clinicalNotes.length > 60 ? clinicalNotes.substring(0, 60) + '...' : clinicalNotes) : 'None'}"
   - Vision Findings: ${visionCount} items
   - Audio Classification: ${hasAudio ? `${payload.audioClassification?.predictedCategory} (${((payload.audioClassification?.confidence || 0) * 100).toFixed(1)}%)` : 'none'}
   - Risk Score: ${payload.multimodalRiskScore}
@@ -175,7 +184,9 @@ export class QwenInferenceService {
 Available Core ICD-11 Catalog:
 ${conceptCatalog}
 
-Analyze patient presenting signs, symptoms, anatomical location, vital signs, cough acoustic classification, vision findings, and multimodal risk score.
+Analyze patient presenting signs, symptoms, anatomical location, vital signs, cough acoustic classification, vision findings, clinical notes and subjective history, and multimodal risk score.
+When clinical notes and subjective patient history are provided:
+- Carefully scrutinize the narrative for critical clinical clues, symptom progression, prior exposures, triggers, medication history, and specific details reported by the patient or clinician that clarify the primary pathology.
 When a Bioacoustic Biomarker Profile (extracted via Meyda DSP) is present:
 - Synthesize the acoustic sound phenotype, spectral frequency centroid (pitch/brightness), rolloff, onset flux, airway turbulence (ZCR), and cepstral timbre (MFCC) into your differential diagnostic reasoning.
 - High spectral centroid (>1500 Hz) + high turbulence/ZCR strongly points to airway obstruction, bronchospasm, or wheeze (e.g. Asthma, Bronchospasm).
@@ -248,9 +259,19 @@ Output STRICT JSON conforming to this schema without any markdown formatting or 
       acousticFormattedSection = `- Bioacoustic Biomarker Profile (Meyda DSP Audio Feature Extraction):\n  * Auscultation Sound: ${audioCategory} (${audioConfidence ?? 0}% confidence)\n  * Acoustic Phenotype: ${audioCategory.includes('Wheeze') ? 'High-frequency wheezing / bronchospasm harmonics' : audioCategory.includes('Wet') ? 'Productive lower respiratory secretions' : audioCategory.includes('Dry') ? 'Irritative non-productive cough' : 'Normal laminar breath sound'}`;
     }
 
+    const clinicalNotes = payload.symptoms?.clinicalNotes ||
+      payload.symptoms?.clinical_notes ||
+      payload.symptoms?.additionalNotes ||
+      payload.symptoms?.notes ||
+      payload.clinicalNotes ||
+      payload.clinical_notes ||
+      payload.additionalNotes ||
+      '';
+
     return `PATIENT PRESENTATION:
 - Presenting Symptoms: ${symptomsList.join(', ') || 'General malaise'}
 - Anatomical Location: ${anatomical}
+- Clinical Notes & Patient History: ${clinicalNotes ? `"${clinicalNotes}"` : 'None documented'}
 - Pain Scale: ${payload.symptoms?.painScale ?? 'N/A'}/10
 - Duration: ${payload.symptoms?.durationDays ?? 'N/A'} days
 - Vital Signs:

@@ -37,12 +37,20 @@ cdssRouter.post('/predict-qwen', async (req: Request, res: Response) => {
       temperature = 1.25
     } = req.body;
 
+    const extractedNotes = req.body.clinicalNotes || req.body.clinical_notes || symptoms?.clinicalNotes || symptoms?.clinical_notes || symptoms?.additionalNotes || symptoms?.notes || '';
+    if (symptoms && extractedNotes) {
+      symptoms.clinicalNotes = extractedNotes;
+      symptoms.clinical_notes = extractedNotes;
+      symptoms.additionalNotes = extractedNotes;
+    }
+
     const payload: CDSSInputPayload = {
       screeningId,
       patientId,
       institutionId: institutionId || (symptoms as any)?.institutionId,
       multimodalRiskScore: Number(multimodalRiskScore) || 0.5,
       symptoms,
+      clinicalNotes: extractedNotes,
       visionFindings,
       audioClassification,
       temperature: Number(temperature) || 1.25,
@@ -83,12 +91,20 @@ cdssRouter.post('/evaluate', async (req: Request, res: Response) => {
       useCloudModel
     } = req.body;
 
+    const extractedNotes = req.body.clinicalNotes || req.body.clinical_notes || symptoms?.clinicalNotes || symptoms?.clinical_notes || symptoms?.additionalNotes || symptoms?.notes || '';
+    if (symptoms && extractedNotes) {
+      symptoms.clinicalNotes = extractedNotes;
+      symptoms.clinical_notes = extractedNotes;
+      symptoms.additionalNotes = extractedNotes;
+    }
+
     const payload: CDSSInputPayload = {
       screeningId,
       patientId,
       institutionId: institutionId || (symptoms as any)?.institutionId,
       multimodalRiskScore: Number(multimodalRiskScore) || 0.5,
       symptoms,
+      clinicalNotes: extractedNotes,
       visionFindings,
       audioClassification,
       temperature: Number(temperature) || 1.25,

@@ -16,18 +16,23 @@ import { QwenInferenceService } from './QwenInferenceService.js';
 export class CDSSService {
   // In-memory store for air-gapped / offline fallback and automated unit testing (Guardrail 4)
   private static _inMemoryStore: Map<string, CDSSEvaluationResult> = new Map();
+  // In-flight evaluation deduplication map to prevent parallel duplicate inference calls
+  private static _inFlightEvaluations: Map<string, Promise<CDSSEvaluationResult>> = new Map();
 
   /**
    * Clears the in-memory cache to ensure unit test isolation.
    */
   public static clearInMemoryStore(): void {
     this._inMemoryStore.clear();
+    this._inFlightEvaluations.clear();
   }
 
   /**
    * Evaluates patient screening findings against WHO ICD-11 knowledge base.
    */
   public static async evaluateScreening(payload: CDSSInputPayload): Promise<CDSSEvaluationResult> {
+    const screeningKey = payload.screeningId || `anon-${payload.patientId}-${payload.multimodalRiskScore}`;
+
     // 0. Idempotency Check: Return existing evaluation if already evaluated for this screening ID
     if (payload.screeningId) {
       const existing = await this.getEvaluationByScreeningId(payload.screeningId);
@@ -36,6 +41,24 @@ export class CDSSService {
         return existing;
       }
     }
+
+    // 0b. In-flight Deduplication: Await in-progress promise if already evaluating this screening
+    if (this._inFlightEvaluations.has(screeningKey)) {
+      console.log(`⏳ [CDSSService] Joining in-flight CDSS evaluation for screening key "${screeningKey}"`);
+      return await this._inFlightEvaluations.get(screeningKey)!;
+    }
+
+    const evaluationPromise = this._executeScreeningEvaluation(payload);
+    this._inFlightEvaluations.set(screeningKey, evaluationPromise);
+
+    try {
+      return await evaluationPromise;
+    } finally {
+      this._inFlightEvaluations.delete(screeningKey);
+    }
+  }
+
+  private static async _executeScreeningEvaluation(payload: CDSSInputPayload): Promise<CDSSEvaluationResult> {
 
     const temperature = payload.temperature ?? 1.25;
 
@@ -142,6 +165,34 @@ export class CDSSService {
       }
     } catch (dbErr) {
       console.warn(`⚠️ [CDSSService] Offline / local cache fallback: ${dbErr}`);
+    }
+
+    // Also persist into health_screenings table in Supabase so subsequent queries have it preloaded
+    if (result.screeningId) {
+      try {
+        const { data: hsRow } = await supabase
+          .from('health_screenings')
+          .select('symptom_payload')
+          .eq('id', result.screeningId)
+          .maybeSingle();
+
+        if (hsRow) {
+          const p = (typeof hsRow.symptom_payload === 'object' && hsRow.symptom_payload)
+            ? { ...hsRow.symptom_payload }
+            : {};
+          p.cdss_evaluation = result;
+          p.cdssEvaluation = result;
+          await supabase
+            .from('health_screenings')
+            .update({
+              symptom_payload: p,
+              updated_at: now
+            })
+            .eq('id', result.screeningId);
+        }
+      } catch (hsErr) {
+        console.warn(`⚠️ [CDSSService] Could not update health_screenings with CDSS: ${hsErr}`);
+      }
     }
 
     this._inMemoryStore.set(result.id, result);
@@ -506,6 +557,50 @@ export class CDSSService {
     } catch (e) {
       console.warn(`⚠️ [CDSSService] Fetch by screeningId fallback: ${e}`);
     }
+
+    // Secondary fallback: Query health_screenings table for embedded cdss_evaluation or relation
+    try {
+      const { data: hs, error: hsErr } = await supabase
+        .from('health_screenings')
+        .select('id, patient_id, symptom_payload, cdss_evaluations(*)')
+        .eq('id', screeningId)
+        .maybeSingle();
+
+      if (!hsErr && hs) {
+        if (Array.isArray(hs.cdss_evaluations) && hs.cdss_evaluations.length > 0) {
+          const evalRes = await this.getEvaluationById(hs.cdss_evaluations[0].id);
+          if (evalRes) return evalRes;
+        }
+
+        const sym = (typeof hs.symptom_payload === 'object' && hs.symptom_payload)
+          ? hs.symptom_payload
+          : (typeof hs.symptom_payload === 'string' ? JSON.parse(hs.symptom_payload) : {});
+        const storedCdss = sym?.cdss_evaluation || sym?.cdssEvaluation;
+
+        if (storedCdss && typeof storedCdss === 'object') {
+          const formatted: CDSSEvaluationResult = {
+            id: storedCdss.id || `cdss-${Date.now()}`,
+            screeningId: storedCdss.screeningId || storedCdss.screening_id || screeningId,
+            patientId: storedCdss.patientId || storedCdss.patient_id || hs.patient_id || 'anonymous',
+            institutionId: storedCdss.institutionId || storedCdss.institution_id,
+            institutionName: storedCdss.institutionName || storedCdss.institution_name,
+            primaryICD11Code: storedCdss.primaryICD11Code || storedCdss.primary_icd11_code || 'MG40',
+            primaryICD11Title: storedCdss.primaryICD11Title || storedCdss.primary_icd11_title || 'Clinical Evaluation',
+            primaryICD11Uri: storedCdss.primaryICD11Uri || storedCdss.primary_icd11_uri || `${WHO_ICD11_URI_STEM}/${storedCdss.primaryICD11Code || 'MG40'}`,
+            differentialDiagnoses: storedCdss.differentialDiagnoses || storedCdss.differential_diagnoses || [],
+            treatmentPathway: storedCdss.treatmentPathway || storedCdss.treatment_pathway,
+            temperatureScaling: Number(storedCdss.temperatureScaling ?? storedCdss.temperature_scaling) || 1.25,
+            regulatoryDisclaimer: storedCdss.regulatoryDisclaimer || storedCdss.regulatory_disclaimer || MANDATORY_CDSS_DISCLAIMER,
+            attendingClinicianApproval: storedCdss.attendingClinicianApproval || storedCdss.attending_clinician_approval || null,
+            createdAt: storedCdss.createdAt || storedCdss.created_at || new Date().toISOString(),
+            updatedAt: storedCdss.updatedAt || storedCdss.updated_at || new Date().toISOString()
+          };
+          this._inMemoryStore.set(formatted.id, formatted);
+          this._inMemoryStore.set(screeningId, formatted);
+          return formatted;
+        }
+      }
+    } catch (_) {}
 
     return null;
   }

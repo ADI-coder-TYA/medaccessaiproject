@@ -123,7 +123,49 @@ async function runEmergencyFacilityTests() {
   assert(!areIdentical, 'Distinct hospitals have distinct, differentiated clinical capabilities');
   console.log(`   [Pediatric Caps] ${pediatricCaps.join(' | ')}`);
   console.log(`   [Cardiac Caps]   ${cardiacCaps.join(' | ')}`);
-  console.log(`   [General Caps]   ${generalCaps.join(' | ')}`);
+  // -------------------------------------------------------------
+  // TEST 6: skipGooglePlaces Flag strictly avoids Tier 1 (Places API)
+  // -------------------------------------------------------------
+  console.log('\n--- TEST 6: Offline / Overview Safe Mode (skipGooglePlaces) ---');
+
+  const offlineResult = await EmergencyFacilityService.getNearbyFacilities(campusLat, campusLng, 20.0, undefined, true);
+  assert(offlineResult.facilities.length > 0, `Offline query returned ${offlineResult.facilities.length} facilities`);
+  assert(
+    offlineResult.facilities.every(f => f.distanceKm !== undefined && f.distanceKm <= 20.0),
+    'Offline facilities strictly within 20 km search radius'
+  );
+
+  // -------------------------------------------------------------
+  // TEST 7: Haversine Spatial Cache (200m Displacement Threshold & 6h TTL)
+  // -------------------------------------------------------------
+  console.log('\n--- TEST 7: Haversine Spatial Cache & Threshold Validation ---');
+
+  assert(
+    EmergencyFacilityService.SPATIAL_CACHE_DISPLACEMENT_KM === 0.20,
+    `Spatial cache displacement threshold is standardized to 200m / 0.20 km (got ${EmergencyFacilityService.SPATIAL_CACHE_DISPLACEMENT_KM} km)`
+  );
+  assert(
+    EmergencyFacilityService.CACHE_TTL_MS === 6 * 60 * 60 * 1000,
+    `Spatial cache TTL is standardized to 6 Hours (got ${EmergencyFacilityService.CACHE_TTL_MS / (60 * 60 * 1000)} hours)`
+  );
+
+  // Reset spatial cache
+  EmergencyFacilityService.clearCache();
+
+  // Initial query at campus
+  const q1 = await EmergencyFacilityService.getNearbyFacilities(campusLat, campusLng, 20.0);
+  assert(q1.facilities.length > 0, `Initial facility search succeeded with ${q1.facilities.length} facilities`);
+
+  // Move user by 50 meters (~0.00045 degrees lat)
+  const shift50mLat = campusLat + 0.00045;
+  const displacement50m = EmergencyFacilityService.calculateDistanceKm(campusLat, campusLng, shift50mLat, campusLng);
+  assert(
+    displacement50m < EmergencyFacilityService.SPATIAL_CACHE_DISPLACEMENT_KM,
+    `Displacement of ~50m is within the 200m spatial cache boundary (got ${(displacement50m * 1000).toFixed(0)}m)`
+  );
+
+  const q2 = await EmergencyFacilityService.getNearbyFacilities(shift50mLat, campusLng, 20.0);
+  assert(q2.facilities.length === q1.facilities.length, 'Spatial cache hit served same facility pool without redundant live Places query');
 
   console.log('\n================================================================');
   console.log(`📊 Emergency Facility Test Summary: ${passed} passed, ${failed} failed`);

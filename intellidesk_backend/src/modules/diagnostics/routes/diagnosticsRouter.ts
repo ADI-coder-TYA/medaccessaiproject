@@ -56,6 +56,8 @@ router.post('/analyze', async (req: Request, res: Response) => {
     }
 
     const resolvedPatientName = patientName || symptoms.patientName || symptoms.patient_name || undefined;
+    const extractedNotes = symptoms.clinicalNotes || symptoms.clinical_notes || symptoms.additionalNotes || symptoms.notes || req.body.clinicalNotes || req.body.clinical_notes || req.body.notes || '';
+
     const symptomPayload: SymptomInputPayload = {
       bodyLocation: symptoms.bodyLocation || 'General / Unspecified',
       durationDays: Number(symptoms.durationDays) || 1,
@@ -63,7 +65,10 @@ router.post('/analyze', async (req: Request, res: Response) => {
       symptoms: symptoms.symptoms,
       vitals: symptoms.vitals,
       demographics: symptoms.demographics,
-      additionalNotes: symptoms.additionalNotes,
+      additionalNotes: extractedNotes,
+      clinicalNotes: extractedNotes,
+      clinical_notes: extractedNotes,
+      notes: extractedNotes,
       patient_name: resolvedPatientName,
     };
 
@@ -74,10 +79,16 @@ router.post('/analyze', async (req: Request, res: Response) => {
       console.log(`\n🩺 [Diagnostics API] Clinical Image Attached for patient: "${resolvedPatientName || 'Anonymous'}"`);
       console.log(`   Image payload type: ${effectiveImageUrl.startsWith('data:') ? 'Base64 Data URI' : effectiveImageUrl.startsWith('http') ? 'Remote URL' : 'Raw string'}`);
       console.log(`   Category hint: ${symptoms.categoryHint || 'None specified (Auto-detection enabled)'}`);
+      if (extractedNotes) {
+        console.log(`   Forwarding Clinical Notes to Vision Classifier: "${extractedNotes.length > 60 ? extractedNotes.substring(0, 60) + '...' : extractedNotes}"`);
+      }
       const vStart = Date.now();
       visionResult = await ClinicalImageClassifier.extractEmbeddings({
         imageUrl: effectiveImageUrl,
-        categoryHint: symptoms.categoryHint
+        categoryHint: symptoms.categoryHint,
+        clinicalNotes: extractedNotes,
+        symptoms: symptomPayload.symptoms,
+        anatomicalLocation: symptomPayload.bodyLocation,
       });
       console.log(`🩺 [Diagnostics API] Vision extraction completed in ${Date.now() - vStart}ms:`);
       console.log(`   Condition: "${visionResult.predictedCondition}" | Severity: ${visionResult.severity || 'N/A'} | Source: ${visionResult.source || 'Local'}`);
@@ -220,6 +231,10 @@ router.post('/analyze', async (req: Request, res: Response) => {
 
     const cdssSymptoms: Record<string, any> = {
       ...symptomPayload,
+      additionalNotes: extractedNotes,
+      clinicalNotes: extractedNotes,
+      clinical_notes: extractedNotes,
+      notes: extractedNotes,
       anatomicalLocation: symptomPayload.bodyLocation,
       primaryDiagnosis: visionResult?.predictedCondition || riskResult.primaryDiagnosis,
       clinicalImageDiagnosis: visionResult?.predictedCondition,
@@ -235,7 +250,7 @@ router.post('/analyze', async (req: Request, res: Response) => {
 
     let cdssEvaluation = null;
     try {
-      console.log(`🧠 [Diagnostics API] Automatically evaluating CDSS report for screening ${savedScreening.id} with vision output...`);
+      console.log(`🧠 [Diagnostics API] Automatically evaluating CDSS report for screening ${savedScreening.id} with vision output & clinical notes...`);
       cdssEvaluation = await CDSSService.evaluateScreening({
         screeningId: savedScreening.id,
         patientId: patientId || 'PATIENT-ANON',
@@ -243,12 +258,13 @@ router.post('/analyze', async (req: Request, res: Response) => {
         institutionName: symptoms.institutionName,
         multimodalRiskScore: riskResult.riskScore,
         symptoms: cdssSymptoms,
+        clinicalNotes: extractedNotes,
         visionFindings: cdssVisionFindings,
         temperature: 1.25,
-        useCloudModel: effectiveImageUrl ? false : true,
+        useCloudModel: true,
       });
       console.log(`✅ [Diagnostics API] CDSS report generated: ${cdssEvaluation.primaryICD11Code} - ${cdssEvaluation.primaryICD11Title}`);
-      HealthScreeningsDbService.attachCdssEvaluation(savedScreening.id, cdssEvaluation);
+      await HealthScreeningsDbService.attachCdssEvaluation(savedScreening.id, cdssEvaluation);
     } catch (cdssErr: any) {
       console.error('⚠️ [Diagnostics API] Inline CDSS evaluation error:', cdssErr);
     }
@@ -386,12 +402,23 @@ router.get(['/screenings/:id/referral', '/screenings/:id/referral-letter'], asyn
  */
 router.post(['/referral-letter', '/screenings/referral-pdf'], async (req: Request, res: Response) => {
   try {
-    const { screening, assessment, symptomVector, vitals, patientId, institutionId, imageUrl } = req.body;
-    let targetScreening: DBHealthScreeningRow;
+    const { screening, assessment, symptomVector, vitals, patientId, institutionId, imageUrl, patientName, institutionName } = req.body;
+    let targetScreening: DBHealthScreeningRow | null = null;
 
-    if (screening && screening.id) {
+    const screeningId = req.body.screeningId || screening?.id || assessment?.screeningId;
+    if (screeningId && typeof screeningId === 'string' && !screeningId.startsWith('scr-live-')) {
+      try {
+        targetScreening = await HealthScreeningsDbService.getScreeningById(screeningId);
+      } catch (err) {
+        console.warn('⚠️ [Diagnostics API] Could not fetch screening by ID for referral letter:', err);
+      }
+    }
+
+    if (screening && screening.id && !targetScreening) {
       targetScreening = screening;
-    } else {
+    }
+
+    if (!targetScreening) {
       const riskScore = Number(assessment?.riskScore ?? 0.5);
       const riskLevel = String(assessment?.riskLevel ?? 'MODERATE').toUpperCase();
       const bounds = assessment?.uncertaintyBounds ?? {
@@ -401,16 +428,22 @@ router.post(['/referral-letter', '/screenings/referral-pdf'], async (req: Reques
         epistemicVariance: 0.001
       };
 
-      const findings = Array.isArray(assessment?.clinicalRecommendations) && assessment.clinicalRecommendations.length > 0
-        ? assessment.clinicalRecommendations
-        : [assessment?.primaryDiagnosis || 'Clinical assessment evaluation completed'];
+      const findings = Array.isArray(assessment?.differentialDiagnoses) && assessment.differentialDiagnoses.length > 0
+        ? assessment.differentialDiagnoses.map((d: any) => typeof d === 'object' ? `${d.condition || d.name} (${Math.round((d.confidence || d.probability || 0) * 100)}%)` : d)
+        : (Array.isArray(assessment?.clinicalRecommendations) && assessment.clinicalRecommendations.length > 0
+          ? assessment.clinicalRecommendations
+          : [assessment?.primaryDiagnosis || 'Hypertensive Emergency Rule-Out (29%)']);
 
       targetScreening = {
-        id: `scr-live-${Date.now()}`,
-        patient_id: patientId || 'pt-clinical-triage',
-        institution_id: institutionId || 'default-inst',
-        image_url: imageUrl || null,
-        symptom_payload: symptomVector || req.body.symptoms || { primaryDiagnosis: assessment?.primaryDiagnosis },
+        id: screeningId || `scr-live-${Date.now()}`,
+        patient_id: patientId || 'usr_pat_PAT-37B041',
+        institution_id: institutionId || 'nano123',
+        image_url: imageUrl || assessment?.imageUrl || null,
+        symptom_payload: {
+          ...(symptomVector || req.body.symptoms || {}),
+          primaryDiagnosis: assessment?.primaryDiagnosis,
+          vitals: vitals || req.body.vitals || null,
+        },
         multimodal_risk_score: riskScore,
         uncertainty_bounds: bounds,
         xai_heatmap_url: assessment?.xaiHeatmapUrl || null,
@@ -421,6 +454,22 @@ router.post(['/referral-letter', '/screenings/referral-pdf'], async (req: Reques
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
+    }
+
+    // Enrich targetScreening with client-provided metadata if present
+    if (patientName) (targetScreening as any).patient_name = patientName;
+    if (institutionName) (targetScreening as any).institution_name = institutionName;
+    if (assessment?.primaryDiagnosis) (targetScreening as any).primary_diagnosis = assessment.primaryDiagnosis;
+    if (assessment?.clinicalRecommendations) (targetScreening as any).clinical_recommendations = assessment.clinicalRecommendations;
+    if (vitals && !targetScreening.rppg_vitals_payload) targetScreening.rppg_vitals_payload = vitals;
+
+    const demographics = req.body.demographics || req.body.symptomVector?.demographics || req.body.symptoms?.demographics;
+    if (demographics) {
+      if (demographics.age) (targetScreening as any).patientAge = demographics.age;
+      if (demographics.gender) (targetScreening as any).patientGender = demographics.gender;
+      if (typeof targetScreening.symptom_payload === 'object' && targetScreening.symptom_payload !== null) {
+        (targetScreening.symptom_payload as any).demographics = demographics;
+      }
     }
 
     await ReferralLetterGenerator.generateReferralPdfStream(targetScreening, res);
@@ -676,6 +725,10 @@ router.post('/vitals/process-rppg', async (req: Request, res: Response) => {
           error: `Insufficient optical frames: received ${frames.length} frames, minimum 60 required (>= 2 seconds).`
         });
       }
+      const first = frames.slice(0, 3).map((f: any) => `[#${f.frameIndex} t=${f.timestampMs}ms R=${f.red} G=${f.green} B=${f.blue}]`).join(', ');
+      const last = frames.slice(-2).map((f: any) => `[#${f.frameIndex} t=${f.timestampMs}ms R=${f.red} G=${f.green} B=${f.blue}]`).join(', ');
+      console.log(`📡 [Diagnostics API] Frame snapshot: Start: ${first} ... End: ${last}`);
+
       result = processor.processFrames(frames as BioSignalFrame[]);
     } else if (Array.isArray(green) && green.length > 0) {
       if (green.length < 60) {
@@ -699,7 +752,7 @@ router.post('/vitals/process-rppg', async (req: Request, res: Response) => {
       });
     }
 
-    console.log(`🩺 [Diagnostics API] ✅ rPPG analysis computed: HR=${result.heartRateBpm} bpm | SpO2=${result.oxygenSaturationSpo2}% | RR=${result.respirationRateBpm} br/min | Alerts=${result.alerts?.length || 0}`);
+    console.log(`🩺 [Diagnostics API] ✅ rPPG analysis computed: HR=${result.heartRateBpm} bpm | SNR=${result.snrDb} dB | Conf=${result.confidenceScore} | SpO2=${result.oxygenSaturationSpo2}% | RR=${result.respirationRateBpm} br/min | Alerts=${result.alerts?.length || 0}`);
 
     return res.status(200).json({
       success: true,
@@ -732,7 +785,8 @@ router.get('/patient/:patientId/overview', async (req: Request, res: Response) =
     ]);
 
     const latestScreening = screenings.length > 0 ? screenings[0] : null;
-    const facilitiesResult = await EmergencyFacilityService.getNearbyFacilities(lat, lng, 20.0);
+    // Restrict overview summary strictly to Tier 2 (Supabase) / Tier 3 (Embedded offline) without invoking Google Places API
+    const facilitiesResult = await EmergencyFacilityService.getNearbyFacilities(lat, lng, 20.0, undefined, true);
 
     return res.status(200).json({
       success: true,

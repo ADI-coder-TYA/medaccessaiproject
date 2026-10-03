@@ -28,14 +28,40 @@ export class HealthScreeningsDbService {
   private static _localCdssMap: Map<string, any> = new Map();
 
   /**
-   * Attaches an evaluated CDSS report to a screening for immediate caching and retrieval.
+   * Attaches an evaluated CDSS report to a screening for immediate caching and retrieval,
+   * updating both memory maps and persisting into Supabase health_screenings table.
    */
-  public static attachCdssEvaluation(screeningId: string, evaluation: any): void {
+  public static async attachCdssEvaluation(screeningId: string, evaluation: any): Promise<void> {
     if (!screeningId || !evaluation) return;
     this._localCdssMap.set(screeningId, evaluation);
     const existing = this._localCache.get(screeningId);
     if (existing) {
       (existing as any).cdss_evaluation = evaluation;
+      (existing as any).cdssEvaluation = evaluation;
+      (existing as any).cdss_evaluations = [evaluation];
+    }
+
+    try {
+      const { data: current } = await supabase
+        .from('health_screenings')
+        .select('symptom_payload')
+        .eq('id', screeningId)
+        .maybeSingle();
+
+      if (current) {
+        const payload = this.safeJsonParse<Record<string, any>>(current.symptom_payload, {});
+        payload.cdss_evaluation = evaluation;
+        payload.cdssEvaluation = evaluation;
+        await supabase
+          .from('health_screenings')
+          .update({
+            symptom_payload: payload,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', screeningId);
+      }
+    } catch (err: any) {
+      console.warn(`⚠️ [Diagnostics DB] Could not persist CDSS into health_screenings symptom_payload: ${err?.message}`);
     }
   }
 
@@ -63,6 +89,63 @@ export class HealthScreeningsDbService {
   }
 
   /**
+   * Normalizes raw CDSS evaluations from Supabase (or memory) to supply both
+   * snake_case and camelCase attributes, ensuring seamless cross-platform consumption.
+   */
+  public static normalizeCdssEvaluation(rawCdss: any, fallbackScreeningId?: string, fallbackPatientId?: string): any {
+    if (!rawCdss) return null;
+    const parsed = this.safeJsonParse<Record<string, any>>(rawCdss, {});
+    if (!parsed || Object.keys(parsed).length === 0) return null;
+
+    const primaryCode = parsed.primaryICD11Code || parsed.primary_icd11_code || '';
+    const ddx = parsed.differentialDiagnoses || parsed.differential_diagnoses || [];
+    const pathway = parsed.treatmentPathway || parsed.treatment_pathway || {};
+    const primaryTitle = parsed.primaryICD11Title || parsed.primary_icd11_title ||
+      (Array.isArray(ddx) && ddx[0]?.title) || pathway.primaryTitle || pathway.primary_title || primaryCode || 'Clinical Assessment';
+    const uri = parsed.primaryICD11Uri || parsed.primary_icd11_uri ||
+      (primaryCode ? `http://id.who.int/icd/release/11/mms/${primaryCode}` : 'http://id.who.int/icd/release/11/mms');
+    const screeningId = parsed.screeningId || parsed.screening_id || fallbackScreeningId || null;
+    const patientId = parsed.patientId || parsed.patient_id || fallbackPatientId || 'anonymous';
+    const disclaimer = parsed.regulatoryDisclaimer || parsed.regulatory_disclaimer ||
+      'AI Clinical Decision Support Tool — For Licensed Practitioner Reference Only. Requires Attending Physician Validation.';
+
+    return {
+      ...parsed,
+      id: parsed.id || `cdss-${Date.now()}`,
+      screeningId,
+      screening_id: screeningId,
+      patientId,
+      patient_id: patientId,
+      institutionId: parsed.institutionId || parsed.institution_id || null,
+      institution_id: parsed.institutionId || parsed.institution_id || null,
+      institutionName: parsed.institutionName || parsed.institution_name || null,
+      institution_name: parsed.institutionName || parsed.institution_name || null,
+      primaryICD11Code: primaryCode,
+      primary_icd11_code: primaryCode,
+      primaryICD11Title: primaryTitle,
+      primary_icd11_title: primaryTitle,
+      primaryICD11Uri: uri,
+      primary_icd11_uri: uri,
+      differentialDiagnoses: ddx,
+      differential_diagnoses: ddx,
+      treatmentPathway: pathway,
+      treatment_pathway: pathway,
+      temperatureScaling: Number(parsed.temperatureScaling ?? parsed.temperature_scaling) || 1.25,
+      temperature_scaling: Number(parsed.temperatureScaling ?? parsed.temperature_scaling) || 1.25,
+      regulatoryDisclaimer: disclaimer,
+      regulatory_disclaimer: disclaimer,
+      modelUsed: parsed.modelUsed || parsed.model_used || null,
+      model_used: parsed.modelUsed || parsed.model_used || null,
+      attendingClinicianApproval: parsed.attendingClinicianApproval || parsed.attending_clinician_approval || null,
+      attending_clinician_approval: parsed.attendingClinicianApproval || parsed.attending_clinician_approval || null,
+      createdAt: parsed.createdAt || parsed.created_at || new Date().toISOString(),
+      created_at: parsed.createdAt || parsed.created_at || new Date().toISOString(),
+      updatedAt: parsed.updatedAt || parsed.updated_at || new Date().toISOString(),
+      updated_at: parsed.updatedAt || parsed.updated_at || new Date().toISOString(),
+    };
+  }
+
+  /**
    * Normalizes raw database rows from Supabase, parsing stringified JSON columns,
    * standardizing vital signs across naming conventions, and populating clinical findings.
    */
@@ -75,11 +158,15 @@ export class HealthScreeningsDbService {
     const physiologicalAlerts = this.safeJsonParse<any[]>(raw.physiological_alerts, []);
     let rppgVitals = this.safeJsonParse<Record<string, any> | null>(raw.rppg_vitals_payload, null);
 
-    const cdssEval = raw.cdss_evaluation ||
+    const rawCdss = raw.cdss_evaluation ||
+      raw.cdssEvaluation ||
       (Array.isArray(raw.cdss_evaluations) && raw.cdss_evaluations.length > 0 ? raw.cdss_evaluations[0] : null) ||
+      symptomPayload.cdss_evaluation ||
+      symptomPayload.cdssEvaluation ||
       this._localCdssMap.get(raw.id) || null;
 
     const pid = raw.patient_id || '';
+    const cdssEval = this.normalizeCdssEvaluation(rawCdss, raw.id, pid);
     const resolvedName =
       raw.patient_name ||
       raw.patientName ||
@@ -174,6 +261,8 @@ export class HealthScreeningsDbService {
       physiological_alerts: physiologicalAlerts,
       rppg_vitals_payload: rppgVitals,
       cdss_evaluation: cdssEval,
+      cdssEvaluation: cdssEval,
+      cdss_evaluations: cdssEval ? [cdssEval] : (Array.isArray(raw.cdss_evaluations) ? raw.cdss_evaluations : []),
     };
 
     return normalizedRow;
@@ -292,10 +381,18 @@ export class HealthScreeningsDbService {
       ];
     }
 
+    let targetInstId = screening.institutionId || 'nano123';
+    if (!screening.institutionId || screening.institutionId === 'inst-001' || screening.institutionId === 'default-inst') {
+      const pId = (screening.patientId || '').replace(/^usr_pat_/, '');
+      if (pId.startsWith('PAT-2026-') || pId === '001') {
+        targetInstId = 'nano123';
+      }
+    }
+
     const payload = {
       patient_id: screening.patientId || null,
       previous_screening_id: previousScreeningId,
-      institution_id: screening.institutionId || 'edu-admin-123',
+      institution_id: targetInstId,
       image_url: screening.imageUrl || null,
       symptom_payload: screening.symptomPayload,
       multimodal_risk_score: screening.multimodalRiskScore,
@@ -349,10 +446,11 @@ export class HealthScreeningsDbService {
         candidates.add(stripped);
         candidates.add(`usr_pat_${stripped}`);
 
-        // Common demo aliases mapped to Alex Rivera canonical IDs
-        const demoSet = ['demo-patient-001', 'pat-demo-01', 'usr_pat_001', 'PAT-2026-001', 'usr_pat_PAT-2026-001', 'PATIENT-DEMO', 'PATIENT-ANON'];
-        if (demoSet.includes(raw) || demoSet.includes(stripped)) {
-          demoSet.forEach(d => candidates.add(d));
+
+        // Common demo aliases mapped to Priya Sharma canonical IDs
+        const priyaSet = ['demo-patient-002', 'pat-demo-02', 'usr_pat_002', '002', 'PAT-2026-002', 'usr_pat_PAT-2026-002', 'PAT-9470', 'usr_pat_PAT-9470'];
+        if (priyaSet.includes(raw) || priyaSet.includes(stripped)) {
+          priyaSet.forEach(d => candidates.add(d));
         }
       }
 
@@ -505,16 +603,9 @@ export class HealthScreeningsDbService {
   public static async _buildPatientNameMap(institutionId?: string): Promise<Map<string, string>> {
     const nameMap = new Map<string, string>();
 
-    // Canonical default roster mappings
+    // Canonical roster mappings (verified active patients)
     const DEFAULT_NAME_MAP: Record<string, string> = {
-      'PAT-2026-001': 'Alex Rivera',
       'PAT-2026-002': 'Priya Sharma',
-      'PAT-2026-003': 'Marcus Chen',
-      'PAT-2026-004': 'Elena Rostova',
-      'PAT-2026-005': 'Jordan Taylor',
-      'PAT-2026-006': 'Sophia Rodriguez',
-      'PAT-2026-007': 'Rohan Gupta',
-      'PAT-2026-008': 'Maya Lin',
     };
 
     for (const [id, name] of Object.entries(DEFAULT_NAME_MAP)) {
@@ -522,8 +613,6 @@ export class HealthScreeningsDbService {
       nameMap.set(`usr_pat_${id}`, name);
       nameMap.set(`pat-${id.toLowerCase()}`, name);
     }
-    nameMap.set('usr_pat_001', 'Alex Rivera');
-    nameMap.set('001', 'Alex Rivera');
 
     // 1. Fetch from Supabase profiles
     try {
@@ -573,6 +662,19 @@ export class HealthScreeningsDbService {
   }
 
   /**
+   * Resolves the primary institution ID and associated aliases (e.g. 'nano123' and default 'inst-001').
+   */
+  public static getInstitutionAliases(institutionId?: string): string[] | null {
+    if (!institutionId || institutionId === 'ALL' || institutionId === '*') return null;
+    const clean = institutionId.trim();
+    const primaryCampusGroup = ['nano123', 'inst-001', 'default-inst', 'edu-admin-123', 'default'];
+    if (primaryCampusGroup.includes(clean)) {
+      return primaryCampusGroup;
+    }
+    return [clean];
+  }
+
+  /**
    * Retrieves all health screenings strictly for the requested institution (newest first).
    * Enriches records with real patient names and normalized clinical findings.
    */
@@ -584,6 +686,7 @@ export class HealthScreeningsDbService {
   }): Promise<DBHealthScreeningRow[]> {
     const institutionId = options?.institutionId;
     const patientNameMap = await this._buildPatientNameMap(institutionId);
+    const instAliases = this.getInstitutionAliases(institutionId);
 
     try {
       let data: any = null;
@@ -595,8 +698,12 @@ export class HealthScreeningsDbService {
           .select('*, cdss_evaluations(*)')
           .order('created_at', { ascending: false });
 
-        if (institutionId) {
-          q = q.eq('institution_id', institutionId);
+        if (instAliases && instAliases.length > 0) {
+          if (instAliases.length === 1) {
+            q = q.eq('institution_id', instAliases[0]);
+          } else {
+            q = q.in('institution_id', instAliases);
+          }
         }
         if (options?.riskLevel && options.riskLevel !== 'ALL') {
           q = q.eq('risk_level', options.riskLevel.toUpperCase());
@@ -616,8 +723,12 @@ export class HealthScreeningsDbService {
           .select('*')
           .order('created_at', { ascending: false });
 
-        if (institutionId) {
-          qFallback = qFallback.eq('institution_id', institutionId);
+        if (instAliases && instAliases.length > 0) {
+          if (instAliases.length === 1) {
+            qFallback = qFallback.eq('institution_id', instAliases[0]);
+          } else {
+            qFallback = qFallback.in('institution_id', instAliases);
+          }
         }
         if (options?.riskLevel && options.riskLevel !== 'ALL') {
           qFallback = qFallback.eq('risk_level', options.riskLevel.toUpperCase());
@@ -662,8 +773,8 @@ export class HealthScreeningsDbService {
       .map((s) => this.normalizeScreeningRow(s, patientNameMap))
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-    if (institutionId) {
-      list = list.filter((s) => s.institution_id === institutionId);
+    if (instAliases && instAliases.length > 0) {
+      list = list.filter((s) => s.institution_id && instAliases.includes(s.institution_id));
     }
     if (options?.riskLevel && options.riskLevel !== 'ALL') {
       list = list.filter((s) => s.risk_level?.toUpperCase() === options.riskLevel!.toUpperCase());
@@ -691,15 +802,30 @@ export class HealthScreeningsDbService {
     const patientNameMap = await this._buildPatientNameMap(institutionId);
     const patientMap = new Map<string, DBHealthScreeningRow[]>();
 
-    for (const sc of allScreenings) {
-      const pid = sc.patient_id || 'unknown-patient';
-      if (!patientMap.has(pid)) {
-        patientMap.set(pid, []);
+    const canonicalKey = (rawPid: string, patientName?: string) => {
+      let stripped = rawPid.replace(/^usr_pat_/, '').trim();
+      if (
+        stripped === '002' ||
+        stripped === 'PAT-9470' ||
+        stripped === 'demo-patient-002' ||
+        stripped === 'pat-demo-02' ||
+        (patientName && patientName.toLowerCase().includes('priya sharma'))
+      ) {
+        return 'PAT-2026-002';
       }
-      patientMap.get(pid)!.push(sc);
+      return stripped || 'unknown-patient';
+    };
+
+    for (const sc of allScreenings) {
+      const pName = sc.patient_name || sc.symptom_payload?.patient_name || sc.symptom_payload?.patientName;
+      const cKey = canonicalKey(sc.patient_id || 'unknown-patient', pName);
+      if (!patientMap.has(cKey)) {
+        patientMap.set(cKey, []);
+      }
+      patientMap.get(cKey)!.push(sc);
     }
 
-    const patientSummaries = Array.from(patientMap.entries()).map(([pid, list]) => {
+    const patientSummaries = Array.from(patientMap.entries()).map(([cKey, list]) => {
       list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       const latest = list[0];
       const highestRiskScore = Math.max(...list.map((s) => s.multimodal_risk_score || 0));
@@ -714,17 +840,20 @@ export class HealthScreeningsDbService {
       const primaryDiagnosis = primaryFinding?.diagnosis || primaryFinding?.condition || 'Multimodal Clinical Checkup';
       const primaryICD11 = primaryFinding?.icd11Code || primaryFinding?.code || 'MG40';
 
+      const pid = latest.patient_id || cKey;
       const patientName =
         latest.patient_name ||
         (latest as any).patientName ||
         latest.symptom_payload?.patient_name ||
         latest.symptom_payload?.patientName ||
+        patientNameMap.get(cKey) ||
         patientNameMap.get(pid) ||
         patientNameMap.get(pid.replace('usr_pat_', '')) ||
-        (pid !== 'unknown-patient' ? `Patient ${pid.replace('usr_pat_', '')}` : 'Anonymous Patient');
+        (cKey !== 'unknown-patient' ? `Patient ${cKey}` : 'Anonymous Patient');
 
       return {
         patientId: pid,
+        canonicalPatientId: cKey,
         patientName,
         institutionId: latest.institution_id || institutionId || 'nano123',
         totalDiagnoses: list.length,

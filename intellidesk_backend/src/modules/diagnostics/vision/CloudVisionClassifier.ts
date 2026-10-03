@@ -26,20 +26,28 @@ export class CloudVisionClassifier {
    */
   public static async classifyClinicalImage(
     rawBuffer: Buffer,
-    categoryHint?: ClinicalImageCategory
+    categoryHint?: ClinicalImageCategory,
+    clinicalContext?: {
+      clinicalNotes?: string;
+      symptoms?: string[];
+      anatomicalLocation?: string;
+    }
   ): Promise<CloudVisionClassificationResult> {
     const startTime = Date.now();
     console.log(`\n👁️ ════════════════════════════════════════════════════════════════`);
     console.log(`👁️ [CloudVisionClassifier] INCOMING CLINICAL IMAGE INTAKE`);
     console.log(`👁️   Raw buffer size: ${(rawBuffer.length / 1024).toFixed(1)} KB (${rawBuffer.length} bytes)`);
     console.log(`👁️   Category Hint: ${categoryHint || 'AUTO_DETECT / GENERAL'}`);
+    if (clinicalContext?.clinicalNotes) {
+      console.log(`👁️   Clinical Notes: "${clinicalContext.clinicalNotes}"`);
+    }
     console.log(`👁️   Cloud VLM Status: ${this.isCloudConfigured() ? 'CONFIGURED (HF_TOKEN present)' : 'OFFLINE (Local fallback only)'}`);
 
     // 1. Try Hugging Face SOTA Multimodal Vision Model (Qwen/Qwen2.5-VL-72B-Instruct)
     if (this.isCloudConfigured()) {
       try {
         console.log(`🚀 [CloudVisionClassifier] Step 1: Preprocessing & dispatching to VLM [${this.CLOUD_MODEL_ID}]...`);
-        const cloudResult = await this.callCloudVisionModel(rawBuffer, categoryHint);
+        const cloudResult = await this.callCloudVisionModel(rawBuffer, categoryHint, clinicalContext);
         cloudResult.latencyMs = Date.now() - startTime;
         console.log(`✅ [CloudVisionClassifier] Step 1 Succeeded: High-fidelity clinical assessment received in ${cloudResult.latencyMs}ms:`);
         console.log(`   ├─ Diagnosed Condition: "${cloudResult.condition}"`);
@@ -77,7 +85,12 @@ export class CloudVisionClassifier {
    */
   private static async callCloudVisionModel(
     rawBuffer: Buffer,
-    categoryHint?: ClinicalImageCategory
+    categoryHint?: ClinicalImageCategory,
+    clinicalContext?: {
+      clinicalNotes?: string;
+      symptoms?: string[];
+      anatomicalLocation?: string;
+    }
   ): Promise<CloudVisionClassificationResult> {
     const token = process.env.HF_TOKEN!.trim();
     const prepStart = Date.now();
@@ -103,6 +116,9 @@ The image may depict:
 5. General Clinical Manifestations (e.g., Peripheral Edema, Hematoma, Localized Erythema).
 
 Category hint from patient triage intake: ${categoryHint || 'General clinical triage'}.
+Anatomical location: ${clinicalContext?.anatomicalLocation || 'Not specified'}.
+Reported symptoms: ${(clinicalContext?.symptoms || []).join(', ') || 'None specified'}.
+Patient clinical notes & history: ${clinicalContext?.clinicalNotes ? `"${clinicalContext.clinicalNotes}"` : 'None documented'}.
 
 Evaluate the photograph and output STRICT JSON matching this schema:
 {
@@ -137,7 +153,12 @@ Do not include markdown or explanations. Output valid JSON only.`;
             content: [
               {
                 type: 'text',
-                text: 'Analyze this clinical medical photograph and provide differential diagnosis and severity triage.'
+                text: `Analyze this clinical medical photograph taking into account the patient's subjective presentation and clinical notes:
+- Anatomical Site: ${clinicalContext?.anatomicalLocation || 'General'}
+- Reported Symptoms: ${(clinicalContext?.symptoms || []).join(', ') || 'N/A'}
+- Patient Clinical Notes: ${clinicalContext?.clinicalNotes ? `"${clinicalContext.clinicalNotes}"` : 'None documented'}
+
+Provide differential diagnosis, objective visual findings, clinical severity triage, and recommended action.`
               },
               {
                 type: 'image_url',

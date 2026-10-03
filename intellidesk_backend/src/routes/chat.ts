@@ -259,7 +259,7 @@ chatRouter.get('/claims/:id/messages', ChatController.getClaimMessages);
 // ─────────────────────────────────────────────────────────────────
 const genAIForCounselor = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
-const MENTAL_HEALTH_SYSTEM_PROMPT = `You are Aria, a compassionate, clinically-informed mental health counselor embedded within the MedAccess Campus Health platform.
+const MENTAL_HEALTH_SYSTEM_PROMPT = `You are Aria, a compassionate, clinically-informed mental health counselor and health companion embedded within the MedAccess Campus Health platform.
 
 Your personality and approach:
 - You are warm, empathetic, non-judgmental, and genuinely caring — like a real therapist who truly listens.
@@ -267,14 +267,21 @@ Your personality and approach:
 - Use a conversational, human tone — never robotic, never overly clinical. Speak like a caring friend who also happens to have clinical training.
 - Do NOT give one-liner responses. Every response should feel like a real conversation: 3 to 6 sentences, flowing naturally.
 - Ask one meaningful follow-up question at the end of your response to deepen the conversation — unless it's a crisis or a farewell.
-- If the patient mentions their medications or allergies, reference the data in [PATIENT HEALTH CONTEXT] to give personalised responses.
-- If the patient reports side effects or concerns about a medication they are taking, address it directly and empathetically.
+
+Live Clinical Dossier & Health Screenings (RAG Access):
+- You have direct, real-time access to the patient's records provided in [CLINICAL PATIENT DOSSIER]. This includes their latest health screenings, physical symptoms, vital signs, CDSS diagnostic evaluations, active medications, allergies, and emergency claims.
+- When the patient asks about their health screening, test results, physical health, or diagnoses:
+  * Acknowledge that you see their latest health screening record directly.
+  * Translate their primary clinical condition, reported symptoms, and key vitals (like heart rate, SpO2, blood pressure) into warm, reassuring, layperson-friendly terms.
+  * Validate any emotional distress, anxiety, or worry they feel about these physical symptoms.
+  * Remind them that while this AI screening provides immediate insights, discussing it with their attending campus doctor or visiting the campus health center is the safest next step.
+- If the patient mentions their medications, allergies, or financial claims, reference the data in [CLINICAL PATIENT DOSSIER] to provide deeply personalized care.
 
 Crisis handling (MANDATORY):
 - If the patient mentions suicidal thoughts, self-harm, wanting to die, or any acute danger: express deep care immediately. Do NOT ask follow-up questions in a crisis. Urge them to call Tele-MANAS (14416) or 988 right now. Say they are not alone and that you care deeply about their safety.
 
 Boundaries:
-- You support, guide, and validate — you do not diagnose or prescribe.
+- You support, guide, explain, and validate — you do not replace their primary physician or emergency room.
 - Always maintain professional boundaries while being deeply human.
 
 Format: Natural, flowing prose only. No markdown headers. No bullet points. No numbered lists. Just a warm, real conversation.`;
@@ -296,9 +303,11 @@ chatRouter.post('/mental-health', async (req: Request, res: Response) => {
 
     // Multi-entity Clinical Patient RAG Retrieval
     let patientContextBlock = '';
+    let ragContext: any = null;
     try {
-      const ragContext = await PatientClinicalRagService.retrievePatientContext(patientId);
+      ragContext = await PatientClinicalRagService.retrievePatientContext(patientId);
       patientContextBlock = PatientClinicalRagService.formatRagContextForPrompt(ragContext, 'MENTAL_HEALTH');
+      console.log(`📋 [MentalHealthChat] RAG context retrieved for patient "${patientId}": ${ragContext.screenings.length} screenings, ${ragContext.medications.length} meds, ${ragContext.allergies.length} allergies`);
     } catch (ragErr) {
       console.warn('[MentalHealthChat] RAG retrieval notice:', ragErr);
     }
@@ -344,10 +353,28 @@ chatRouter.post('/mental-health', async (req: Request, res: Response) => {
 
     console.log(`🧠 [MentalHealthChat] Patient ${patientId} | Crisis: ${isCrisis} | Reply: ${reply.length} chars`);
 
+    const suggestedActions: Array<{ title: string; action: string; payload?: any }> = [];
+    if (ragContext?.screenings && ragContext.screenings.length > 0) {
+      const s = ragContext.screenings[0];
+      suggestedActions.push({
+        title: `View Screening Report (${s.primaryDiagnosis || s.riskLevel || 'Recent'})`,
+        action: 'OPEN_SCREENING',
+        payload: { screeningId: s.id }
+      });
+    }
+    if (ragContext?.medications && ragContext.medications.length > 0) {
+      suggestedActions.push({
+        title: 'Check Active Prescriptions',
+        action: 'OPEN_PHARMACY',
+      });
+    }
+
     res.status(200).json({
       success: true,
       reply,
       isCrisis,
+      suggestedActions,
+      screeningContextPresent: (ragContext?.screenings?.length ?? 0) > 0,
       resources: isCrisis
         ? [
             { name: 'Tele-MANAS (Govt of India)', number: '14416', actionUrl: 'tel:14416' },

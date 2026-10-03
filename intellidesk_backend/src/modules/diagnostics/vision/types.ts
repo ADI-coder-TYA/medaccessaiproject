@@ -15,6 +15,9 @@ export interface ClinicalImageInput {
   imageUrl?: string;
   mimeType?: string;
   categoryHint?: ClinicalImageCategory;
+  clinicalNotes?: string;
+  symptoms?: string[];
+  anatomicalLocation?: string;
 }
 
 export interface ClinicalImageFinding {

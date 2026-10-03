@@ -123,7 +123,15 @@ export interface CDSSInputPayload {
       respirationRate?: number;
       rppgResult?: any;
     };
+    clinicalNotes?: string;
+    clinical_notes?: string;
+    additionalNotes?: string;
+    notes?: string;
+    [key: string]: any;
   };
+  clinicalNotes?: string;
+  clinical_notes?: string;
+  additionalNotes?: string;
   visionFindings?: Array<{ condition: string; confidence: number }>;
   audioClassification?: {
     predictedCategory: string;

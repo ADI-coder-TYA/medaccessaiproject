@@ -19,10 +19,29 @@ INSTITUTIONS.set(DEFAULT_INSTITUTION_ID, {
 });
 
 /**
- * Resolves institution record directly from Supabase institutions table with memory fallback
+ * Resolves institution record directly from Supabase institutions table with memory fallback,
+ * along with the designated clinical administrator for institutional healthcare delivery.
  */
 export async function getInstitutionDetails(instId?: string | null) {
   const cleanId = (instId || DEFAULT_INSTITUTION_ID).trim();
+  let adminName: string = 'Dr. Aditya';
+
+  try {
+    const { data: adminProfile } = await supabase
+      .from('profiles')
+      .select('full_name, name, role')
+      .eq('institution_id', cleanId)
+      .in('role', ['CLINICAL_ADMIN', 'admin', 'DOCTOR', 'ADMIN'])
+      .maybeSingle();
+
+    if (adminProfile) {
+      const resolved = adminProfile.full_name || adminProfile.name;
+      if (resolved && resolved.trim().length > 0) {
+        adminName = resolved.trim();
+      }
+    }
+  } catch (_) {}
+
   try {
     const { data } = await supabase
       .from('institutions')
@@ -36,18 +55,20 @@ export async function getInstitutionDetails(instId?: string | null) {
         name: data.name,
         domain: data.domain || 'health.edu',
         currency: data.default_currency || 'INR',
+        administratorName: adminName,
       };
     }
   } catch (_) {}
 
   const mem = INSTITUTIONS.get(cleanId);
-  if (mem) return mem;
+  if (mem) return { ...mem, administratorName: adminName };
 
   return {
     id: cleanId,
     name: cleanId,
     domain: 'health.edu',
     currency: 'INR',
+    administratorName: adminName,
   };
 }
 
@@ -60,84 +81,8 @@ router.get('/institution/:id', async (req: Request, res: Response) => {
   }
 });
 
-// Seed Whitelisted Patient Roster
-const DEFAULT_ROSTER = [
-  { student_id: 'PAT-2026-001', email: 'alex.rivera@campushealth.edu', phone: '+91 98765 43210', name: 'Alex Rivera' },
-  { student_id: 'PAT-2026-002', email: 'priya.sharma@campushealth.edu', phone: '+91 98111 22334', name: 'Priya Sharma' },
-  { student_id: 'PAT-2026-003', email: 'marcus.chen@campushealth.edu', phone: '+91 98222 33445', name: 'Marcus Chen' },
-  { student_id: 'PAT-2026-004', email: 'elena.rostova@campushealth.edu', phone: '+91 98333 44556', name: 'Elena Rostova' },
-  { student_id: 'PAT-2026-005', email: 'jordan.taylor@campushealth.edu', phone: '+91 98444 55667', name: 'Jordan Taylor' },
-  { student_id: 'PAT-2026-006', email: 'sophia.r@campushealth.edu', phone: '+91 98555 66778', name: 'Sophia Rodriguez' },
-  { student_id: 'PAT-2026-007', email: 'rohan.gupta@campushealth.edu', phone: '+91 98666 77889', name: 'Rohan Gupta' },
-  { student_id: 'PAT-2026-008', email: 'maya.lin@campushealth.edu', phone: '+91 98777 88990', name: 'Maya Lin' },
-];
-
-// Auto-seed default patients to Supabase public.patient_rosters if table is empty
-async function syncDefaultRosterToSupabase() {
-  try {
-    const { data, error } = await supabase.from('patient_rosters').select('id').limit(1);
-    if (!error && (!data || data.length === 0)) {
-      const defaultRows = DEFAULT_ROSTER.map((r, idx) => ({
-        institution_id: DEFAULT_INSTITUTION_ID,
-        patient_id: r.student_id || `PAT-2026-${100 + idx}`,
-        email: r.email,
-        phone: r.phone,
-        is_registered: false,
-      }));
-      const { error: insertErr } = await supabase.from('patient_rosters').insert(defaultRows);
-      if (!insertErr) {
-        console.log(`🚀 [Supabase] Auto-seeded ${defaultRows.length} default patients into public.patient_rosters table.`);
-      } else {
-        console.warn('⚠️ [Supabase] patient_rosters seed notice:', insertErr.message);
-      }
-    }
-  } catch (e) {
-    console.warn('⚠️ [Supabase] Could not auto-seed default patients:', e);
-  }
-}
-// Auto-seed default admin profile to Supabase public.profiles if empty
-async function syncDefaultAdminToSupabase() {
-  try {
-    const { data } = await supabase.from('profiles').select('id').eq('role', 'CLINICAL_ADMIN').limit(1);
-    if (!data || data.length === 0) {
-      const defaultAdminUuid = '00000000-0000-0000-0000-000000000001';
-      await supabase.from('institutions').upsert({
-        id: DEFAULT_INSTITUTION_ID,
-        name: 'Apex Health & Medical Center',
-        domain: 'apexhealth.edu',
-        default_currency: 'INR',
-      });
-
-      await supabase.from('profiles').upsert({
-        id: defaultAdminUuid,
-        email: 'admin@campushealth.edu',
-        full_name: 'Dr. Sarah Chen, MD',
-        role: 'CLINICAL_ADMIN',
-        institution_id: DEFAULT_INSTITUTION_ID,
-        phone: '+91 98111 22334',
-        emergency_contact: 'Clinical Triage & Emergency Copay Desk',
-        alerts_enabled: true,
-      });
-      console.log(`👨‍⚕️ [Supabase] Seeded default Clinical Admin into profiles table.`);
-    }
-  } catch (e: any) {
-    console.warn('⚠️ [Supabase] syncDefaultAdmin notice:', e?.message);
-  }
-}
-syncDefaultAdminToSupabase();
-
-// Default Admin Account
-const DEFAULT_ADMIN = {
-  id: '00000000-0000-0000-0000-000000000001',
-  name: 'Dr. Sarah Chen, MD',
-  email: 'admin@campushealth.edu',
-  role: 'ADMIN',
-  department: 'Clinical Triage & Emergency Copay Desk',
-  institutionId: DEFAULT_INSTITUTION_ID,
-  avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150',
-  token: 'jwt_mock_token_admin_sarah_chen',
-};
-USER_STORE.set(DEFAULT_ADMIN.email.toLowerCase(), DEFAULT_ADMIN);
+// Empty initial roster - user will register institution and roster fresh
+const DEFAULT_ROSTER: any[] = [];
 
 /**
  * POST /api/v1/auth/admin/register-tenant
@@ -576,6 +521,30 @@ router.post('/login', async (req: Request, res: Response) => {
     whitelistedEntry = STUDENT_ROSTERS.get(lookupKey);
   }
 
+  // 3b. Canonical fallback to DEFAULT_ROSTER to preserve canonical PAT IDs
+  if (!whitelistedEntry) {
+    const defaultMatch = DEFAULT_ROSTER.find(
+      (r) => r.email.toLowerCase() === lookupKey || r.phone === lookupKey || r.student_id.toLowerCase() === lookupKey
+    );
+    if (defaultMatch) {
+      whitelistedEntry = {
+        id: `rst_def_${defaultMatch.student_id}`,
+        institution_id: req.body.institutionId || req.body.institution_id || DEFAULT_INSTITUTION_ID,
+        student_id: defaultMatch.student_id,
+        patient_id: defaultMatch.student_id,
+        name: defaultMatch.name,
+        email: defaultMatch.email,
+        phone: defaultMatch.phone,
+        department: null,
+        password: 'Patient@123',
+        passwordChanged: false,
+        is_registered: true,
+      };
+      STUDENT_ROSTERS.set(lookupKey, whitelistedEntry);
+      STUDENT_ROSTERS.set(defaultMatch.student_id.toLowerCase(), whitelistedEntry);
+    }
+  }
+
   // 4. If patient record still NOT found -> Auto-provision if valid educational/email format
   if (!whitelistedEntry) {
     if (lookupKey.includes('@')) {
@@ -586,11 +555,18 @@ router.post('/login', async (req: Request, res: Response) => {
         .join(' ')
         .trim();
 
+      // Check if derived name matches a known canonical patient
+      const canonicalMatch = DEFAULT_ROSTER.find(
+        (r) => r.name.toLowerCase() === derivedName.toLowerCase()
+      );
+      const assignedId = canonicalMatch ? canonicalMatch.student_id : `PAT-${Math.floor(1000 + Math.random() * 9000)}`;
+
       whitelistedEntry = {
         id: `rst_dyn_${Date.now()}`,
         institution_id: req.body.institutionId || req.body.institution_id || DEFAULT_INSTITUTION_ID,
-        student_id: `PAT-${Math.floor(1000 + Math.random() * 9000)}`,
-        name: derivedName || 'Patient',
+        student_id: assignedId,
+        patient_id: assignedId,
+        name: canonicalMatch?.name || derivedName || 'Patient',
         email: lookupKey,
         phone: '+91 98' + Math.floor(10000000 + Math.random() * 90000000),
         department: null,
@@ -599,7 +575,7 @@ router.post('/login', async (req: Request, res: Response) => {
       };
       STUDENT_ROSTERS.set(lookupKey, whitelistedEntry);
       STUDENT_ROSTERS.set(whitelistedEntry.student_id.toLowerCase(), whitelistedEntry);
-      console.log(`✨ [Patient Whitelist Engine] Dynamically registered patient: ${whitelistedEntry.name} (${lookupKey}) for ${whitelistedEntry.institution_id}`);
+      console.log(`✨ [Patient Whitelist Engine] Dynamically registered patient: ${whitelistedEntry.name} (${lookupKey}) as ${whitelistedEntry.student_id} for ${whitelistedEntry.institution_id}`);
     } else {
       console.warn(`⛔ [Patient Whitelist Engine] Access REJECTED for '${lookupKey}' - Not found in institutional rosters.`);
       return res.status(403).json({
@@ -774,10 +750,29 @@ router.get('/me', async (req: Request, res: Response) => {
 
     // 3. Fallback
     if (authHeader.includes('admin')) {
-      const instDetail = await getInstitutionDetails(DEFAULT_ADMIN.institutionId);
+      const { data: adminProf } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('role', 'CLINICAL_ADMIN')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const instId = adminProf?.institution_id || instHeader || 'nano123';
+      const instDetail = await getInstitutionDetails(instId);
       return res.status(200).json({
         success: true,
-        user: { ...DEFAULT_ADMIN, institutionName: instDetail.name },
+        user: {
+          id: adminProf?.id || '00000000-0000-0000-0000-000000000001',
+          name: adminProf?.full_name || 'Chief Medical Officer',
+          email: adminProf?.email || 'admin@nano.org',
+          role: 'ADMIN',
+          department: adminProf?.emergency_contact || 'Clinical Triage & Emergency Copay Desk',
+          institutionId: instId,
+          institutionName: instDetail.name,
+          avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150',
+          token: authHeader.replace('Bearer ', ''),
+        },
       });
     }
 
@@ -785,9 +780,9 @@ router.get('/me', async (req: Request, res: Response) => {
     return res.status(200).json({
       success: true,
       user: {
-        id: 'usr_pat_001',
-        name: 'Patient Member',
-        email: email || 'patient@campushealth.edu',
+        id: 'usr_pat_PAT-2026-002',
+        name: 'Priya Sharma',
+        email: email || 'priya.sharma@campushealth.edu',
         role: 'PATIENT',
         institutionId: fallbackInst.id,
         institutionName: fallbackInst.name,

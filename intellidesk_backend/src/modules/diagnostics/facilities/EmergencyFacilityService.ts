@@ -117,9 +117,25 @@ export class EmergencyFacilityService {
     }
   ];
 
-  // In-memory cache for live Places API responses (10 min TTL)
-  private static readonly placesCache = new Map<string, { timestamp: number; facilities: EmergencyFacility[] }>();
-  private static readonly CACHE_TTL_MS = 10 * 60 * 1000;
+  // Technical Guardrails: Spatial cache threshold (200m displacement & 6 hours TTL)
+  public static readonly SPATIAL_CACHE_DISPLACEMENT_KM = 0.20; // 200 meters
+  public static readonly CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 Hours TTL
+
+  private static readonly spatialCache: Array<{
+    centerLat: number;
+    centerLng: number;
+    radiusKm: number;
+    facilityTypeFilter?: FacilityType;
+    timestamp: number;
+    facilities: EmergencyFacility[];
+  }> = [];
+
+  /**
+   * Clears in-memory spatial cache (useful for test runs or manual administrative resets).
+   */
+  public static clearCache(): void {
+    this.spatialCache.length = 0;
+  }
 
   /**
    * Technical Guardrail 3: Haversine Geodesic Distance Formula (R = 6371.0 km)
@@ -173,11 +189,40 @@ export class EmergencyFacilityService {
       return null;
     }
 
-    const cacheKey = `${userLat.toFixed(3)}_${userLng.toFixed(3)}_${radiusKm}_${facilityTypeFilter || 'all'}`;
-    const cached = this.placesCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL_MS) {
-      console.log(`⚡ [EmergencyFacilityService] Cache Hit! Serving ${cached.facilities.length} facilities for key [${cacheKey}]`);
-      return cached.facilities;
+    // 1. Prune expired spatial cache entries (6 hours TTL)
+    const now = Date.now();
+    for (let i = this.spatialCache.length - 1; i >= 0; i--) {
+      if (now - this.spatialCache[i].timestamp > this.CACHE_TTL_MS) {
+        this.spatialCache.splice(i, 1);
+      }
+    }
+
+    // 2. Spatial Cache Evaluation: Check if user is within 200m (0.20 km) of any cached search center
+    for (const cached of this.spatialCache) {
+      const isFilterMatch = (!facilityTypeFilter && !cached.facilityTypeFilter) || (facilityTypeFilter === cached.facilityTypeFilter);
+      if (!isFilterMatch) continue;
+      if (cached.radiusKm < radiusKm) continue; // Cached search must encompass requested radius
+
+      const displacementKm = this.calculateDistanceKm(userLat, userLng, cached.centerLat, cached.centerLng);
+      if (displacementKm <= this.SPATIAL_CACHE_DISPLACEMENT_KM) {
+        const displacementMeters = Math.round(displacementKm * 1000);
+        console.log(`⚡ [EmergencyFacilityService] Spatial Cache Hit! Displacement only ${displacementMeters}m (<= ${this.SPATIAL_CACHE_DISPLACEMENT_KM * 1000}m). Serving ${cached.facilities.length} facilities (TTL 6h).`);
+
+        // Recompute distances & travel times dynamically relative to current user coordinates
+        const adjustedFacilities: EmergencyFacility[] = cached.facilities
+          .map((f) => {
+            const dist = this.calculateDistanceKm(userLat, userLng, f.latitude, f.longitude);
+            return {
+              ...f,
+              distanceKm: dist,
+              travelTimeMinutes: this.calculateTravelTimeMinutes(dist)
+            };
+          })
+          .filter((f) => (f.distanceKm ?? 0) <= radiusKm)
+          .sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0));
+
+        return adjustedFacilities;
+      }
     }
 
     try {
@@ -299,7 +344,15 @@ export class EmergencyFacilityService {
 
       console.log(`🎯 [Google Places API] Parsed & mapped ${results.length} valid medical facilities. Closest: "${results[0]?.name || 'N/A'}" (${results[0]?.distanceKm}km, ~${results[0]?.travelTimeMinutes} min drive).`);
 
-      this.placesCache.set(cacheKey, {
+      // Store in spatial cache (max 50 searches, FIFO eviction)
+      if (this.spatialCache.length >= 50) {
+        this.spatialCache.shift();
+      }
+      this.spatialCache.push({
+        centerLat: userLat,
+        centerLng: userLng,
+        radiusKm,
+        facilityTypeFilter,
         timestamp: Date.now(),
         facilities: results
       });
@@ -314,7 +367,7 @@ export class EmergencyFacilityService {
   /**
    * Queries facilities within specified radius (default 20 km), sorted by ascending distance.
    * Priority:
-   * 1. Google Places API (New) Pro SKU if GOOGLE_PLACES_API_KEY is configured
+   * 1. Google Places API (New) Pro SKU (with 200m Haversine spatial caching) unless skipGooglePlaces=true
    * 2. Supabase `emergency_facilities` table
    * 3. Embedded regional reference facilities (zero-failure emergency guarantee)
    */
@@ -322,23 +375,26 @@ export class EmergencyFacilityService {
     userLat: number,
     userLng: number,
     radiusKm: number = 20.0,
-    facilityTypeFilter?: FacilityType
+    facilityTypeFilter?: FacilityType,
+    skipGooglePlaces: boolean = false
   ): Promise<NearbyFacilitiesResult> {
-    console.log(`🏥 [EmergencyFacilityService] Querying facilities around (${userLat.toFixed(4)}, ${userLng.toFixed(4)}) | Radius: ${radiusKm}km | Filter: ${facilityTypeFilter || 'ALL'}`);
+    console.log(`🏥 [EmergencyFacilityService] Querying facilities around (${userLat.toFixed(4)}, ${userLng.toFixed(4)}) | Radius: ${radiusKm}km | Filter: ${facilityTypeFilter || 'ALL'}${skipGooglePlaces ? ' [Offline/Tiers 2-3 Only]' : ''}`);
 
-    // 1. Attempt Live Google Places API Query
-    const googleFacilities = await this.fetchFromGooglePlaces(userLat, userLng, radiusKm, facilityTypeFilter);
-    if (googleFacilities !== null && googleFacilities.length > 0) {
-      console.log(`🚀 [EmergencyFacilityService] Serving ${googleFacilities.length} facilities via Tier 1: Google Places API (Live).`);
-      return {
-        userLocation: {
-          latitude: userLat,
-          longitude: userLng
-        },
-        searchRadiusKm: radiusKm,
-        totalFound: googleFacilities.length,
-        facilities: googleFacilities
-      };
+    // 1. Attempt Live Google Places API Query (unless explicitly bypassed)
+    if (!skipGooglePlaces) {
+      const googleFacilities = await this.fetchFromGooglePlaces(userLat, userLng, radiusKm, facilityTypeFilter);
+      if (googleFacilities !== null && googleFacilities.length > 0) {
+        console.log(`🚀 [EmergencyFacilityService] Serving ${googleFacilities.length} facilities via Tier 1: Google Places API (Live / Spatial Cache).`);
+        return {
+          userLocation: {
+            latitude: userLat,
+            longitude: userLng
+          },
+          searchRadiusKm: radiusKm,
+          totalFound: googleFacilities.length,
+          facilities: googleFacilities
+        };
+      }
     }
 
     // 2. Fallback to Supabase Database

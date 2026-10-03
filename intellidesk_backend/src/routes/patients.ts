@@ -21,17 +21,7 @@ router.get('/profile', async (req: Request, res: Response) => {
     } else if (patientPhone) {
       query = query.eq('phone', patientPhone);
     } else {
-      // Return demo patient profile
-      return res.json({
-        id: 'usr_pat_001',
-        full_name: 'Alex Rivera',
-        email: 'alex.rivera@campushealth.edu',
-        phone: '+91 98765 43210',
-        role: 'PATIENT',
-        emergency_contact: '+91 98765 43211',
-        preferred_channel: 'SMS',
-        institution_id: 'hosp-stanford-01',
-      });
+      return res.status(400).json({ error: 'Patient email or phone required' });
     }
 
     const { data: profile, error } = await query.maybeSingle();
@@ -40,33 +30,24 @@ router.get('/profile', async (req: Request, res: Response) => {
       return res.json(profile);
     }
 
-    // Fallback: check students table for backward compatibility
-    let studentQuery = supabase.from('students').select('*');
-    if (patientEmail) studentQuery = studentQuery.eq('email', patientEmail);
-    else if (patientPhone) studentQuery = studentQuery.eq('phone', patientPhone);
+    // Fallback: check patient_rosters table
+    let rosterQuery = supabase.from('patient_rosters').select('*');
+    if (patientEmail) rosterQuery = rosterQuery.eq('email', patientEmail);
+    else if (patientPhone) rosterQuery = rosterQuery.eq('phone', patientPhone);
 
-    const { data: student } = await studentQuery.maybeSingle();
-    if (student) {
+    const { data: rosterEntry } = await rosterQuery.maybeSingle();
+    if (rosterEntry) {
       return res.json({
-        id: student.id,
-        full_name: student.name || 'Alex Rivera',
-        email: student.email,
-        phone: student.phone,
+        id: rosterEntry.patient_id,
+        full_name: rosterEntry.name || 'Verified Patient',
+        email: rosterEntry.email,
+        phone: rosterEntry.phone,
         role: 'PATIENT',
-        institution_id: student.institution_id || 'hosp-stanford-01',
+        institution_id: rosterEntry.institution_id || 'nano123',
       });
     }
 
-    return res.json({
-      id: patientId || 'usr_pat_001',
-      full_name: 'Alex Rivera',
-      email: patientEmail || 'alex.rivera@campushealth.edu',
-      phone: patientPhone || '+91 98765 43210',
-      role: 'PATIENT',
-      emergency_contact: '+91 98765 43211',
-      preferred_channel: 'SMS',
-      institution_id: 'hosp-stanford-01',
-    });
+    return res.status(404).json({ error: 'Patient profile not found' });
   } catch (error: any) {
     return res.status(500).json({ error: error.message });
   }

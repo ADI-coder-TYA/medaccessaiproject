@@ -26,6 +26,9 @@ export interface SymptomInputPayload {
     preExistingConditions?: string[];
   };
   additionalNotes?: string;
+  clinicalNotes?: string;
+  clinical_notes?: string;
+  notes?: string;
   patient_name?: string;
   patientName?: string;
 }

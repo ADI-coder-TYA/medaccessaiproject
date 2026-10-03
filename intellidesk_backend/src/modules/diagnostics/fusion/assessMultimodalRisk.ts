@@ -81,10 +81,11 @@ export function evaluateClinicalSafetyNet(
   }
 
   // 5. Critical Symptom Red-Flag Keywords
+  const notesText = symptomData?.clinicalNotes || (symptomData as any)?.clinical_notes || symptomData?.additionalNotes || (symptomData as any)?.notes || '';
   const symptomsText = [
     ...(symptomData?.symptoms || []),
     symptomData?.bodyLocation || '',
-    symptomData?.additionalNotes || ''
+    notesText
   ].join(' ').toLowerCase();
 
   if (symptomsText.includes('chest pain') || symptomsText.includes('angina') || symptomsText.includes('myocardial')) {

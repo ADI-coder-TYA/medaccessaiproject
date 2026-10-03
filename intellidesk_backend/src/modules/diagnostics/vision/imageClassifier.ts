@@ -72,7 +72,11 @@ export class ClinicalImageClassifier {
     const featureVector = tfResult.bottleneckEmbedding;
 
     // Advanced VLM inference with Qwen 2.5-VL 72B (with local MobileNet fallback)
-    const vlmResult = await CloudVisionClassifier.classifyClinicalImage(bufferToProcess, category);
+    const vlmResult = await CloudVisionClassifier.classifyClinicalImage(bufferToProcess, category, {
+      clinicalNotes: input.clinicalNotes,
+      symptoms: input.symptoms,
+      anatomicalLocation: input.anatomicalLocation,
+    });
 
     // Map clinical findings
     let findings: ClinicalImageFinding[];

@@ -267,28 +267,30 @@ export class rPPGSignalProcessor {
   /**
    * Main bio-signal analysis engine:
    * Processes input RGB arrays, filters green channel, computes FFT spectral peak,
-   * calculates HRV, respiration, SpO2, evaluates physiological red flags.
+  /**
+   * Technical Guardrail: Channel Candidate Spectral Analysis.
+   * Evaluates a color channel time-series by applying the Butterworth bandpass filter (0.75 - 3.5 Hz),
+   * computing the FFT power spectrum, determining dominant cardiac frequency, and calculating SNR & confidence.
    */
-  public processSignals(input: SignalSeriesInput): rPPGAnalysisResult {
-    let rawRed = input.red;
-    let rawGreen = input.green;
-    let rawBlue = input.blue;
+  public analyzeCandidateChannel(
+    signal: number[],
+    samplingRate: number = 30.0,
+    channelName: string = 'channel'
+  ): {
+    filtered: number[];
+    dominantFreq: number;
+    heartRateBpm: number;
+    cardiacBandPower: number;
+    totalBandPower: number;
+    snrLinear: number;
+    snrDb: number;
+    confidenceScore: number;
+  } {
+    // 1. 4th-Order Butterworth Bandpass Filtering (0.75 - 3.5 Hz)
+    const filtered = this.filter.filter(signal);
 
-    // 1. Resample to uniform 30.0 Hz if non-uniform timestamps provided (Guardrail 1)
-    if (input.timestampsMs && input.timestampsMs.length === rawGreen.length) {
-      rawRed = this.resampleToUniform30Hz(rawRed, input.timestampsMs);
-      rawGreen = this.resampleToUniform30Hz(rawGreen, input.timestampsMs);
-      rawBlue = this.resampleToUniform30Hz(rawBlue, input.timestampsMs);
-    }
-
-    const sampleCount = rawGreen.length;
-    const durationSeconds = sampleCount / this.targetSamplingRate;
-
-    // 2. 4th-Order Butterworth Bandpass Filtering on Green Channel (0.75 - 3.5 Hz)
-    const filteredGreen = this.filter.filter(rawGreen);
-
-    // 3. FFT Spectral Peak Extraction for Heart Rate (BPM)
-    const { frequencies, powers } = this.computePowerSpectrum(filteredGreen, 2048);
+    // 2. FFT Spectral Peak Extraction
+    const { frequencies, powers } = this.computePowerSpectrum(filtered, 2048);
 
     let maxPower = -1;
     let peakBin = -1;
@@ -311,7 +313,7 @@ export class rPPGSignalProcessor {
       const y3 = powers[peakBin + 1];
       const delta = (0.5 * (y1 - y3)) / (y1 - 2 * y2 + y3);
       const binExact = peakBin + (isNaN(delta) ? 0 : delta);
-      const freqStep = this.targetSamplingRate / 2048;
+      const freqStep = samplingRate / 2048;
       dominantFreq = binExact * freqStep;
     } else if (peakBin >= 0) {
       dominantFreq = frequencies[peakBin];
@@ -319,36 +321,107 @@ export class rPPGSignalProcessor {
 
     const heartRateBpm = Math.round(dominantFreq * 60.0);
 
-    // 4. Peak Detection, Inter-Beat Intervals & RMSSD (HRV)
-    const minPeakDistance = Math.max(5, Math.floor(this.targetSamplingRate / 3.5));
-    const peaks = this.detectPeaks(filteredGreen, minPeakDistance);
-    const { rmssdMs, ibisMs } = this.computeHrvRmssd(peaks, this.targetSamplingRate);
-
-    // 5. Respiration Rate (breaths/min)
-    const respirationRateBpm = this.estimateRespirationRate(filteredGreen);
-
-    // 6. Blood Oxygen SpO2 % (Guardrail 2)
-    const oxygenSaturationSpo2 = this.computeSpO2(rawRed, rawBlue);
-
-    // 7. Signal-to-Noise Ratio (SNR) & Confidence Score
+    // 3. Signal-to-Noise Ratio (SNR) via Normalized Power Spectral Density (PSD)
     let cardiacBandPower = 0;
     let totalBandPower = 0;
+    let cardiacBins = 0;
+    let totalBins = 0;
+
     for (let i = 0; i < frequencies.length; i++) {
       const f = frequencies[i];
       if (f >= 0.5 && f <= 4.0) {
         totalBandPower += powers[i];
-        if (Math.abs(f - dominantFreq) <= 0.25) {
+        totalBins++;
+        // Include fundamental pulse peak (+- 0.22 Hz) and 1st harmonic (+- 0.22 Hz)
+        const isFundamental = Math.abs(f - dominantFreq) <= 0.22;
+        const isHarmonic = Math.abs(f - (2.0 * dominantFreq)) <= 0.22;
+        if (isFundamental || isHarmonic) {
           cardiacBandPower += powers[i];
+          cardiacBins++;
         }
       }
     }
 
     const noisePower = Math.max(1e-6, totalBandPower - cardiacBandPower);
-    const snrLinear = cardiacBandPower / noisePower;
-    const snrDb = Math.round(10.0 * Math.log10(Math.max(1.0, snrLinear)) * 10) / 10;
-    const confidenceScore = Math.max(0.4, Math.min(0.99, snrLinear / (snrLinear + 1.5)));
+    const noiseBins = Math.max(1, totalBins - cardiacBins);
 
-    // 8. Clinical Red Flag Sentinel Evaluation
+    // Power spectral density (power per bin) for signal window vs noise floor
+    const cardiacPsd = cardiacBandPower / Math.max(1, cardiacBins);
+    const noisePsd = Math.max(1e-6, noisePower / noiseBins);
+    const snrLinear = cardiacPsd / noisePsd;
+    const snrDb = Math.round(10.0 * Math.log10(Math.max(1.0, snrLinear)) * 10) / 10;
+    const confidenceScore = Math.max(0.4, Math.min(0.99, snrLinear / (snrLinear + 2.5)));
+
+    console.log(`🔍 [rPPG DSP] ${channelName} analysis: HR=${heartRateBpm}bpm (${dominantFreq.toFixed(2)}Hz) | peakPower=${maxPower.toExponential(2)} | cardiacPSD=${cardiacPsd.toExponential(2)} | noisePSD=${noisePsd.toExponential(2)} | SNR=${snrDb}dB | Conf=${Math.round(confidenceScore * 100)}%`);
+
+    return {
+      filtered,
+      dominantFreq,
+      heartRateBpm,
+      cardiacBandPower,
+      totalBandPower,
+      snrLinear,
+      snrDb,
+      confidenceScore: Math.round(confidenceScore * 100) / 100
+    };
+  }
+
+  /**
+   * Main bio-signal analysis engine:
+   * Dynamically evaluates both Green (contactless facial rPPG) and Red (contact fingertip PPG)
+   * channels to select the optimal optical carrier with highest pulsatile SNR.
+   */
+  public processSignals(input: SignalSeriesInput): rPPGAnalysisResult {
+    let rawRed = input.red;
+    let rawGreen = input.green;
+    let rawBlue = input.blue;
+
+    // 1. Resample to uniform 30.0 Hz if non-uniform timestamps provided (Guardrail 1)
+    if (input.timestampsMs && input.timestampsMs.length === rawGreen.length) {
+      rawRed = this.resampleToUniform30Hz(rawRed, input.timestampsMs);
+      rawGreen = this.resampleToUniform30Hz(rawGreen, input.timestampsMs);
+      rawBlue = this.resampleToUniform30Hz(rawBlue, input.timestampsMs);
+    }
+
+    const sampleCount = rawGreen.length;
+    const durationSeconds = sampleCount / this.targetSamplingRate;
+
+    // 2. Adaptive Channel Selection: Compare Green (facial rPPG) vs Red (fingertip contact PPG)
+    const greenAnalysis = this.analyzeCandidateChannel(rawGreen, this.targetSamplingRate, 'GREEN');
+    const redAnalysis = this.analyzeCandidateChannel(rawRed, this.targetSamplingRate, 'RED');
+
+    // Compute optical channel characteristics
+    const meanRed = rawRed.length > 0 ? (rawRed.reduce((a, b) => a + b, 0) / rawRed.length) : 0;
+    const meanGreen = rawGreen.length > 0 ? (rawGreen.reduce((a, b) => a + b, 0) / rawGreen.length) : 0;
+    const isContactSignature = meanRed > 45.0 && meanRed > (meanGreen * 1.05);
+
+    // Select optimal channel:
+    // If contact fingertip mode is detected and Red has viable SNR, or if Red SNR exceeds Green by 20%, use Red.
+    // Otherwise, default to Green channel (standard for contactless facial rPPG).
+    const useRedChannel = (isContactSignature && redAnalysis.snrLinear > 1.02) ||
+                          (redAnalysis.snrLinear > greenAnalysis.snrLinear * 1.2);
+
+    const selectedAnalysis = useRedChannel ? redAnalysis : greenAnalysis;
+    const primaryFiltered = selectedAnalysis.filtered;
+    const dominantFreq = selectedAnalysis.dominantFreq;
+    const heartRateBpm = selectedAnalysis.heartRateBpm;
+    const snrDb = selectedAnalysis.snrDb;
+    const confidenceScore = selectedAnalysis.confidenceScore;
+
+    console.log(`📊 [rPPG Processor] ${sampleCount} frames (${durationSeconds.toFixed(1)}s) | Mean RGB: R=${meanRed.toFixed(1)}, G=${meanGreen.toFixed(1)} | ContactSignature=${isContactSignature} | Channel Selected: ${useRedChannel ? 'RED' : 'GREEN'} | HR=${heartRateBpm} BPM | SNR=${snrDb} dB | Conf=${Math.round(confidenceScore * 100)}%`);
+
+    // 3. Peak Detection, Inter-Beat Intervals & RMSSD (HRV) using primary selected channel
+    const minPeakDistance = Math.max(5, Math.floor(this.targetSamplingRate / 3.5));
+    const peaks = this.detectPeaks(primaryFiltered, minPeakDistance);
+    const { rmssdMs, ibisMs } = this.computeHrvRmssd(peaks, this.targetSamplingRate);
+
+    // 4. Respiration Rate (breaths/min)
+    const respirationRateBpm = this.estimateRespirationRate(primaryFiltered);
+
+    // 5. Blood Oxygen SpO2 % (Guardrail 2)
+    const oxygenSaturationSpo2 = this.computeSpO2(rawRed, rawBlue);
+
+    // 6. Clinical Red Flag Sentinel Evaluation
     const alerts = PhysiologicalRedFlagSentinel.evaluateVitals({
       heartRate: heartRateBpm,
       oxygenSaturation: oxygenSaturationSpo2,
@@ -362,11 +435,11 @@ export class rPPGSignalProcessor {
       hrvRmssdMs: rmssdMs,
       respirationRateBpm,
       oxygenSaturationSpo2,
-      confidenceScore: Math.round(confidenceScore * 100) / 100,
+      confidenceScore,
       snrDb,
       sampleCount,
       durationSeconds: Math.round(durationSeconds * 10) / 10,
-      filteredWaveform: filteredGreen.slice(0, 150), // Sample snippet for UI preview
+      filteredWaveform: primaryFiltered.slice(0, 150), // Sample snippet for UI preview
       interBeatIntervalsMs: ibisMs,
       alerts,
       hasCriticalDerangement

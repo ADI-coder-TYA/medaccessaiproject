@@ -178,6 +178,10 @@ class RPPGSensorService {
         isMotionArtifactDetected: isMotion,
       );
 
+      if (frameData.frameIndex % 30 == 0) {
+        debugPrint('📸 [RPPG Frame #${frameData.frameIndex} (${(elapsedMs / 1000).toStringAsFixed(1)}s)] R=${rgb.red.toStringAsFixed(1)} G=${rgb.green.toStringAsFixed(1)} B=${rgb.blue.toStringAsFixed(1)} | Contact: $isContact | Motion: $isMotion');
+      }
+
       _collectedFrames.add(frameData);
       if (!_frameStreamController.isClosed) {
         _frameStreamController.add(frameData);
@@ -210,6 +214,10 @@ class RPPGSensorService {
         final width = image.width;
         final height = image.height;
 
+        final yRowStride = image.planes[0].bytesPerRow;
+        final uvRowStride = image.planes[1].bytesPerRow;
+        final uvPixelStride = image.planes[1].bytesPerPixel ?? 1;
+
         // Sample center 16x16 grid (256 points) for ultra-fast arithmetic
         final stepX = max(1, width ~/ 16);
         final stepY = max(1, height ~/ 16);
@@ -221,8 +229,8 @@ class RPPGSensorService {
 
         for (int y = stepY; y < height - stepY; y += stepY) {
           for (int x = stepX; x < width - stepX; x += stepX) {
-            final yIndex = y * width + x;
-            final uvIndex = (y ~/ 2) * (width ~/ 2) + (x ~/ 2);
+            final yIndex = y * yRowStride + x;
+            final uvIndex = (y ~/ 2) * uvRowStride + (x ~/ 2) * uvPixelStride;
 
             if (yIndex < yPlane.length && uvIndex < uPlane.length && uvIndex < vPlane.length) {
               final yVal = yPlane[yIndex];
@@ -375,6 +383,19 @@ class RPPGSensorService {
       throw StateError('No optical frames collected. Please perform a 15-second scan.');
     }
 
+    final redVals = targetFrames.map((f) => f.red).toList();
+    final greenVals = targetFrames.map((f) => f.green).toList();
+    final meanR = redVals.reduce((a, b) => a + b) / redVals.length;
+    final meanG = greenVals.reduce((a, b) => a + b) / greenVals.length;
+    final minR = redVals.reduce(min);
+    final maxR = redVals.reduce(max);
+    final minG = greenVals.reduce(min);
+    final maxG = greenVals.reduce(max);
+
+    debugPrint('📊 [RPPG Scan Finished] ${targetFrames.length} frames collected.');
+    debugPrint('📊 [RPPG Stats] Red: mean=${meanR.toStringAsFixed(1)}, min=${minR.toStringAsFixed(1)}, max=${maxR.toStringAsFixed(1)}, dynamicRange=${(maxR - minR).toStringAsFixed(1)}');
+    debugPrint('📊 [RPPG Stats] Green: mean=${meanG.toStringAsFixed(1)}, min=${minG.toStringAsFixed(1)}, max=${maxG.toStringAsFixed(1)}, dynamicRange=${(maxG - minG).toStringAsFixed(1)}');
+
     final payload = {
       'frames': targetFrames.map((f) => f.toJson()).toList(),
       'samplingRate': 30.0,
@@ -401,7 +422,9 @@ class RPPGSensorService {
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body) as Map<String, dynamic>;
           final vitalsMap = data['vitals'] as Map<String, dynamic>;
-          return VitalsResult.fromJson(vitalsMap);
+          final result = VitalsResult.fromJson(vitalsMap);
+          debugPrint('🩺 [RPPG Result] ✅ HR=${result.heartRateBpm} BPM | SNR=${result.snrDb} dB | Conf=${(result.confidenceScore * 100).round()}% | SpO2=${result.oxygenSaturationSpo2}%');
+          return result;
         }
       } catch (e) {
         debugPrint('⚠️ [RPPGSensorService] Failed candidate $endpoint: $e');
@@ -438,15 +461,18 @@ class RPPGSensorService {
     final durationSeconds = (frames.last.timestampMs - frames.first.timestampMs) / 1000.0;
     final validDuration = durationSeconds > 1.0 ? durationSeconds : 15.0;
 
-    final greenValues = frames.map((f) => f.green).toList();
-    final meanGreen = greenValues.reduce((a, b) => a + b) / greenValues.length;
+    final isContact = frames.isNotEmpty && (frames.last.isFingerDetected || frames.any((f) => f.isFingerDetected));
+    final primaryValues = isContact
+        ? frames.map((f) => f.red).toList()
+        : frames.map((f) => f.green).toList();
+    final meanPrimary = primaryValues.reduce((a, b) => a + b) / primaryValues.length;
 
     int peakCount = 0;
     final List<double> ibiList = [];
     int lastPeakIndex = 0;
 
-    for (int i = 1; i < greenValues.length - 1; i++) {
-      if (greenValues[i] > greenValues[i - 1] && greenValues[i] > greenValues[i + 1] && greenValues[i] > meanGreen) {
+    for (int i = 1; i < primaryValues.length - 1; i++) {
+      if (primaryValues[i] > primaryValues[i - 1] && primaryValues[i] > primaryValues[i + 1] && primaryValues[i] > meanPrimary) {
         if (lastPeakIndex > 0) {
           final ibiMs = (frames[i].timestampMs - frames[lastPeakIndex].timestampMs).toDouble();
           if (ibiMs >= 400.0 && ibiMs <= 1500.0) {
@@ -488,7 +514,7 @@ class RPPGSensorService {
       snrDb: 16.4,
       sampleCount: frames.length,
       durationSeconds: validDuration,
-      filteredWaveform: greenValues.take(150).toList(),
+      filteredWaveform: primaryValues.take(150).toList(),
       interBeatIntervalsMs: ibiList.isNotEmpty ? ibiList : [800.0, 810.0, 795.0, 805.0],
       alerts: [],
       hasCriticalDerangement: false,

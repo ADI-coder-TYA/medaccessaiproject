@@ -134,7 +134,9 @@ class _VitalsScannerModalState extends State<VitalsScannerModal>
       setState(() {
         _isFingerDetected = frame.isFingerDetected;
         _isMotionDetected = frame.isMotionArtifactDetected;
-        _waveformPoints.add(frame.green);
+        // In fingertip contact mode, plot pulsing red channel; otherwise plot green for face rPPG
+        final pointValue = frame.isFingerDetected ? frame.red : frame.green;
+        _waveformPoints.add(pointValue);
         if (_waveformPoints.length > 50) {
           _waveformPoints.removeAt(0);
         }
@@ -524,7 +526,10 @@ class _VitalsScannerModalState extends State<VitalsScannerModal>
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: CustomPaint(
-            painter: WaveformPainter(points: _waveformPoints),
+            painter: WaveformPainter(
+              points: _waveformPoints,
+              color: _isFingerDetected ? Colors.redAccent : const Color(0xFF14B8A6),
+            ),
           ),
         ),
         const SizedBox(height: 12),
@@ -800,15 +805,19 @@ class _VitalsScannerModalState extends State<VitalsScannerModal>
 
 class WaveformPainter extends CustomPainter {
   final List<double> points;
+  final Color color;
 
-  WaveformPainter({required this.points});
+  WaveformPainter({
+    required this.points,
+    this.color = const Color(0xFF14B8A6),
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
     if (points.length < 2) return;
 
     final paint = Paint()
-      ..color = const Color(0xFF14B8A6)
+      ..color = color
       ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;

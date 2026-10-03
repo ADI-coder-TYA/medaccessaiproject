@@ -326,6 +326,41 @@ async function runRPPGVitalsSuite() {
     assert(safetyNetTachy.enforcedFloor === 0.85, 'Enforced risk floor is 0.85 for tachycardia');
   }
 
+  // TEST 8: Adaptive Channel Selection (Fingertip Contact Mode with Flash)
+  console.log('\n--- Test Group 8: Adaptive Channel Selection (Fingertip Contact PPG) ---');
+  {
+    const processor = new rPPGSignalProcessor(30.0);
+    const n = 450;
+    const targetBpm = 82.0;
+    const targetFreq = targetBpm / 60.0;
+
+    const fingertipFrames: BioSignalFrame[] = [];
+    for (let i = 0; i < n; i++) {
+      const tSec = i / 30.0;
+      const pulse = 8.0 * Math.sin(2 * Math.PI * targetFreq * tSec);
+      // Red light passes through tissue with pulse; green is heavily absorbed & noisy/flat
+      fingertipFrames.push({
+        frameIndex: i,
+        timestampMs: Math.round(tSec * 1000),
+        red: 210.0 + pulse,
+        green: 18.0 + (Math.sin(i * 0.7) * 0.4), // Absorbed flat/noisy green
+        blue: 10.0 + (Math.cos(i * 0.3) * 0.2)
+      });
+    }
+
+    const result = processor.processFrames(fingertipFrames);
+    console.log(`    Detected Fingertip Heart Rate: ${result.heartRateBpm} BPM (Target: 82 BPM)`);
+    console.log(`    Fingertip SNR: ${result.snrDb} dB, Confidence: ${result.confidenceScore}`);
+
+    assert(
+      Math.abs(result.heartRateBpm - 82.0) <= 2.0,
+      'Adaptive channel switches to Red channel and accurately detects 82 BPM',
+      `Got: ${result.heartRateBpm} BPM`
+    );
+    assert(result.snrDb >= 5.0, 'Fingertip SNR exceeds 5.0 dB via red channel', `SNR: ${result.snrDb}`);
+    assert(result.confidenceScore >= 0.70, 'Fingertip confidence exceeds 70%', `Conf: ${result.confidenceScore}`);
+  }
+
   console.log('\n======================================================');
   console.log(`🎉 ALL ${passedTests}/${totalTests} rPPG VITALS TESTS PASSED SUCCESSFULLY!`);
   console.log('======================================================\n');

@@ -127,10 +127,17 @@ MultiProvider(
 Dedicated client for all clinical diagnostic endpoints:
 - `evaluateVision({required File image, required String anatomicalSite})`: Uploads dermatology/lesion photo to `/api/v1/diagnostics/vision`. Returns condition, severity, findings, and Grad-CAM heatmap base64.
 - `evaluateCough({required File audioFile})`: Uploads 16kHz audio sample to `/api/v1/diagnostics/audio`. Returns 4-class probabilities and wheeze alert status.
-- `evaluateVitals({required List<String> frameData})`: Posts 30Hz facial video frames to `/api/v1/diagnostics/vitals` to calculate heart rate and SpO2.
-- `evaluateCDSS({required Map<String, dynamic> clinicalPayload})`: Dispatches structured symptom payload to `/api/v1/cdss/evaluate`, returning WHO ICD-11 differential candidates and FHIR R4 Bundle.
+- `evaluateVitals({required List<String> frameData})`: Posts 30Hz facial/fingertip video frames to `/api/v1/diagnostics/vitals` to calculate heart rate, SpO2, and respiratory metrics via dual-channel optical analysis.
+- `evaluateCDSS({required Map<String, dynamic> clinicalPayload})`: Dispatches structured symptom payload and clinical notes to `/api/v1/cdss/evaluate`, returning WHO ICD-11 differential candidates and FHIR R4 Bundle.
+- `approveCDSS({required String evaluationId, required ClinicianApproval approval})`: Dispatches attending physician digital signature and override justification to `/api/v1/cdss/approve`.
 - `parsePrescription({required File prescriptionImage})`: Uploads prescription to `/api/v1/pharmacy/parse` for OCR extraction and RxNorm mapping.
 - `checkInteractions({required List<String> medications})`: Cross-references drug lists against the 8,000+ DDI matrix via `/api/v1/pharmacy/interactions`.
+
+### `HospitalLocatorService`
+**File:** `lib/modules/diagnostics/services/HospitalLocatorService.dart`
+Geolocation facility client connecting to `/api/v1/diagnostics/facilities/emergency`:
+- Retrieves certified medical centers, trauma units, and clinics matching dynamic clinical capability deductions.
+- Calculates Haversine distance, travel times, and provides direct emergency phone dialing intents.
 
 ### `SocketService`
 **File:** `lib/services/socket_service.dart`
@@ -150,15 +157,15 @@ Dedicated client for all clinical diagnostic endpoints:
 ### 🔷 Patient Portal Screens (`lib/screens/patient/`)
 
 #### 1. `PatientClinicalDashboard`
-**File:** `patient_clinical_dashboard.dart` (38 KB)
+**File:** `patient_clinical_dashboard.dart`
 The central clinical hub for patients:
-- **Diagnostic Launchpad:** One-tap navigation to Dermatology Vision Scan, Cough Acoustic Screening, and Contactless Vitals Monitor.
-- **Symptom Tracker:** Interactive body map and symptom severity selector.
-- **Active Prescriptions:** Current medications with quick links to Pharmacy Hub for interaction checking.
-- **Recent Screenings:** Summary cards showing latest diagnostic risk scores and follow-up guidance.
+- **Emergency Medical Passport:** Prominent interactive card displaying verified patient allergen profile (or `NKDA`), active medication count with badge coloring, emergency telephone contact, and care plan status.
+- **Diagnostic Launchpad & CDSS Review:** Directly launches into `DiagnosticResultsScreen` with `assessmentOverride`, seamlessly rendering historical or live health screenings alongside the CDSS Decision Drawer.
+- **Diagnostic Action Bar:** One-tap navigation to Dermatology Vision Scan, Cough Acoustic Screening, and Contactless Vitals Monitor.
+- **Symptom Tracker & Longitudinal Trends:** Visual history of past screenings, risk index progressions, and clinician follow-up instructions.
 
 #### 2. `PharmacyHubScreen`
-**File:** `pharmacy_hub_screen.dart` (35 KB)
+**File:** `pharmacy_hub_screen.dart`
 Comprehensive medication safety center:
 - **Prescription Upload:** Dual camera/PDF capture for handwritten prescriptions.
 - **OCR Review Panel:** Displays digitized medications with editable dosage, frequency, and canonical RxCUI tags.
@@ -166,17 +173,53 @@ Comprehensive medication safety center:
 - **Allergy Scanner:** Alerts patients if active ingredients conflict with their medical profile.
 
 #### 3. `HealthRecordsScreen`
-**File:** `health_records_screen.dart` (32 KB)
+**File:** `health_records_screen.dart`
 Patient health summary and clinical documentation:
 - Historical diagnostic reports with Grad-CAM image comparisons over time.
 - Standardized HL7 FHIR R4 JSON viewer and export utility for external clinicians.
 - Verified medical leave letters and institutional excuse notes with redaction tags.
 
 #### 4. `ClaimIntakeScreen`
-**File:** `claim_intake_screen.dart` (23 KB)
+**File:** `claim_intake_screen.dart`
 Multimodal intake screen supporting narrative text, hospital bills (PDF/JPG), and clinical imagery.
 
-#### 5. `ClinicalChatScreen`
+---
+
+### 🔷 Diagnostic Sheets & Modal Components (`lib/modules/`)
+
+#### 1. `CDSSDecisionDrawer`
+**File:** `lib/modules/cdss/ui/cdss_decision_drawer.dart`
+Interactive clinical decision review and governance sheet:
+- **Institutional Medical Center Card:** Highlights assigned clinical center and review status badge (`Pending Review` vs `Clinician Verified`).
+- **Medical Center Dispatch:** One-tap dispatch routing diagnostic encounters directly to attending physician queues.
+- **Differential Candidates:** Renders top ICD-11 conditions with temperature-scaled probabilities, logit scores, and matched clinical criteria.
+- **Evidence-Based Care Pathways:** Recommends first-line pharmacotherapy with dosage/frequency, clinical lab orders, diagnostic imaging orders, and urgent red flags.
+- **Clinician Approval & Override Modal:** Attending physicians enter their credentials, select alternative ICD-11 diagnoses if overriding, input clinical rationales, and generate cryptographic digital signature hashes.
+
+#### 2. `ClinicalReportShareSheet`
+**File:** `lib/modules/diagnostics/ui/ClinicalReportShareSheet.dart`
+Hospital referral letter and reporting modal:
+- **Automated Referral Letter (PDF):** Calls `/api/v1/diagnostics/referral-letter/pdf` to generate an official referral document with LOINC-coded vitals, 95% Bayesian risk confidence intervals, and physician attestation.
+- **Native File Download & Share Intent:** Saves PDF directly to user storage, launching native viewer or sharing intent with feedback snackbars.
+
+#### 3. `EmergencyFacilitySheet`
+**File:** `lib/modules/diagnostics/ui/EmergencyFacilitySheet.dart`
+Emergency response bottom sheet:
+- Displays nearby hospitals ranked by distance and estimated transit time.
+- Renders dynamic clinical capability badges (e.g., Burn Center, Level 1 Trauma, Stroke Center) based on the patient's diagnosed condition.
+- Direct-dial emergency phone action and one-tap map navigation dispatch.
+
+#### 4. `VitalsScannerModal`
+**File:** `lib/modules/diagnostics/vitals/ui/vitals_scanner_modal.dart`
+Non-invasive physiological monitoring modal:
+- Displays live 30Hz optical camera preview with capillary variance detection.
+- Renders real-time pulsatile photoplethysmogram waveforms with physiological red-flag notifications for emergent vital signs.
+
+---
+
+### 🔷 Psychological First Aid & Emergency Support Screens
+
+#### 1. `ClinicalChatScreen`
 **File:** `clinical_chat_screen.dart` (13 KB)
 Confidential, on-device Psychological First Aid chat with local Qwen ONNX model, conversational grounding animations, and emergency resource triggers.
 

@@ -277,6 +277,74 @@ Dr. Chen, Chief Medical Officer, reviews active overnight emergency cases and AI
 
 ---
 
+## Workflow 8: Emergency Medical Passport, Clinical Referral Letter (PDF) & Emergency Facilities
+
+### Clinical Context
+Priya has completed a multimodal screening for severe migraine and elevated blood pressure. She needs an official clinical referral letter to present to the emergency room, wants to verify her allergies and medications on her emergency medical passport, and needs to locate the nearest emergency department equipped for acute neurological care.
+
+### Step-by-Step Instructions
+
+**1. Inspect Emergency Medical Passport**
+- On the **Patient Clinical Dashboard**, the **Emergency Medical Passport** card displays:
+  - **Allergies:** Verified allergen status (`PENICILLINS` or `NKDA - None`).
+  - **Medications:** Active prescription count with real-time status.
+  - **Emergency Contact:** Direct contact phone number linked to user profile.
+  - **Care Status:** Clinical stability indicator.
+
+**2. Open Diagnostic Report & CDSS Review**
+- Tap **"Open Diagnostic Report & CDSS Review"** directly from the latest health screening card.
+- The app launches into the complete diagnostic results interface with live assessment parameters loaded.
+
+**3. Generate and Download Clinical Referral Letter (PDF)**
+- Tap **"Export / Share Clinical Referral"** in the diagnostic report.
+- The `ClinicalReportShareSheet` opens. Tap **"Download Referral Letter (PDF)"**.
+- The backend compiles a vector PDF with:
+  - Patient demographics & institutional ID (`PAT-2026-002`)
+  - Vital signs standardized to LOINC codes: Body Temp (`8310-5`), HR (`8867-4`), BP (`8480-6`), SpO2 (`2708-6`), Pain Scale (`72514-3`)
+  - Multimodal risk score with 95% Bayesian confidence intervals
+  - Recommended clinical directives & attending physician signature block
+- The app saves the PDF file directly to device storage and launches the native sharing intent for instant messaging or printing.
+
+**4. Locate Emergency Facility with Dynamic Capability Deduction**
+- Tap **"Find Nearby Emergency Care"** in the diagnostic report or emergency hub.
+- The `EmergencyFacilitySheet` displays surrounding facilities matched against Priya's condition:
+  - Capability badges highlight relevant specialty units (e.g. `Comprehensive Stroke Center`, `24/7 Acute Crisis`, `Level 1 Trauma`).
+  - Displays distance in kilometers and estimated driving duration.
+  - Tap **"Call Emergency Desk"** for instant hotline connection, or **"Directions"** to launch GPS navigation.
+
+---
+
+## Workflow 9: Clinician Review, Medical Center Assignment & CDSS Override
+
+### Clinical Context
+Dr. Aditya, attending physician at the campus medical center, reviews a student encounter routed through the institutional CDSS decision drawer to validate the treatment pathway.
+
+### Step-by-Step Instructions
+
+**1. Open CDSS Decision Drawer**
+- Clinician opens the student's screening report and expands the **CDSS Decision Drawer**.
+- The **Assigned Medical Center** card confirms:
+  - Medical Center Name: `Campus Medical Center & Health Annex`
+  - Status: `Pending Review`
+  - Patient Roster ID: `Active in Institution Admin Roster (PAT-2026-002)`
+
+**2. Scrutinize Differential Diagnoses & Clinical Evidence**
+- The clinician inspects the top WHO ICD-11 differential candidates:
+  - Calibrated probability percentages and raw temperature-scaled logit scores ($T=1.25$).
+  - Matched clinical criteria derived from patient symptoms and subjective narrative history.
+  - Recommended first-line pharmacotherapy, required lab tests, and imaging orders.
+
+**3. Clinician Sign-off or Override**
+- **To Approve Suggestion:** Clinician enters attending name, clinician ID, and taps **"Approve Clinical Pathway"**.
+- **To Override:**
+  - Clinician toggles **"Override Diagnosis"**.
+  - Selects the correct ICD-11 code from the differential list or enters a custom code.
+  - Documents clinical rationale in the notes field.
+  - Taps **"Sign & Confirm Override"**.
+- The backend cryptographically hashes the signature, logs the override justification to the immutable audit trail, and updates the patient's care plan.
+
+---
+
 ## Frequently Asked Questions (FAQ)
 
 **Q: Are camera photos and voice recordings sent to external cloud companies?**  

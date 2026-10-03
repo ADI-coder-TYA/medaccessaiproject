@@ -69,6 +69,7 @@
 ### 🔬 Clinical Decision Support System (CDSS)
 - **WHO ICD-11 Knowledge Graph** — curated concept store with clinical condition priors, symptom linkages, and evidence-based guideline references.
 - **Differential Diagnosis Engine** — Qwen2.5-72B inference combined with temperature-scaled logit scoring ($T=1.25$) and $[-20, 20]$ logit clipping to produce calibrated probabilities for top differential candidates.
+- **Subjective Clinical Notes Synthesis** — deeply scrutinizes free-text patient narratives, duration, triggers, and clinician observations within the Qwen2.5 prompt to refine differential diagnostic reasoning.
 - **Urgency Classification** — categorizes presentations into `ROUTINE`, `PROMPT_EVALUATION`, and `IMMEDIATE_EMERGENCY`.
 - **HL7 FHIR R4 Bundle Export** — transforms diagnostic encounters, observations, and recommendations into standardized clinical FHIR JSON bundles.
 
@@ -77,10 +78,23 @@
 - **On-Device Cough Classifier** — multi-layer neural network classifying cough audio into 4 distinct clinical categories: dry, wet/productive, whooping, or normal.
 - **Acoustic Red-Flag Sentinel** — triggers immediate clinical escalation upon detecting stridor, wheezing, or whoop signatures.
 
-### 💓 Contactless rPPG Camera Vitals
-- **Remote Video Photoplethysmography** — non-invasive pulse wave extraction from facial capillary blood absorption using standard smartphone camera sensors.
-- **Butterworth Bandpass Filtering** — 2nd-order bandpass filter ($0.75–3.5\text{ Hz}$, corresponding to 45–210 BPM) isolating cardiac pulsatile frequencies.
+### 💓 Contactless rPPG Camera Vitals & Dual-Channel DSP
+- **Dual-Channel Adaptive Optical Selection** — dynamically evaluates both Green (contactless facial capillary absorption) and Red (contact fingertip photoplethysmography) channels via Normalized Power Spectral Density (PSD) to choose the optical carrier with highest pulsatile SNR.
+- **Butterworth Bandpass Filtering** — 4th-order bandpass filter ($0.75–3.5\text{ Hz}$, corresponding to 45–210 BPM) isolating cardiac pulsatile frequencies.
+- **Harmonic Peak Tracking & SNR** — sums fundamental cardiac peak ($\pm 0.22\text{ Hz}$) and first harmonic ($\pm 0.22\text{ Hz}$) against the spectral noise floor to compute linear SNR and SNR in dB.
 - **Physiological Red-Flag Sentinel** — automated boundary monitoring detecting acute tachycardia ($>110\text{ BPM}$), bradycardia ($<50\text{ BPM}$), and hypoxia indicators.
+
+### 🚑 Emergency Medical Facilities & Dynamic Capability Deduction
+- **Real-Time Geolocation Facility Discovery** — searches surrounding emergency departments, trauma centers, urgent cares, and student health clinics.
+- **Dynamic Clinical Capability Deduction** — dynamically evaluates patient diagnostic findings and maps them against certified facility capabilities (e.g. Burn Care Unit, Comprehensive Stroke Center, Level 1 Trauma, 24/7 Acute Psychiatric Crisis, Pediatric ER, Advanced Ophthalmic Care).
+- **Direct Dispatch & Calling Rail** — integrates one-tap emergency calling, travel time estimation, distance calculation, and native navigation dispatch.
+
+### 📄 Automated Clinical Referral Letter (PDF) & LOINC Vitals
+- **PDFKit Medical Referral Generator** — programmatically compiles a standardized, hospital-ready clinical referral letter for downstream attending physicians.
+- **Standardized LOINC Medical Observation Coding** — formats vital signs with international LOINC identifiers: Body Temperature (8310-5), Heart Rate (8867-4), Blood Pressure (8480-6 / 8462-4), Oxygen Saturation SpO2 (2708-6), and Pain Severity Score (72514-3).
+- **Bayesian Risk & Evidence Confidence Intervals** — embeds multimodal risk score with 95% confidence intervals and epistemic standard deviation.
+- **Dynamic Clinical Directives & Sign-off** — generates urgent stabilization directives and clinician sign-off block with medical license verification.
+- **Native Flutter Download & Share Sheet** — direct PDF download, share sheet fallback, and native file saving with visual confirmation.
 
 ### 💊 Pharmacy Safety & RxSentinel
 - **Handwritten Prescription Open-ML OCR** — hybrid architecture combining open-weight Vision-Language Models (`GLM-4.6V-Flash`, `Qwen2.5-VL-72B`, `DeepSeek-V4-Flash-Vision` via Hugging Face router) with localized Poppler `pdftotext` and Tesseract.js sanitization fallback (correcting clinical token swaps like O/0, I/1).
@@ -90,13 +104,17 @@
 - **Allergy Safety Sentinel** — cross-checks newly prescribed substances against patient allergy records with allergen cross-reactivity tree analysis to prevent anaphylaxis.
 
 ### 🧠 Psychological First Aid (PFA), Clinical Chatbots & Patient-RAG
-- **Clinical Patient-RAG Architecture (`PatientClinicalRagService`)** — retrieves and synthesizes multi-entity clinical dossiers from Supabase (demographics, active medications, recorded allergies, recent rPPG vitals, and emergency copay claims) to supply deep, clinically-tailored context to chatbots without privacy compromise.
+- **Clinical Patient-RAG Architecture (`PatientClinicalRagService`)** — retrieves and synthesizes multi-entity clinical dossiers from Supabase (patient demographics & canonical roster mapping, active medications, recorded allergies, recent screening vitals with BP/Temp/RR, CDSS evaluations with first-line pathways, and emergency copay claims) to supply deep, clinically-tailored context to chatbots without privacy compromise.
 - **Personalized Mental Health Counselor (`/api/v1/chat/mental-health`)** — combines Gemini Flash with Patient-RAG retrieval, empathetically addressing patient emotional distress while taking active medications, allergies, and recent screening vitals into account.
 - **Emergency Copay & Medical Claim Assistant (`/api/v1/claims/:id/messages`)** — injects live claim amounts, copay relief allocations, and clinical category into multi-turn dialogue with token throttling and memory caching.
 - **Local ONNX Qwen Chat Engine** — runs `Xenova/Qwen1.5-0.5B-Chat` completely on-device without network transmission, ensuring absolute privacy for sensitive mental health conversations.
 - **Life-Safety & Crisis Regex** — instant pattern matching detecting suicide and self-harm keywords, overriding conversation flow to present immediate 24/7 hotlines (Tele-MANAS 14416, 988 Lifeline, Vandrevala).
 - **Rogerian PFA Fallback** — deterministic, non-judgmental reflective listening engine providing continuous availability under zero-memory constraints.
 
+### 📱 Patient Clinical Dashboard & Emergency Medical Passport
+- **Emergency Medical Passport** — interactive patient health passport card displaying verified allergen profile (or NKDA), active medication counts, emergency contact telephone, and immediate care plan status.
+- **Diagnostic Report & CDSS Review Launchpad** — direct navigation from health screening history into the clinical diagnostic report and CDSS decision drawer with full assessment overrides.
+- **Longitudinal Trend Tracking** — historical health screening timeline tracking risk levels, vital sign changes, and clinical recommendations across consultations.
 
 ### 📋 Clinical ESI Triage & Emergency Copay Support
 - **DeepRank Emergency Severity Index (ESI)** — assigns Crisis Severity Index (CSI $\in [0, 1]$) and triage tiers (ESI-1 Resuscitation down to ESI-5 Routine).
@@ -140,12 +158,15 @@ Fallback: Clinical Photo → MobileNet-V3 TFLite → 10-Class Top-K Probabilitie
 | Attribute | Detail |
 |---|---|
 | **Primary Cloud Model** | `Qwen/Qwen2.5-72B-Instruct` via Hugging Face Inference Router |
+| **Subjective History Synthesis** | Deep clinical narrative scrutiny ingesting patient-reported progression, prior exposures, triggers, and clinician notes directly into the Qwen LLM prompt |
 | **Local Engine Fallback** | `DifferentialDiagnosisEngine` — deterministic ICD-11 probability calculator |
 | **Knowledge Base** | `ICD11ConceptStore` — graph of ICD-11 codes, priors, and cardinal symptoms |
 | **Logit Calibration** | Temperature-scaled logit scoring ($T=1.25$) with $[-20, 20]$ boundary clipping |
+| **Serialization Resilience** | Case-invariant DTO schema supporting both camelCase and snake_case representations across cloud and offline records |
 | **Urgency Grades** | `ROUTINE`, `PROMPT_EVALUATION`, `IMMEDIATE_EMERGENCY` |
+| **Institutional Governance** | `CDSSDecisionDrawer` Flutter interface routes findings to assigned Medical Centers; records licensed clinician approvals, cryptographic signatures, and clinical overrides |
 | **Interoperability** | `FHIRConverterService` outputs HL7 FHIR R4 `DiagnosticReport` Bundles |
-| **File** | `intellidesk_backend/src/modules/cdss/CDSSService.ts` |
+| **Files** | `intellidesk_backend/src/modules/cdss/CDSSService.ts`, `QwenInferenceService.ts`, `intellidesk_app/lib/modules/cdss/ui/cdss_decision_drawer.dart` |
 
 ---
 
@@ -193,16 +214,18 @@ Fallback: Clinical Photo → MobileNet-V3 TFLite → 10-Class Top-K Probabilitie
 
 ---
 
-### 4.6 rPPG Vital Sign Processor — Contactless Camera Photoplethysmography
+### 4.6 rPPG Vital Sign Processor — Dual-Channel Contactless & Contact DSP
 
-**Clinical Role:** Non-contact physiological monitoring extracting heart rate (BPM) and SpO2 from ordinary selfie video frames.
+**Clinical Role:** Non-invasive physiological monitoring extracting heart rate (BPM), respiratory rate, SpO2, and HRV RMSSD from ordinary camera streams using adaptive optical channel selection.
 
 | Attribute | Detail |
 |---|---|
-| **Signal Decomposition** | Green-channel facial micro-vascular absorption tracking |
-| **Temporal Resampling** | Uniform 30.0 Hz time-series interpolation across variable camera frame rates |
-| **DSP Filtering** | 2nd-order Butterworth bandpass filter ($0.75–3.5\text{ Hz}$, $45–210\text{ BPM}$) |
-| **Safety Sentinel** | `PhysiologicalRedFlagSentinel` alerts on tachycardia, bradycardia, or low pulse confidence |
+| **Adaptive Channel Selection** | Simultaneously evaluates **Green Channel** (contactless facial capillary light absorption) and **Red Channel** (contact fingertip photoplethysmography), dynamically selecting the optimal optical carrier with highest pulsatile SNR |
+| **Temporal Resampling** | Uniform 30.0 Hz time-series interpolation across variable device camera frame rates |
+| **DSP Filtering** | 4th-order Butterworth bandpass filter ($0.75–3.5\text{ Hz}$, corresponding to $45–210\text{ BPM}$) isolating cardiac pulse waves |
+| **FFT Spectral Estimation** | 2048-point power spectrum with parabolic peak interpolation for sub-bin frequency accuracy |
+| **Harmonic Peak Tracking & SNR** | Integrates fundamental pulse power ($f_0 \pm 0.22\text{ Hz}$) and first harmonic power ($2f_0 \pm 0.22\text{ Hz}$) relative to noise floor via Normalized Power Spectral Density (PSD) |
+| **Safety Sentinel** | `PhysiologicalRedFlagSentinel` alerts on acute tachycardia ($>110\text{ BPM}$), bradycardia ($<50\text{ BPM}$), and hypoxia |
 | **File** | `intellidesk_backend/src/modules/diagnostics/vitals/rPPGSignalProcessor.ts` |
 
 ---
@@ -241,21 +264,19 @@ Fallback: Clinical Photo → MobileNet-V3 TFLite → 10-Class Top-K Probabilitie
 
 ### 4.9 Clinical Patient-RAG Architecture (Retrieval-Augmented Generation)
 
-**Clinical Role:** Supplies multi-entity longitudinal patient data to both conversational assistants (Mental Health Counselor & Claim Copay Assistant) to deliver personalized, safe, and context-aware responses.
+**Clinical Role:** Aggregates and synthesizes longitudinal multi-entity patient dossiers from Supabase to provide deep, safe, and context-aware intelligence to clinical chatbots.
 
 | Attribute | Detail |
 |---|---|
 | **Retriever Service** | `PatientClinicalRagService.ts` |
-| **Data Entities Retrieved** | `profiles` (demographics), `patient_medications` (active therapy), `patient_allergies` (hypersensitivities), `health_screenings` (rPPG vitals & risk indices), `claims` (copay status & amounts) |
-| **Prompt Synthesis** | Domain-tuned context formatting (`MENTAL_HEALTH` vs. `CLAIM_TRIAGE`) ensuring token efficiency |
-| **Clinical Privacy** | Zero data leakage; context strictly scoped to the authenticated patient and claim session |
-| **Crisis Override** | Life-safety regex triggers immediate emergency hotline cards, bypassing non-urgent conversational paths |
-| **Files** | `intellidesk_backend/src/services/patientClinicalRagService.ts`, `intellidesk_backend/src/routes/chat.ts`, `intellidesk_backend/src/services/clinicalCounselorService.ts` |
-
+| **Data Entities Retrieved** | `profiles` (demographics & canonical roster resolution e.g. Priya Sharma `PAT-2026-002`), `patient_medications` (active therapy & dosages), `patient_allergies` (verified hypersensitivities), `health_screenings` (multimodal risk scores, full rPPG vitals including BP/Temp/RR, subjective notes), `cdss_evaluations` (ICD-11 codes, primary titles, first-line treatment pathways), `claims` (emergency copay status & approved amounts) |
+| **Prompt Synthesis** | Dual domain modes: `MENTAL_HEALTH` (empathetic counseling) and `CLAIM_TRIAGE` (copay assistance) with token throttling |
+| **Clinical Privacy** | Zero data leakage; context strictly scoped to authenticated patient sessions with strict FERPA compliance |
+| **Files** | `intellidesk_backend/src/services/patientClinicalRagService.ts`, `intellidesk_backend/src/routes/chat.ts` |
 
 ---
 
-### 4.9 PFA Crisis Counselor — Local ONNX Psychological First Aid
+### 4.10 PFA Crisis Counselor — Local ONNX Psychological First Aid
 
 **Clinical Role:** Provides instantaneous, 100% confidential Psychological First Aid for students experiencing acute emotional crises.
 
@@ -271,7 +292,36 @@ Fallback: Clinical Photo → MobileNet-V3 TFLite → 10-Class Top-K Probabilitie
 
 ---
 
-### 4.10 NLP Clinical Sentiment & Medical Entity Pipeline
+### 4.11 Emergency Medical Facilities & Dynamic Capability Deduction
+
+**Clinical Role:** Geolocation-based emergency medical facility routing dynamically matching diagnosed patient conditions with hospital certifications and clinical capabilities.
+
+| Attribute | Detail |
+|---|---|
+| **Matching Algorithm** | Evaluates diagnostic clinical findings, ICD-11 differential impressions, and acuity tiers against facility specialty taxonomy (e.g. `Burn Care Unit`, `Comprehensive Stroke Center`, `Level 1 Trauma`, `24/7 Acute Psychiatric Crisis`, `Pediatric Emergency`) |
+| **Scoring & Routing** | Haversine distance calculation, estimated travel time, operating status verification, and direct hotlines |
+| **Flutter Interface** | `EmergencyFacilitySheet` bottom sheet with interactive navigation dispatch, direct calling, and facility capability tags |
+| **Files** | `intellidesk_backend/src/modules/diagnostics/facilities/EmergencyFacilityService.ts`, `intellidesk_app/lib/modules/diagnostics/services/HospitalLocatorService.dart`, `intellidesk_app/lib/modules/diagnostics/ui/EmergencyFacilitySheet.dart` |
+
+---
+
+### 4.12 Automated Clinical Referral Letter Generator (PDF & LOINC Standard)
+
+**Clinical Role:** Automatically compiles and signs an official, standardized clinical referral document in PDF format for downstream emergency departments and attending physicians.
+
+| Attribute | Detail |
+|---|---|
+| **PDF Rendering Engine** | Server-side vector PDF generation via `pdfkit` |
+| **Standardized LOINC Coding** | Vital signs mapped to international clinical observation codes: Body Temperature (8310-5), Heart Rate (8867-4), Blood Pressure (8480-6 / 8462-4), Oxygen Saturation SpO2 (2708-6), Pain Severity (72514-3) |
+| **Bayesian Evidence Summary** | Renders continuous Multimodal Risk Score, 95% Confidence Interval range, and epistemic standard deviation |
+| **Dynamic Clinical Directives** | Recommends triage priority, urgent stabilization steps, and diagnostic workup recommendations |
+| **Physician Attestation** | Attending physician title, license verification block, and signature attestation line |
+| **Client Download Rail** | `ClinicalReportShareSheet.dart` provides direct in-app PDF downloading, native share intent fallback, and offline saving |
+| **Files** | `intellidesk_backend/src/modules/diagnostics/fhir/ReferralLetterGenerator.ts`, `intellidesk_app/lib/modules/diagnostics/ui/ClinicalReportShareSheet.dart` |
+
+---
+
+### 4.13 NLP Clinical Sentiment & Medical Entity Pipeline
 
 **Clinical Role:** Ingests unstructured patient messages to extract emotional distress metrics and urgent clinical entities.
 
@@ -285,7 +335,7 @@ Fallback: Clinical Photo → MobileNet-V3 TFLite → 10-Class Top-K Probabilitie
 
 ---
 
-### 4.11 Clinical Counselor — Real-Time Conversational AI
+### 4.14 Clinical Counselor — Real-Time Conversational AI
 
 **Clinical Role:** Real-time conversational triage assistant answering medical policy and symptom questions.
 
@@ -299,7 +349,7 @@ Fallback: Clinical Photo → MobileNet-V3 TFLite → 10-Class Top-K Probabilitie
 
 ---
 
-### 4.12 DeepRank — Crisis Severity Indexer & ESI Triage
+### 4.15 DeepRank — Crisis Severity Indexer & ESI Triage
 
 **Clinical Role:** Computes a continuous Crisis Severity Index (CSI $\in [0, 1]$) and maps the patient into standard Emergency Severity Index (ESI) tiers.
 
@@ -313,7 +363,7 @@ Fallback: Clinical Photo → MobileNet-V3 TFLite → 10-Class Top-K Probabilitie
 
 ---
 
-### 4.13 Multimodal Medical Intake Processor — Gemini 2.0 Flash
+### 4.16 Multimodal Medical Intake Processor — Gemini 2.0 Flash
 
 **Clinical Role:** Comprehensive multimodal parsing of patient text narratives paired with medical bills or clinical photographs.
 
@@ -326,7 +376,7 @@ Fallback: Clinical Photo → MobileNet-V3 TFLite → 10-Class Top-K Probabilitie
 
 ---
 
-### 4.14 Medical Privacy & PHI Redaction Filter
+### 4.17 Medical Privacy & PHI Redaction Filter
 
 **Clinical Role:** Redacts protected health information (PHI) before generating external notifications or faculty leave letters.
 
@@ -339,7 +389,7 @@ Fallback: Clinical Photo → MobileNet-V3 TFLite → 10-Class Top-K Probabilitie
 
 ---
 
-### 4.15 Fraud Sentinel — Multi-Layer Claim Integrity Detection
+### 4.18 Fraud Sentinel — Multi-Layer Claim Integrity Detection
 
 **Welfare Role:** Safeguards institutional medical relief funds from fraudulent exploitation.
 
@@ -354,7 +404,7 @@ Fallback: Clinical Photo → MobileNet-V3 TFLite → 10-Class Top-K Probabilitie
 
 ---
 
-### 4.16 Anomaly Autoencoder — Feature Reconstruction NN
+### 4.19 Anomaly Autoencoder — Feature Reconstruction NN
 
 **Welfare Role:** Learns legitimate claim manifold; high reconstruction error signals anomalous submissions.
 
@@ -367,7 +417,7 @@ Fallback: Clinical Photo → MobileNet-V3 TFLite → 10-Class Top-K Probabilitie
 
 ---
 
-### 4.17 Temporal Attrition LSTM — Longitudinal Health Risk
+### 4.20 Temporal Attrition LSTM — Longitudinal Health Risk
 
 **Clinical Role:** Evaluates time-series trajectories across consecutive health center visits to detect escalating dropout or health burnout risk.
 
@@ -379,7 +429,7 @@ Fallback: Clinical Photo → MobileNet-V3 TFLite → 10-Class Top-K Probabilitie
 
 ---
 
-### 4.18 Grant Optimizer — Monte Carlo Dropout Neural Regression
+### 4.21 Grant Optimizer — Monte Carlo Dropout Neural Regression
 
 **Welfare Role:** Calculates optimal emergency medical copay disbursement amount with Bayesian uncertainty quantification.
 
@@ -391,7 +441,7 @@ Fallback: Clinical Photo → MobileNet-V3 TFLite → 10-Class Top-K Probabilitie
 
 ---
 
-### 4.19 Policy Adjudicator & Semantic Search — Gemini RAG
+### 4.22 Policy Adjudicator & Semantic Search — Gemini RAG
 
 **Welfare Role:** Semantic matching and Chain-of-Thought policy adjudication for institutional health insurance copays.
 
@@ -676,8 +726,14 @@ intellidesk/
 |---|---|---|
 | `POST` | `/api/v1/diagnostics/vision` | Upload clinical image $\rightarrow$ Qwen2.5-VL 72B / MobileNet assessment + Grad-CAM |
 | `POST` | `/api/v1/diagnostics/audio` | Ingest cough audio $\rightarrow$ 16-d MFCC extraction $\rightarrow$ 4-class cough classification |
-| `POST` | `/api/v1/diagnostics/vitals` | Ingest facial video frame sequence $\rightarrow$ rPPG pulse extraction & vitals red flags |
+| `POST` | `/api/v1/diagnostics/vitals` | Ingest facial/fingertip video frames $\rightarrow$ dual-channel rPPG pulse extraction & vitals red flags |
+| `POST` | `/api/v1/diagnostics/facilities/emergency` | Search nearby emergency facilities with dynamic clinical capability deduction |
+| `POST` | `/api/v1/diagnostics/referral-letter/pdf` | Generate standardized clinical referral letter (PDF) with LOINC vitals & clinician signature |
+| `GET` | `/api/v1/diagnostics/screenings/patient/:patientId` | Retrieve longitudinal multimodal health screening records |
 | `POST` | `/api/v1/cdss/evaluate` | Ingest symptom payload $\rightarrow$ WHO ICD-11 differential diagnosis & FHIR R4 bundle |
+| `POST` | `/api/v1/cdss/predict-qwen` | Differential disease prediction via Qwen2.5-72B with subjective clinical notes synthesis |
+| `POST` | `/api/v1/cdss/approve` | Attending clinician sign-off or diagnostic override with cryptographic signature hash |
+| `GET` | `/api/v1/cdss/evaluation/:screeningId` | Retrieve cached or persisted CDSS evaluation by health screening ID |
 
 ### Pharmacy & Medication Safety
 
@@ -686,11 +742,12 @@ intellidesk/
 | `POST` | `/api/v1/pharmacy/parse` | Ingest prescription image $\rightarrow$ OCR extraction $\rightarrow$ RxNorm canonical matching |
 | `POST` | `/api/v1/pharmacy/interactions` | Ingest medication list $\rightarrow$ check 8,000+ drug-drug interactions & allergy profile |
 
-### Psychological First Aid (PFA) & Crisis Chat
+### Psychological First Aid (PFA), Clinical Chatbots & Patient-RAG
 
 | Method | Route | Description |
 |---|---|---|
 | `POST` | `/api/v1/chat` | Send message $\rightarrow$ on-device Qwen PFA reply + self-harm crisis interception |
+| `POST` | `/api/v1/chat/mental-health` | Patient-RAG augmented empathetic PFA counselor with full patient dossier context |
 | `GET` | `/api/v1/chat/:ticketId/messages` | Retrieve confidential PFA chat history for a clinical claim |
 
 ### Clinical Triage & Intake

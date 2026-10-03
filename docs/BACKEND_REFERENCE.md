@@ -50,9 +50,11 @@ intellidesk_backend/
 │   │   │   │   ├── AudioFeatureExtractor.ts    # 16-d MFCC extraction (Meyda DSP)
 │   │   │   │   └── CloudAudioClassifier.ts     # Hugging Face audio inference client
 │   │   │   ├── vitals/
-│   │   │   │   ├── rPPGSignalProcessor.ts      # Facial video camera pulse extractor
-│   │   │   │   ├── ButterworthFilter.ts        # 2nd-order 0.75-3.5 Hz bandpass filter
+│   │   │   │   ├── rPPGSignalProcessor.ts      # Dual-channel video pulse & optical SNR extractor
+│   │   │   │   ├── ButterworthFilter.ts        # 4th-order 0.75-3.5 Hz bandpass filter
 │   │   │   │   └── PhysiologicalRedFlagSentinel.ts # Tachycardia/bradycardia alerts
+│   │   │   ├── facilities/
+│   │   │   │   └── EmergencyFacilityService.ts # Geolocation discovery & clinical capability deduction
 │   │   │   ├── fusion/
 │   │   │   │   ├── MultimodalFusionModel.ts    # 168-d late-fusion DNN (visual+symptom+vitals)
 │   │   │   │   ├── multimodalRiskNetwork.ts    # Fusion coordinator & uncertainty engine
@@ -62,7 +64,7 @@ intellidesk_backend/
 │   │   │   │   └── uncertaintyEngine.ts        # Monte Carlo Dropout confidence bounds
 │   │   │   ├── fhir/
 │   │   │   │   ├── FHIRConverterService.ts     # HL7 FHIR R4 DiagnosticReport generator
-│   │   │   │   └── ReferralLetterGenerator.ts  # Formats official medical referral letters
+│   │   │   │   └── ReferralLetterGenerator.ts  # Compiles PDF referral letters with LOINC vitals
 │   │   │   ├── progression/
 │   │   │   │   └── ScreeningDeltaAnalyzer.ts   # Tracks lesion healing over time
 │   │   │   └── routes/diagnosticsRouter.ts     # /api/v1/diagnostics endpoints
@@ -75,6 +77,7 @@ intellidesk_backend/
 │   │       ├── RxSentinelService.ts            # Pharmacy safety coordinator
 │   │       └── routes/pharmacyRouter.ts        # /api/v1/pharmacy endpoints
 │   ├── services/                       # Triage, Welfare & Foundation Services
+│   │   ├── patientClinicalRagService.ts # Multi-entity patient dossier aggregator for clinical AI
 │   │   ├── deepRankModel.ts            # DeepRank Crisis Severity Index (CSI) NN
 │   │   ├── crisisCounselorService.ts   # On-device Qwen ONNX PFA counselor
 │   │   ├── clinicalCounselorService.ts # Gemini Flash Lite clinical triage chat
@@ -149,7 +152,8 @@ The backend initializes sequentially to ensure zero-crash resilience:
 ## 4. Clinical Modules Architecture
 
 ### 4.1 CDSS — Clinical Decision Support System (`src/modules/cdss/`)
-- **`CDSSService.ts`**: Coordinates clinical evaluations. Validates incoming symptoms, applies in-memory caching keyed by `screeningId` to ensure idempotency, and routes to either cloud Qwen2.5-72B or local deterministic algorithms.
+- **`CDSSService.ts`**: Coordinates clinical evaluations. Validates incoming symptoms, applies in-memory caching keyed by `screeningId` to ensure idempotency, and routes to either cloud Qwen2.5-72B or local deterministic algorithms. Features case-invariant normalization supporting both camelCase and snake_case DTO schemas across cloud and offline records.
+- **`QwenInferenceService.ts`**: Cloud VLM/LLM inference client for Qwen2.5-72B. Seamlessly extracts and scrutinizes patient clinical notes and subjective history narratives, synthesizing patient-reported symptoms, triggers, prior exposures, and duration into the diagnostic prompt.
 - **`DifferentialDiagnosisEngine.ts`**: Evaluates symptom vectors against the WHO ICD-11 graph. Applies temperature-scaled logit transformation ($T=1.25$) with clipping to $[-20, 20]$ to prevent numerical overflow and calculate calibrated probability distributions.
 - **`ICD11ConceptStore.ts`**: In-memory knowledge base containing cardinal ICD-11 codes, baseline prevalence priors, severity weights, and contraindications.
 - **`FHIRConverterService.ts`**: Transforms CDSS outputs into HL7 FHIR R4 `Bundle` containing `DiagnosticReport`, `Observation`, and `Condition` resources.
@@ -162,9 +166,13 @@ The backend initializes sequentially to ensure zero-crash resilience:
   - `AudioFeatureExtractor.ts`: Processes 16kHz uncompressed WAV buffers via Meyda.js, extracting 16 Mel-Frequency Cepstral Coefficients (MFCCs).
   - `CoughClassifier.ts`: Dense neural network (`@tensorflow/tfjs-node`) mapping 16 MFCC features to 4 classes: dry, wet, whooping, normal.
 - **Vitals (`vitals/`)**:
-  - `rPPGSignalProcessor.ts`: Samples green-channel pixel variance from facial video at 30Hz.
-  - `ButterworthFilter.ts`: 2nd-order bandpass filter ($0.75–3.5\text{ Hz}$) isolating pulse signals in the 45–210 BPM human heart rate band.
-  - `PhysiologicalRedFlagSentinel.ts`: Generates real-time alerts for tachycardia ($>110\text{ BPM}$), bradycardia ($<50\text{ BPM}$), or signal noise.
+  - `rPPGSignalProcessor.ts`: Advanced bio-signal processor featuring **Dual-Channel Adaptive Optical Selection**. Simultaneously evaluates **Green Channel** (contactless facial capillary absorption) and **Red Channel** (contact fingertip photoplethysmography). Computes Normalized Power Spectral Density (PSD), summing fundamental pulse power ($f_0 \pm 0.22\text{ Hz}$) and first harmonic ($2f_0 \pm 0.22\text{ Hz}$) relative to noise floor to dynamically select the optical carrier with highest pulsatile SNR.
+  - `ButterworthFilter.ts`: 4th-order bandpass filter ($0.75–3.5\text{ Hz}$) isolating pulse signals in the 45–210 BPM human heart rate band.
+  - `PhysiologicalRedFlagSentinel.ts`: Generates real-time alerts for tachycardia ($>110\text{ BPM}$), bradycardia ($<50\text{ BPM}$), hypoxia, or signal noise.
+- **Emergency Facilities (`facilities/`)**:
+  - `EmergencyFacilityService.ts`: Real-time emergency medical facility discovery engine. Implements **Dynamic Clinical Capability Deduction**, matching diagnosed patient conditions, ICD-11 differentials, and triage urgency against verified facility services (Burn Units, Comprehensive Stroke Centers, Level 1 Trauma, 24/7 Psychiatric Crisis, Pediatric ER). Computes Haversine distance, travel times, and emergency telephone lines.
+- **Clinical Referral Letters & FHIR (`fhir/`)**:
+  - `ReferralLetterGenerator.ts`: Vector PDF generation via `pdfkit`. Formats official medical referral letters encoding vital signs with standard LOINC codes (Temperature: 8310-5, HR: 8867-4, BP: 8480-6, SpO2: 2708-6, Pain: 72514-3). Computes Bayesian uncertainty confidence intervals, urgent clinical directives, and attending physician sign-off block.
 - **Fusion & Explainability (`fusion/`, `explainability/`)**:
   - `MultimodalFusionModel.ts`: Late-fusion DNN concatenating 128 visual features + 32 clinical symptom features + 8 demographic features into a 168-d vector, outputting continuous risk and categorical care tiers.
   - `gradCamGenerator.ts`: Computes gradient of the predicted class score with respect to convolutional feature maps, producing normalized 2D saliency heatmaps.
@@ -181,7 +189,14 @@ The backend initializes sequentially to ensure zero-crash resilience:
 
 ## 5. Core Services Architecture (`src/services/`)
 
-- **`patientClinicalRagService.ts`**: Unified Clinical Patient RAG (Retrieval-Augmented Generation) Service. Queries Supabase across `profiles`, `patient_medications`, `patient_allergies`, `health_screenings` (rPPG vitals), and `claims` to synthesize context-rich, privacy-preserved prompt blocks tailored for both the Mental Health Counselor and the Emergency Claim Copay Assistant.
+- **`patientClinicalRagService.ts`**: Unified Clinical Patient RAG (Retrieval-Augmented Generation) Service. Aggregates multi-entity clinical dossiers from Supabase across:
+  - `profiles` (demographics & canonical patient roster resolution e.g., Priya Sharma `PAT-2026-002`)
+  - `patient_medications` (active medications & dosage regimens)
+  - `patient_allergies` (verified hypersensitivities)
+  - `health_screenings` (multimodal risk scores, full rPPG vitals with BP/Temp/RR, and subjective notes)
+  - `cdss_evaluations` (ICD-11 codes, primary titles, and first-line treatment pathways)
+  - `claims` (emergency copay status & approved allocations)
+  Synthesizes context-rich, privacy-preserved prompt blocks tailored for both the Mental Health Counselor (`/api/v1/chat/mental-health`) and the Emergency Claim Copay Assistant.
 - **`clinicalCounselorService.ts`**: Multi-turn clinical copay counselor. Injects live claim RAG context into Gemini Flash Lite prompts with per-session rate throttling, memory response caching, and local Rogerian Psychological First Aid (PFA) fallbacks.
 - **`deepRankModel.ts`**: Neural network evaluating crisis text. Computes Crisis Severity Index (CSI $\in [0, 1]$) and maps to ESI triage levels:
   - $\text{CSI} \ge 0.85 \rightarrow \text{ESI-1 (Critical / Resuscitation)}$
@@ -201,7 +216,6 @@ The backend initializes sequentially to ensure zero-crash resilience:
   - *Emergency life-safety claims automatically bypass velocity checks.*
 - **`disbursementService.ts` & `payoutService.ts`**: Multi-rail disbursement executing instant UPI/IMPS via RazorpayX, USD payouts via Stripe, or generating campus clinic QR vouchers.
 
-
 ---
 
 ## 6. Complete API Reference
@@ -211,9 +225,23 @@ The backend initializes sequentially to ensure zero-crash resilience:
 |---|---|---|---|
 | `POST` | `/api/v1/diagnostics/vision` | Authenticated | Upload clinical image $\rightarrow$ Qwen2.5-VL 72B / MobileNet + Grad-CAM heatmap |
 | `POST` | `/api/v1/diagnostics/audio` | Authenticated | Upload cough audio $\rightarrow$ 16-d MFCC extraction $\rightarrow$ 4-class respiratory model |
-| `POST` | `/api/v1/diagnostics/vitals` | Authenticated | Ingest facial video frames $\rightarrow$ rPPG pulse extraction & tachycardia/bradycardia check |
+| `POST` | `/api/v1/diagnostics/vitals` | Authenticated | Ingest facial/fingertip video frames $\rightarrow$ dual-channel rPPG pulse extraction & vitals red flags |
+| `POST` | `/api/v1/diagnostics/facilities/emergency` | Authenticated | Search nearby emergency facilities with dynamic clinical capability deduction |
+| `GET` | `/api/v1/diagnostics/facilities/capabilities` | Authenticated | List standardized emergency facility clinical capability taxonomy |
+| `POST` | `/api/v1/diagnostics/referral-letter/pdf` | Authenticated | Compile standardized PDF clinical referral letter with LOINC vitals & clinician signature |
+| `GET` | `/api/v1/diagnostics/screenings/patient/:patientId` | Authenticated | Retrieve longitudinal multimodal health screening records |
 | `POST` | `/api/v1/diagnostics/fusion` | Authenticated | Concatenate vision + symptoms + vitals $\rightarrow$ 168-d late-fusion clinical risk score |
 | `POST` | `/api/v1/cdss/evaluate` | Authenticated | Submit clinical symptoms $\rightarrow$ WHO ICD-11 differential diagnosis & FHIR R4 Bundle |
+| `POST` | `/api/v1/cdss/predict-qwen` | Authenticated | Qwen2.5-72B differential disease prediction with subjective clinical notes synthesis |
+| `POST` | `/api/v1/cdss/approve` | Clinician / Admin | Attending clinician sign-off or diagnostic override with cryptographic signature hash |
+| `GET` | `/api/v1/cdss/evaluation/:screeningId` | Authenticated | Retrieve cached or persisted CDSS evaluation by health screening ID |
+
+### 🔷 Psychological First Aid (PFA), Clinical Chatbots & Patient-RAG
+| Method | Route | Auth / Role | Description |
+|---|---|---|---|
+| `POST` | `/api/v1/chat` | Authenticated | Send message $\rightarrow$ on-device Qwen PFA reply + self-harm crisis interception |
+| `POST` | `/api/v1/chat/mental-health` | Authenticated | Patient-RAG augmented empathetic PFA counselor with full patient dossier context |
+| `GET` | `/api/v1/chat/:ticketId/messages` | Authenticated | Retrieve confidential PFA chat history for a clinical claim |
 
 ### 🔷 Pharmacy & Medication Safety
 | Method | Route | Auth / Role | Description |

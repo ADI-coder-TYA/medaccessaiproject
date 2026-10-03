@@ -65,8 +65,8 @@ class _LongitudinalHistoryScreenState extends State<LongitudinalHistoryScreen> {
     });
 
     try {
-      final patientId = (widget.patientId != null && widget.patientId!.isNotEmpty && widget.patientId != 'demo-patient-001')
-          ? widget.patientId!
+      final patientId = (widget.patientId != null && widget.patientId!.trim().isNotEmpty)
+          ? widget.patientId!.trim()
           : (ApiConfig.userId ?? 'PAT-2026-001');
       final history = await _diagnosticsService.fetchLongitudinalHistory(patientId);
 

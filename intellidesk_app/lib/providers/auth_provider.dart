@@ -146,25 +146,25 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// One-tap demo login as Alex Rivera (Patient / Member)
+  /// One-tap login as Priya Sharma (Patient / Member)
   Future<void> loginAsPatient() async {
     final success = await login(
-      email: 'alex.rivera@campushealth.edu',
+      email: 'priya.sharma@campushealth.edu',
       password: 'Patient@123',
-      role: UserRole.student,
+      role: UserRole.patient,
     );
     if (!success) {
       _user = const UserProfile(
-        id: 'usr_pat_001',
-        name: 'Alex Rivera',
-        email: 'alex.rivera@campushealth.edu',
-        studentId: 'PAT-2026-001',
+        id: 'usr_pat_PAT-2026-002',
+        name: 'Priya Sharma',
+        email: 'priya.sharma@campushealth.edu',
+        studentId: 'PAT-2026-002',
         role: UserRole.patient,
         department: 'General Health & Outpatient Care',
-        institutionId: 'inst-001',
-        phone: '+91 98765 43210',
+        institutionId: 'nano123',
+        phone: '+91 98111 22334',
         avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-        token: 'jwt_mock_token_patient_alex_rivera',
+        token: 'jwt_mock_token_patient_priya_sharma',
       );
       await _persistSession();
       _syncApiConfig();
@@ -175,24 +175,24 @@ class AuthProvider extends ChangeNotifier {
   /// Backward compatibility alias
   Future<void> loginAsStudent() => loginAsPatient();
 
-  /// One-tap demo login as Dr. Sarah Chen (Chief Medical Officer)
+  /// One-tap login as Clinical Admin (Dr. Aditya)
   Future<void> loginAsAdmin() async {
     final success = await login(
-      email: 'admin@campushealth.edu',
+      email: 'admin@nano.org',
       password: 'Patient@123',
       role: UserRole.admin,
     );
     if (!success) {
       _user = const UserProfile(
-        id: 'usr_adm_999',
-        name: 'Dr. Sarah Chen, MD',
-        email: 'admin@campushealth.edu',
+        id: 'usr_adm_8820',
+        name: 'Dr. Aditya',
+        email: 'admin@nano.org',
         role: UserRole.admin,
         department: 'Clinical Triage & Emergency Copay Desk',
-        institutionId: 'inst-001',
+        institutionId: 'nano123',
         phone: '+91 98111 22334',
         avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150',
-        token: 'jwt_mock_token_admin_sarah_chen',
+        token: 'jwt_mock_token_admin_aditya',
       );
       await _persistSession();
       _syncApiConfig();

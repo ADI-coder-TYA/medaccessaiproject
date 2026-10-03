@@ -60,14 +60,14 @@ class _EmergencyFacilitySheetState extends State<EmergencyFacilitySheet> {
     }
   }
 
-  Future<void> _loadFacilities() async {
+  Future<void> _loadFacilities({bool forceRefresh = false}) async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      final list = await _locatorService.getNearbyFacilities(radiusKm: 20.0);
+      final list = await _locatorService.getNearbyFacilities(radiusKm: 20.0, forceRefresh: forceRefresh);
       setState(() {
         _facilities = list;
         _isLoading = false;
@@ -192,7 +192,7 @@ class _EmergencyFacilitySheetState extends State<EmergencyFacilitySheet> {
                               Text(_errorMessage!),
                               const SizedBox(height: 12),
                               ElevatedButton(
-                                onPressed: _loadFacilities,
+                                onPressed: () => _loadFacilities(forceRefresh: true),
                                 child: const Text('Retry Search'),
                               ),
                             ],

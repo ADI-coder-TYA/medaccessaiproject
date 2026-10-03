@@ -285,66 +285,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                               ],
                             ),
                           ),
-                          const SizedBox(height: 24),
-
-                          // Divider
-                          Row(
-                            children: const [
-                              Expanded(child: Divider(color: Color(0x330F172A))),
-                              Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 12),
-                                child: Text(
-                                  'QUICK DEMO ACCESS',
-                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF64748B), letterSpacing: 0.5),
-                                ),
-                              ),
-                              Expanded(child: Divider(color: Color(0x330F172A))),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Quick Demo Login Cards
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: () {
-                                    auth.loginAsPatient();
-                                  },
-                                  icon: const Icon(Icons.person, size: 16, color: Color(0xFF0D9488)),
-                                  label: const Text(
-                                    'Patient / Member\n(Alex Rivera)',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, height: 1.2),
-                                  ),
-                                  style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                                    side: const BorderSide(color: Color(0xFF0D9488), width: 1.2),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: () {
-                                    auth.loginAsAdmin();
-                                  },
-                                  icon: const Icon(Icons.local_hospital, size: 16, color: Color(0xFF0284C7)),
-                                  label: const Text(
-                                    'Chief Medical Officer\n(Dr. Sarah Chen)',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, height: 1.2),
-                                  ),
-                                  style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                                    side: const BorderSide(color: Color(0xFF0284C7), width: 1.2),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
                         ],
                       ),
                     ),

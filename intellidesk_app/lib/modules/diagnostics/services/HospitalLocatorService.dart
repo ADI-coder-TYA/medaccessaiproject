@@ -203,16 +203,16 @@ class HospitalLocatorService {
     return math.max(1, mins);
   }
 
-  // Static spatial & temporal cache (<100m displacement & 10 min TTL)
+  // Static spatial & temporal cache (<200m displacement & 6 hours TTL)
   static double? _lastQueryLat;
   static double? _lastQueryLng;
   static double? _lastQueryRadiusKm;
   static DateTime? _lastQueryTime;
   static List<EmergencyFacility>? _cachedFacilities;
 
-  // Minimum displacement threshold: 100 meters = 0.10 km
-  static const double minDisplacementKm = 0.10;
-  static const Duration cacheTtl = Duration(minutes: 10);
+  // Minimum displacement threshold: 200 meters = 0.20 km
+  static const double minDisplacementKm = 0.20;
+  static const Duration cacheTtl = Duration(hours: 6);
 
   /**
    * Resets spatial cache (useful for tests or manual pull-to-refresh).
@@ -227,13 +227,14 @@ class HospitalLocatorService {
 
   /**
    * Queries nearby emergency care centers, trauma hospitals, and campus clinics within 20km radius.
-   * Throttles requests if user moved < 100m since last query, serving updated relative distances in-memory.
+   * Throttles requests if user moved < 200m since last query, serving updated relative distances in-memory.
    * Seamlessly falls back to local Haversine offline dataset if network or backend API is unreachable.
    */
   Future<List<EmergencyFacility>> getNearbyFacilities({
     double? latitude,
     double? longitude,
     double radiusKm = 20.0,
+    bool forceRefresh = false,
   }) async {
     final coords = (latitude != null && longitude != null)
         ? {'latitude': latitude, 'longitude': longitude}
@@ -242,8 +243,9 @@ class HospitalLocatorService {
     final userLat = coords['latitude']!;
     final userLng = coords['longitude']!;
 
-    // Check spatial cache (<100m displacement & cache not expired)
-    if (_cachedFacilities != null &&
+    // Check spatial cache (<200m displacement & cache not expired & !forceRefresh)
+    if (!forceRefresh &&
+        _cachedFacilities != null &&
         _lastQueryLat != null &&
         _lastQueryLng != null &&
         _lastQueryRadiusKm == radiusKm &&
@@ -253,7 +255,7 @@ class HospitalLocatorService {
       final displacementMeters = (displacementKm * 1000).round();
 
       if (displacementKm < minDisplacementKm) {
-        debugPrint('⚡ [HospitalLocatorService] Spatial Cache Hit! Displacement only ${displacementMeters}m (< 100m). Serving in-memory distances without network call.');
+        debugPrint('⚡ [HospitalLocatorService] Spatial Cache Hit! Displacement only ${displacementMeters}m (< 200m). Serving in-memory distances without network call.');
 
         // Re-compute distances & travel times relative to current location in-memory
         final updatedList = _cachedFacilities!.map((facility) {

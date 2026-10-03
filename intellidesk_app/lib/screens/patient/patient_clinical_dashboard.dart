@@ -70,7 +70,7 @@ class _PatientClinicalDashboardState extends State<PatientClinicalDashboard> wit
 
   Future<void> _fetchClinicalOverview() async {
     final auth = context.read<AuthProvider>();
-    final patientId = auth.user?.id ?? 'pat-demo-01';
+    final patientId = auth.user?.patientId ?? auth.user?.id ?? 'pat-demo-01';
 
     setState(() => _isLoadingOverview = true);
 
@@ -690,9 +690,18 @@ class _PatientClinicalDashboardState extends State<PatientClinicalDashboard> wit
               icon: const Icon(Icons.analytics_outlined, size: 16),
               label: const Text('Open Diagnostic Report & CDSS Review', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
               onPressed: () {
+                final targetAssessment = liveAssessment ??
+                    (rawScreening != null
+                        ? RiskAssessment.fromDbScreening(Map<String, dynamic>.from(rawScreening))
+                        : null);
+
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const DiagnosticResultsScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => DiagnosticResultsScreen(
+                      assessmentOverride: targetAssessment,
+                    ),
+                  ),
                 );
               },
             ),
@@ -703,12 +712,56 @@ class _PatientClinicalDashboardState extends State<PatientClinicalDashboard> wit
   }
 
   Widget _buildMedicalPassportSummaryCard(bool isDark) {
+    final auth = context.watch<AuthProvider>();
+
+    // 1. Dynamic Allergies from overview / live records
+    final rawAllergies = _backendOverview?['allergies'];
+    final List<String> allergiesList = [];
+    if (rawAllergies is List) {
+      for (final a in rawAllergies) {
+        if (a is String && a.trim().isNotEmpty) {
+          allergiesList.add(a.trim());
+        } else if (a is Map) {
+          final g = a['allergenGroup'] ?? a['allergen_group'] ?? a['name'];
+          if (g != null && g.toString().trim().isNotEmpty) {
+            allergiesList.add(g.toString().trim());
+          }
+        }
+      }
+    }
+    final String allergiesDisplay = allergiesList.isNotEmpty
+        ? (allergiesList.length == 1
+            ? allergiesList.first.toUpperCase()
+            : '${allergiesList.first.toUpperCase()} (+${allergiesList.length - 1})')
+        : 'NKDA (None)';
+    final Color allergiesColor = allergiesList.isNotEmpty
+        ? const Color(0xFFD97706)
+        : const Color(0xFF059669);
+
+    // 2. Dynamic Active Medications
+    final rawMedsCount = _backendOverview?['activeMedicationsCount'];
+    final rawMedsList = _backendOverview?['activeMedications'];
+    final int medsCount = rawMedsCount is int
+        ? rawMedsCount
+        : (rawMedsList is List ? rawMedsList.length : 0);
+    final String medsDisplay = medsCount > 0
+        ? (medsCount == 1 ? '1 Active' : '$medsCount Active')
+        : 'None Active';
+    final Color medsColor = medsCount > 0
+        ? const Color(0xFF0284C7)
+        : const Color(0xFF64748B);
+
+    // 3. Dynamic Emergency Contact Phone
+    final emergencyPhone = (auth.user?.phone != null && auth.user!.phone!.trim().isNotEmpty)
+        ? auth.user!.phone!.trim()
+        : '+1-555-0199';
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.03),
@@ -733,8 +786,12 @@ class _PatientClinicalDashboardState extends State<PatientClinicalDashboard> wit
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Emergency Medical Passport & Care Plan',
-                  style: GoogleFonts.outfit(color: const Color(0xFF0F172A), fontSize: 14, fontWeight: FontWeight.bold),
+                  'Emergency Medical Passport',
+                  style: GoogleFonts.outfit(
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -765,20 +822,18 @@ class _PatientClinicalDashboardState extends State<PatientClinicalDashboard> wit
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
+              color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
+              border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildPassportDetail('BLOOD GROUP', 'O+ POS', const Color(0xFFEF4444)),
+                _buildPassportDetail('ALLERGIES', allergiesDisplay, allergiesColor),
                 _buildPassportDivider(),
-                _buildPassportDetail('ALLERGIES', 'Penicillins', const Color(0xFFD97706)),
+                _buildPassportDetail('MEDICATIONS', medsDisplay, medsColor),
                 _buildPassportDivider(),
-                _buildPassportDetail('HEALTH PLAN', 'Comprehensive', const Color(0xFF059669)),
-                _buildPassportDivider(),
-                _buildPassportDetail('CARE STATUS', 'Stable', const Color(0xFF0284C7)),
+                _buildPassportDetail('EMERGENCY CONTACT', emergencyPhone, const Color(0xFFEF4444)),
               ],
             ),
           ),

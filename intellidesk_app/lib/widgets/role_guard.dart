@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/user_role.dart';
 import '../providers/auth_provider.dart';
+import '../main.dart';
 import 'glass_card.dart';
 
 class RoleGuard extends StatelessWidget {
@@ -75,6 +76,10 @@ class RoleGuard extends StatelessWidget {
               const SizedBox(height: 24),
               ElevatedButton.icon(
                 onPressed: () {
+                  Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const AuthGate()),
+                    (route) => false,
+                  );
                   context.read<AuthProvider>().logout();
                 },
                 icon: const Icon(Icons.logout),

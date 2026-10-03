@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import '../../../config/api_config.dart';
 import '../../../theme/app_theme.dart';
 import '../models/risk_assessment.dart';
 import '../providers/diagnostics_provider.dart';
@@ -105,7 +106,10 @@ class _ScreeningResultScreenState extends State<ScreeningResultScreen> {
             icon: const Icon(Icons.show_chart),
             tooltip: 'Longitudinal Progression',
             onPressed: () {
-              final pId = session.patientId.isNotEmpty ? session.patientId : (ApiConfig.userId ?? 'PAT-2026-001');
+              final rawId = session?.patientId;
+              final pId = (rawId != null && rawId.isNotEmpty)
+                  ? rawId
+                  : (ApiConfig.userId ?? 'PAT-2026-001');
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (context) => LongitudinalHistoryScreen(

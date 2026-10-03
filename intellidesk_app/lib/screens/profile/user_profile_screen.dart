@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../config/api_config.dart';
 import '../../providers/auth_provider.dart';
 import '../auth/login_screen.dart';
+import '../../main.dart';
 
 class UserProfileScreen extends StatefulWidget {
   const UserProfileScreen({super.key});
@@ -133,14 +134,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              Navigator.of(dialogCtx).pop();
-              await context.read<AuthProvider>().logout();
-              if (context.mounted) {
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  (route) => false,
-                );
-              }
+              final nav = Navigator.of(context, rootNavigator: true);
+              final auth = context.read<AuthProvider>();
+              nav.pop(); // Close confirmation dialog
+              await auth.logout();
+              nav.pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const AuthGate()),
+                (route) => false,
+              );
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFDC2626),
@@ -168,7 +169,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           .map((s) => '${s[0].toUpperCase()}${s.substring(1)}')
           .join(' ');
     }
-    return isStudent ? 'Alex Rivera' : 'Clinical Administrator';
+    return isStudent ? 'Verified Patient' : 'Clinical Administrator';
   }
 
   String _getInitials(String name) {

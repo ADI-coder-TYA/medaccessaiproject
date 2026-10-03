@@ -89,11 +89,15 @@ void main() {
       expect(find.text('Clinical Health Chat'), findsOneWidget);
       expect(find.text('Medical Passport & EHR'), findsOneWidget);
 
-      // Emergency Medical Passport & Care Plan Card
-      expect(find.text('Emergency Medical Passport & Care Plan'), findsOneWidget);
+      // Emergency Medical Passport Card
+      expect(find.text('Emergency Medical Passport'), findsOneWidget);
       expect(find.text('Verified EHR'), findsOneWidget);
-      expect(find.text('BLOOD GROUP'), findsOneWidget);
       expect(find.text('ALLERGIES'), findsOneWidget);
+      expect(find.text('MEDICATIONS'), findsOneWidget);
+      expect(find.text('EMERGENCY CONTACT'), findsOneWidget);
+      expect(find.text('BLOOD GROUP'), findsNothing);
+      expect(find.text('HEALTH PLAN'), findsNothing);
+      expect(find.text('CARE STATUS'), findsNothing);
       expect(find.text('Clinical Consultation'), findsOneWidget);
       expect(find.text('Open EHR Vault'), findsOneWidget);
 

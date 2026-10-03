@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'risk_assessment.dart';
 
 enum ClinicalProgressionTier {
@@ -53,6 +54,19 @@ class ScreeningHistoryPoint {
     this.uncertaintyBounds = const {},
   });
 
+  static Map<String, dynamic> _safeMap(dynamic val) {
+    if (val == null) return {};
+    if (val is Map<String, dynamic>) return val;
+    if (val is Map) return Map<String, dynamic>.from(val);
+    if (val is String) {
+      try {
+        final decoded = jsonDecode(val);
+        if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      } catch (_) {}
+    }
+    return {};
+  }
+
   factory ScreeningHistoryPoint.fromJson(Map<String, dynamic> json) {
     final rLevelStr = json['risk_level'] as String? ?? 'LOW';
     ClinicalRiskLevel rLevel;
@@ -82,8 +96,8 @@ class ScreeningHistoryPoint {
       riskLevel: rLevel,
       imageUrl: json['image_url'] as String?,
       xaiHeatmapUrl: json['xai_heatmap_url'] as String?,
-      symptomPayload: json['symptom_payload'] as Map<String, dynamic>? ?? {},
-      uncertaintyBounds: json['uncertainty_bounds'] as Map<String, dynamic>? ?? {},
+      symptomPayload: _safeMap(json['symptom_payload']),
+      uncertaintyBounds: _safeMap(json['uncertainty_bounds']),
     );
   }
 

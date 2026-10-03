@@ -20,12 +20,12 @@ class RecommendedMedication {
 
   factory RecommendedMedication.fromJson(Map<String, dynamic> json) {
     return RecommendedMedication(
-      brandName: json['brandName'] as String?,
-      genericName: json['genericName'] as String? ?? 'Medication',
+      brandName: json['brandName'] as String? ?? json['brand_name'] as String?,
+      genericName: json['genericName'] as String? ?? json['generic_name'] as String? ?? 'Medication',
       dosage: json['dosage'] as String? ?? '',
       frequency: json['frequency'] as String? ?? '',
       duration: json['duration'] as String? ?? '',
-      clinicalNotes: json['clinicalNotes'] as String? ?? '',
+      clinicalNotes: json['clinicalNotes'] as String? ?? json['clinical_notes'] as String? ?? '',
     );
   }
 
@@ -65,30 +65,30 @@ class TreatmentPathway {
   });
 
   factory TreatmentPathway.fromJson(Map<String, dynamic> json) {
-    final rawRx = json['recommendedRx'];
+    final rawRx = json['recommendedRx'] ?? json['recommended_rx'];
     final rxList = (rawRx is List)
         ? rawRx.map((e) => RecommendedMedication.fromJson(e as Map<String, dynamic>)).toList()
         : <RecommendedMedication>[];
 
-    final rawLabs = json['labOrders'];
+    final rawLabs = json['labOrders'] ?? json['lab_orders'];
     final labsList = (rawLabs is List) ? rawLabs.map((e) => e.toString()).toList() : <String>[];
 
-    final rawImg = json['imagingOrders'];
+    final rawImg = json['imagingOrders'] ?? json['imaging_orders'];
     final imgList = (rawImg is List) ? rawImg.map((e) => e.toString()).toList() : <String>[];
 
-    final rawFlags = json['urgentRedFlags'];
+    final rawFlags = json['urgentRedFlags'] ?? json['urgent_red_flags'];
     final flagsList = (rawFlags is List) ? rawFlags.map((e) => e.toString()).toList() : <String>[];
 
     return TreatmentPathway(
-      primaryCode: json['primaryCode'] as String? ?? '',
-      primaryTitle: json['primaryTitle'] as String? ?? '',
+      primaryCode: json['primaryCode'] as String? ?? json['primary_code'] as String? ?? '',
+      primaryTitle: json['primaryTitle'] as String? ?? json['primary_title'] as String? ?? '',
       recommendedRx: rxList,
       labOrders: labsList,
       imagingOrders: imgList,
-      monitoringFrequency: json['monitoringFrequency'] as String? ?? 'Daily monitoring',
-      followUpDays: json['followUpDays'] as int? ?? 3,
+      monitoringFrequency: json['monitoringFrequency'] as String? ?? json['monitoring_frequency'] as String? ?? 'Daily monitoring',
+      followUpDays: json['followUpDays'] as int? ?? json['follow_up_days'] as int? ?? 3,
       urgentRedFlags: flagsList,
-      urgencyLevel: json['urgencyLevel'] as String? ?? 'ROUTINE',
+      urgencyLevel: json['urgencyLevel'] as String? ?? json['urgency_level'] as String? ?? 'ROUTINE',
     );
   }
 
@@ -129,7 +129,7 @@ class DifferentialDiagnosisCandidate {
   });
 
   factory DifferentialDiagnosisCandidate.fromJson(Map<String, dynamic> json) {
-    final rawCriteria = json['matchedCriteria'];
+    final rawCriteria = json['matchedCriteria'] ?? json['matched_criteria'];
     final criteriaList = (rawCriteria is List) ? rawCriteria.map((e) => e.toString()).toList() : <String>[];
 
     return DifferentialDiagnosisCandidate(
@@ -138,9 +138,9 @@ class DifferentialDiagnosisCandidate {
       category: json['category'] as String? ?? 'General Diagnosis',
       uri: json['uri'] as String? ?? 'http://id.who.int/icd/release/11/mms',
       probability: (json['probability'] as num?)?.toDouble() ?? 0.0,
-      logitScore: (json['logitScore'] as num?)?.toDouble() ?? 0.0,
+      logitScore: (json['logitScore'] as num?)?.toDouble() ?? (json['logit_score'] as num?)?.toDouble() ?? 0.0,
       matchedCriteria: criteriaList,
-      clinicalRationale: json['clinicalRationale'] as String? ?? '',
+      clinicalRationale: json['clinicalRationale'] as String? ?? json['clinical_rationale'] as String? ?? '',
     );
   }
 
@@ -181,14 +181,14 @@ class ClinicianApproval {
 
   factory ClinicianApproval.fromJson(Map<String, dynamic> json) {
     return ClinicianApproval(
-      clinicianId: json['clinicianId'] as String? ?? 'clinician-default',
-      clinicianName: json['clinicianName'] as String? ?? 'Attending Clinician, MD',
-      approvedAt: json['approvedAt'] as String? ?? DateTime.now().toIso8601String(),
-      isOverridden: json['isOverridden'] as bool? ?? false,
-      originalCode: json['originalCode'] as String? ?? '',
-      overriddenCode: json['overriddenCode'] as String?,
-      overrideNotes: json['overrideNotes'] as String?,
-      signatureHash: json['signatureHash'] as String? ?? '',
+      clinicianId: json['clinicianId'] as String? ?? json['clinician_id'] as String? ?? 'clinician-default',
+      clinicianName: json['clinicianName'] as String? ?? json['clinician_name'] as String? ?? 'Attending Clinician, MD',
+      approvedAt: json['approvedAt'] as String? ?? json['approved_at'] as String? ?? DateTime.now().toIso8601String(),
+      isOverridden: json['isOverridden'] as bool? ?? json['is_overridden'] as bool? ?? false,
+      originalCode: json['originalCode'] as String? ?? json['original_code'] as String? ?? '',
+      overriddenCode: json['overriddenCode'] as String? ?? json['overridden_code'] as String?,
+      overrideNotes: json['overrideNotes'] as String? ?? json['override_notes'] as String?,
+      signatureHash: json['signatureHash'] as String? ?? json['signature_hash'] as String? ?? '',
     );
   }
 
@@ -247,21 +247,22 @@ class CDSSEvaluationResult {
   bool get isOverridden => attendingClinicianApproval?.isOverridden ?? false;
 
   factory CDSSEvaluationResult.fromJson(Map<String, dynamic> json) {
-    final rawDDx = json['differentialDiagnoses'];
+    final rawDDx = json['differentialDiagnoses'] ?? json['differential_diagnoses'];
     final ddxList = (rawDDx is List)
         ? rawDDx.map((e) => DifferentialDiagnosisCandidate.fromJson(e as Map<String, dynamic>)).toList()
         : <DifferentialDiagnosisCandidate>[];
 
-    final rawApproval = json['attendingClinicianApproval'];
+    final rawApproval = json['attendingClinicianApproval'] ?? json['attending_clinician_approval'];
     final approval = (rawApproval is Map<String, dynamic>)
         ? ClinicianApproval.fromJson(rawApproval)
         : null;
 
-    final pathway = json['treatmentPathway'] is Map<String, dynamic>
-        ? TreatmentPathway.fromJson(json['treatmentPathway'] as Map<String, dynamic>)
+    final pathwayJson = json['treatmentPathway'] ?? json['treatment_pathway'];
+    final pathway = pathwayJson is Map<String, dynamic>
+        ? TreatmentPathway.fromJson(pathwayJson)
         : TreatmentPathway(
-            primaryCode: json['primaryICD11Code'] as String? ?? '',
-            primaryTitle: json['primaryICD11Title'] as String? ?? '',
+            primaryCode: json['primaryICD11Code'] as String? ?? json['primary_icd11_code'] as String? ?? '',
+            primaryTitle: json['primaryICD11Title'] as String? ?? json['primary_icd11_title'] as String? ?? '',
             recommendedRx: [],
             labOrders: [],
             imagingOrders: [],
@@ -271,24 +272,44 @@ class CDSSEvaluationResult {
             urgencyLevel: 'ROUTINE',
           );
 
+    final resolvedCode = json['primaryICD11Code'] as String? ??
+        json['primary_icd11_code'] as String? ??
+        (ddxList.isNotEmpty ? ddxList.first.code : null) ??
+        (pathway.primaryCode.isNotEmpty ? pathway.primaryCode : null) ??
+        '1B10.0';
+
+    final resolvedTitle = json['primaryICD11Title'] as String? ??
+        json['primary_icd11_title'] as String? ??
+        (ddxList.isNotEmpty ? ddxList.first.title : null) ??
+        (pathway.primaryTitle.isNotEmpty ? pathway.primaryTitle : null) ??
+        'Acute Respiratory Infection';
+
+    final resolvedUri = json['primaryICD11Uri'] as String? ??
+        json['primary_icd11_uri'] as String? ??
+        (ddxList.isNotEmpty && ddxList.first.uri.isNotEmpty ? ddxList.first.uri : null) ??
+        'http://id.who.int/icd/release/11/mms/$resolvedCode';
+
     return CDSSEvaluationResult(
       id: json['id'] as String? ?? 'eval-${DateTime.now().millisecondsSinceEpoch}',
-      screeningId: json['screeningId'] as String?,
-      patientId: json['patientId'] as String? ?? 'anonymous',
-      institutionId: json['institutionId'] as String?,
-      institutionName: json['institutionName'] as String?,
-      primaryICD11Code: json['primaryICD11Code'] as String? ?? '1B10.0',
-      primaryICD11Title: json['primaryICD11Title'] as String? ?? 'Acute Respiratory Infection',
-      primaryICD11Uri: json['primaryICD11Uri'] as String? ?? 'http://id.who.int/icd/release/11/mms/1B10.0',
+      screeningId: json['screeningId'] as String? ?? json['screening_id'] as String?,
+      patientId: json['patientId'] as String? ?? json['patient_id'] as String? ?? 'anonymous',
+      institutionId: json['institutionId'] as String? ?? json['institution_id'] as String?,
+      institutionName: json['institutionName'] as String? ?? json['institution_name'] as String?,
+      primaryICD11Code: resolvedCode,
+      primaryICD11Title: resolvedTitle,
+      primaryICD11Uri: resolvedUri,
       differentialDiagnoses: ddxList,
       treatmentPathway: pathway,
-      temperatureScaling: (json['temperatureScaling'] as num?)?.toDouble() ?? 1.25,
+      temperatureScaling: (json['temperatureScaling'] as num?)?.toDouble() ??
+          (json['temperature_scaling'] as num?)?.toDouble() ??
+          1.25,
       regulatoryDisclaimer: json['regulatoryDisclaimer'] as String? ??
+          json['regulatory_disclaimer'] as String? ??
           'AI Clinical Decision Support Tool — For Licensed Practitioner Reference Only. Requires Attending Physician Validation.',
-      modelUsed: json['modelUsed'] as String?,
+      modelUsed: json['modelUsed'] as String? ?? json['model_used'] as String?,
       attendingClinicianApproval: approval,
-      createdAt: json['createdAt'] as String? ?? DateTime.now().toIso8601String(),
-      updatedAt: json['updatedAt'] as String? ?? DateTime.now().toIso8601String(),
+      createdAt: json['createdAt'] as String? ?? json['created_at'] as String? ?? DateTime.now().toIso8601String(),
+      updatedAt: json['updatedAt'] as String? ?? json['updated_at'] as String? ?? DateTime.now().toIso8601String(),
     );
   }
 

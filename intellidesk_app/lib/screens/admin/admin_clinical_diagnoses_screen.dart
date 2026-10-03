@@ -362,20 +362,25 @@ class _AdminClinicalDiagnosesScreenState extends State<AdminClinicalDiagnosesScr
     CDSSEvaluationResult evaluation = fallbackEval;
 
     // 1. Check if CDSS evaluation is already attached to this screening record
-    final rawCdss = screening['cdss_evaluation'] ?? screening['cdssEvaluation'];
-    if (rawCdss is Map) {
+    final rawCdss = screening['cdss_evaluation'] ??
+        screening['cdssEvaluation'] ??
+        (screening['cdss_evaluations'] is List && (screening['cdss_evaluations'] as List).isNotEmpty ? (screening['cdss_evaluations'] as List).first : null) ??
+        (screening['symptom_payload'] is Map ? screening['symptom_payload']['cdss_evaluation'] ?? screening['symptom_payload']['cdssEvaluation'] : null);
+    if (rawCdss is Map && rawCdss.isNotEmpty) {
       try {
         final parsed = CDSSEvaluationResult.fromJson(Map<String, dynamic>.from(rawCdss));
-        if (context.mounted) {
-          CDSSDecisionDrawer.show(
-            context,
-            evaluation: parsed,
-            isClinicianView: true,
-            institutionId: instId,
-            institutionName: instName,
-          );
+        if (parsed.differentialDiagnoses.isNotEmpty || parsed.treatmentPathway.recommendedRx.isNotEmpty || parsed.treatmentPathway.labOrders.isNotEmpty) {
+          if (context.mounted) {
+            CDSSDecisionDrawer.show(
+              context,
+              evaluation: parsed,
+              isClinicianView: true,
+              institutionId: instId,
+              institutionName: instName,
+            );
+          }
+          return;
         }
-        return;
       } catch (_) {}
     }
 

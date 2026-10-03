@@ -301,7 +301,7 @@ class DiagnosticsService {
   Future<List<ScreeningHistoryPoint>> fetchLongitudinalHistory(String patientId) async {
     try {
       final uri = Uri.parse('${ApiConfig.baseUrl}/diagnostics/screenings/patient/$patientId/longitudinal');
-      final res = await http.get(uri, headers: ApiConfig.patientHeaders).timeout(const Duration(seconds: 4));
+      final res = await http.get(uri, headers: ApiConfig.patientHeaders).timeout(const Duration(seconds: 20));
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
         if (body['success'] == true && body['screenings'] is List) {
@@ -311,7 +311,9 @@ class DiagnosticsService {
           if (list.isNotEmpty) return list;
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('⚠️ [DiagnosticsService] fetchLongitudinalHistory error for $patientId: $e');
+    }
 
     return [];
   }
@@ -327,7 +329,7 @@ class DiagnosticsService {
           'baselineScreeningId': baselineId,
           'followupScreeningId': followupId,
         }),
-      ).timeout(const Duration(seconds: 4));
+      ).timeout(const Duration(seconds: 20));
 
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
@@ -335,7 +337,9 @@ class DiagnosticsService {
           return ScreeningDeltaResult.fromJson(body['comparison']);
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('⚠️ [DiagnosticsService] compareScreenings error between $baselineId and $followupId: $e');
+    }
 
     throw Exception('Could not retrieve delta comparison from server');
   }

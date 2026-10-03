@@ -25,11 +25,12 @@ class _EmergencyHubScreenState extends State<EmergencyHubScreen> {
     _fetchFacilities();
   }
 
-  Future<void> _fetchFacilities() async {
+  Future<void> _fetchFacilities({bool forceRefresh = false}) async {
     setState(() => _isLoading = true);
     try {
       final results = await _locatorService.getNearbyFacilities(
         radiusKm: _searchRadiusKm,
+        forceRefresh: forceRefresh,
       );
       final filtered = (_selectedType == null || _selectedType == 'All')
           ? results
@@ -73,14 +74,14 @@ class _EmergencyHubScreenState extends State<EmergencyHubScreen> {
         elevation: 0,
         actions: [
           IconButton(
-            tooltip: 'Refresh GPS',
+            tooltip: 'Refresh GPS & Facilities',
             icon: const Icon(Icons.my_location, color: Color(0xFF0D9488)),
-            onPressed: _fetchFacilities,
+            onPressed: () => _fetchFacilities(forceRefresh: true),
           ),
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: _fetchFacilities,
+        onRefresh: () => _fetchFacilities(forceRefresh: true),
         color: const Color(0xFF0D9488),
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),

@@ -97,7 +97,7 @@ void main() {
       }
     });
 
-    test('HospitalLocatorService throttles re-queries when displacement < 100m', () async {
+    test('HospitalLocatorService throttles re-queries when displacement < 200m', () async {
       HospitalLocatorService.clearCache();
       final locator = HospitalLocatorService();
 
@@ -109,14 +109,23 @@ void main() {
       );
       expect(first.isNotEmpty, isTrue);
 
-      // Micro-shift: ~22 meters away (0.0002 deg lat)
+      // Micro-shift: ~50 meters away (0.00045 deg lat)
       final cached = await locator.getNearbyFacilities(
-        latitude: 40.7130,
+        latitude: 40.71325,
         longitude: -74.0060,
         radiusKm: 20.0,
       );
       expect(cached.length, equals(first.length));
       expect(cached[0].id, equals(first[0].id));
+
+      // With forceRefresh: true, spatial cache is bypassed
+      final refreshed = await locator.getNearbyFacilities(
+        latitude: 40.71325,
+        longitude: -74.0060,
+        radiusKm: 20.0,
+        forceRefresh: true,
+      );
+      expect(refreshed.isNotEmpty, isTrue);
     });
 
     testWidgets('EmergencyFacilityCard renders facility info and actions', (tester) async {

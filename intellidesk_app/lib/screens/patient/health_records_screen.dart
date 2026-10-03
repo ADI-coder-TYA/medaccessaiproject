@@ -10,6 +10,7 @@ import '../../modules/diagnostics/ui/LongitudinalHistoryScreen.dart';
 import '../../modules/pharmacy/ui/patient_allergy_profile_screen.dart';
 import 'claim_intake_screen.dart';
 import 'claim_status_screen.dart';
+import '../../services/institution_service.dart';
 
 class HealthRecordsScreen extends StatefulWidget {
   const HealthRecordsScreen({super.key});
@@ -100,6 +101,7 @@ class _MedicalPassportEhrView extends StatefulWidget {
 class _MedicalPassportEhrViewState extends State<_MedicalPassportEhrView> {
   bool _isLoading = true;
   String? _error;
+  String _institutionAdmin = 'Dr. Aditya';
   List<Map<String, dynamic>> _allergies = [];
   List<Map<String, dynamic>> _medications = [];
   List<Map<String, dynamic>> _screenings = [];
@@ -126,6 +128,11 @@ class _MedicalPassportEhrViewState extends State<_MedicalPassportEhrView> {
 
     try {
       final pid = widget.patientId;
+      final auth = context.read<AuthProvider>();
+      final instId = auth.user?.institutionId;
+
+      // 0. Fetch Designated Clinical Administrator
+      final adminFuture = InstitutionService.getInstitutionAdministrator(instId);
 
       // 1. Fetch Allergies from live Supabase
       final algFuture = http
@@ -143,6 +150,7 @@ class _MedicalPassportEhrViewState extends State<_MedicalPassportEhrView> {
           .timeout(const Duration(seconds: 4));
 
       final results = await Future.wait([algFuture, medFuture, scrFuture]);
+      final resolvedAdmin = await adminFuture;
 
       List<Map<String, dynamic>> loadedAllergies = [];
       List<Map<String, dynamic>> loadedMedications = [];
@@ -177,6 +185,9 @@ class _MedicalPassportEhrViewState extends State<_MedicalPassportEhrView> {
           _allergies = loadedAllergies;
           _medications = loadedMedications;
           _screenings = loadedScreenings;
+          if (resolvedAdmin.isNotEmpty) {
+            _institutionAdmin = resolvedAdmin;
+          }
           _isLoading = false;
         });
       }
@@ -194,9 +205,9 @@ class _MedicalPassportEhrViewState extends State<_MedicalPassportEhrView> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final user = auth.user;
-    final patientName = user?.fullName ?? user?.name ?? 'Alex Rivera';
+    final patientName = user?.fullName ?? user?.name ?? 'Verified Patient';
     final patientId = widget.patientId;
-    final institution = user?.institutionName ?? 'Apex Health & Medical Center';
+    final institution = user?.institutionName ?? 'Healthcare Center';
     final emergencyPhone = user?.phone ?? '+1-555-0199';
 
     return RefreshIndicator(
@@ -277,8 +288,7 @@ class _MedicalPassportEhrViewState extends State<_MedicalPassportEhrView> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _buildIdField('BLOOD GROUP', 'O+ POSITIVE'),
-                      _buildIdField('PRIMARY PHYSICIAN', 'Dr. Sarah Chen, MD'),
+                      _buildIdField('PRIMARY PHYSICIAN', _institutionAdmin.toUpperCase()),
                       _buildIdField('EMERGENCY CONTACT', emergencyPhone),
                     ],
                   ),
@@ -480,21 +490,6 @@ class _MedicalPassportEhrViewState extends State<_MedicalPassportEhrView> {
             ),
             const SizedBox(height: 16),
 
-            // 5. Immunization Record
-            _buildExpandableCard(
-              icon: Icons.vaccines_outlined,
-              title: 'Immunization Ledger',
-              subtitle: 'Institutional vaccination verification',
-              child: Column(
-                children: [
-                  _buildImmunizationRow('COVID-19 Bivalent Booster', 'Administered Nov 2025', 'Batch #NV-8821'),
-                  const Divider(color: Color(0xFFE2E8F0)),
-                  _buildImmunizationRow('Seasonal Influenza Quadrivalent', 'Administered Oct 2025', 'Batch #FL-4402'),
-                  const Divider(color: Color(0xFFE2E8F0)),
-                  _buildImmunizationRow('Tetanus, Diphtheria, Pertussis (Tdap)', 'Administered Jun 2023', 'Valid thru 2033'),
-                ],
-              ),
-            ),
             const SizedBox(height: 32),
           ],
         ),
@@ -710,32 +705,7 @@ class _MedicalPassportEhrViewState extends State<_MedicalPassportEhrView> {
     );
   }
 
-  static Widget _buildImmunizationRow(String vaccine, String administered, String batch) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          const Icon(Icons.vaccines, color: Color(0xFF0D9488), size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  vaccine,
-                  style: const TextStyle(color: Color(0xFF0F172A), fontSize: 13, fontWeight: FontWeight.w600),
-                ),
-                Text(
-                  '$administered • $batch',
-                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+
 }
 
 class _InstitutionalCoverageView extends StatefulWidget {

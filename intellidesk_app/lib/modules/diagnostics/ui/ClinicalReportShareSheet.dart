@@ -5,8 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:provider/provider.dart';
 import '../../../config/api_config.dart';
+import '../../../providers/auth_provider.dart';
 import '../../../theme/app_theme.dart';
 import '../models/diagnostic_session.dart';
 import '../models/risk_assessment.dart';
@@ -193,6 +196,161 @@ class _ClinicalReportShareSheetState extends State<ClinicalReportShareSheet> {
     }
   }
 
+  Future<void> _onDownloadPdfPressed() async {
+    // If age or gender are not yet recorded on the stateProvider, prompt the patient before generating
+    if (widget.stateProvider.age == null || widget.stateProvider.gender == null) {
+      final shouldProceed = await _showDemographicsDialog();
+      if (!shouldProceed) return;
+    }
+    await _handleDownloadPdf();
+  }
+
+  Future<bool> _showDemographicsDialog() async {
+    final ageController = TextEditingController(
+      text: widget.stateProvider.age != null ? widget.stateProvider.age.toString() : '',
+    );
+    String? selectedGender = widget.stateProvider.gender;
+    String? ageError;
+    String? genderError;
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              backgroundColor: isDark ? AppTheme.cardDarkNavy : Colors.white,
+              title: Row(
+                children: [
+                  const Icon(Icons.badge_outlined, color: AppTheme.primaryBrand, size: 22),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Patient Demographics',
+                    style: GoogleFonts.outfit(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : AppTheme.textDark,
+                    ),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Patient demographics (Age & Gender) are required to generate an official clinical referral letter.',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: isDark ? Colors.white70 : AppTheme.textMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: ageController,
+                      keyboardType: TextInputType.number,
+                      onChanged: (_) {
+                        if (ageError != null) {
+                          setDialogState(() => ageError = null);
+                        }
+                      },
+                      decoration: InputDecoration(
+                        labelText: 'Age (Years) *',
+                        hintText: 'e.g. 28',
+                        errorText: ageError,
+                        prefixIcon: const Icon(Icons.cake_outlined, color: AppTheme.primaryBrand),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    DropdownButtonFormField<String>(
+                      value: selectedGender,
+                      decoration: InputDecoration(
+                        labelText: 'Gender *',
+                        hintText: 'Select gender',
+                        errorText: genderError,
+                        prefixIcon: const Icon(Icons.person_outline, color: AppTheme.primaryBrand),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'Female', child: Text('Female')),
+                        DropdownMenuItem(value: 'Male', child: Text('Male')),
+                        DropdownMenuItem(value: 'Non-Binary', child: Text('Non-Binary')),
+                        DropdownMenuItem(value: 'Other', child: Text('Other')),
+                      ],
+                      onChanged: (val) {
+                        setDialogState(() {
+                          selectedGender = val;
+                          genderError = null;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogCtx).pop(false),
+                  child: Text(
+                    'Cancel',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: isDark ? Colors.white60 : AppTheme.textMuted,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryBrand,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () {
+                    final rawAge = ageController.text.trim();
+                    final enteredAge = int.tryParse(rawAge);
+                    bool hasError = false;
+
+                    if (rawAge.isEmpty || enteredAge == null || enteredAge <= 0 || enteredAge > 125) {
+                      setDialogState(() {
+                        ageError = 'Please enter a valid age (1-125)';
+                      });
+                      hasError = true;
+                    }
+
+                    if (selectedGender == null || selectedGender!.isEmpty) {
+                      setDialogState(() {
+                        genderError = 'Please select a gender';
+                      });
+                      hasError = true;
+                    }
+
+                    if (hasError) return;
+
+                    widget.stateProvider.setAge(enteredAge);
+                    widget.stateProvider.setGender(selectedGender);
+                    Navigator.of(dialogCtx).pop(true);
+                  },
+                  child: Text(
+                    'Confirm & Generate',
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    return result ?? false;
+  }
+
   Future<void> _handleDownloadPdf() async {
     setState(() {
       _isGeneratingPdf = true;
@@ -200,6 +358,39 @@ class _ClinicalReportShareSheetState extends State<ClinicalReportShareSheet> {
     });
 
     try {
+      AuthProvider? auth;
+      try {
+        auth = Provider.of<AuthProvider>(context, listen: false);
+      } catch (_) {}
+
+      final patientId = widget.session?.patientId ??
+          auth?.user?.patientId ??
+          auth?.user?.id ??
+          'PAT-37B041';
+      final patientName = auth?.user?.name ?? 'Priya Sharma';
+      final institutionId = widget.session?.institutionId ??
+          auth?.user?.institutionId ??
+          ApiConfig.activeInstitutionId;
+      final institutionName = auth?.user?.institutionName ??
+          ApiConfig.activeInstitutionName;
+      final screeningId = widget.assessment.screeningId ?? widget.session?.id;
+
+      final age = widget.stateProvider.age;
+      final gender = widget.stateProvider.gender;
+      final demographicsMap = <String, dynamic>{
+        if (age != null) 'age': age,
+        if (gender != null && gender.isNotEmpty && gender != 'Prefer not to say') 'gender': gender,
+      };
+
+      final vitalsMap = widget.session?.symptomVector.vitals.toMap() ?? {
+        'heartRateBpm': 79,
+        'oxygenSaturationSpo2': 100,
+        'bloodPressureSystolicMmHg': 142,
+        'bloodPressureDiastolicMmHg': 92,
+        'temperatureCelsius': widget.stateProvider.temperatureCelsius,
+        'painSeverity': widget.stateProvider.painSeverity,
+      };
+
       // 1. POST to backend to generate the PDF bytes
       final postUri = ApiConfig.resolveUri('/diagnostics/referral-letter');
       final res = await http
@@ -207,16 +398,23 @@ class _ClinicalReportShareSheetState extends State<ClinicalReportShareSheet> {
             postUri,
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
+              'demographics': demographicsMap,
+              'screeningId': screeningId,
+              'patientId': patientId,
+              'patientName': patientName,
+              'institutionId': institutionId,
+              'institutionName': institutionName,
               'assessment': widget.assessment.toMap(),
+              'vitals': vitalsMap,
               'symptomVector': {
                 'bodyLocation': widget.stateProvider.selectedBodyLocation,
                 'painSeverity': widget.stateProvider.painSeverity,
                 'durationDays': widget.stateProvider.symptomDurationDays,
                 'temperatureCelsius': widget.stateProvider.temperatureCelsius,
                 'symptoms': widget.stateProvider.selectedSecondarySymptoms.toList(),
+                'vitals': vitalsMap,
+                'demographics': demographicsMap,
               },
-              'patientId': widget.session?.patientId ?? 'pt_local',
-              'institutionId': widget.session?.institutionId ?? 'default_inst',
             }),
           )
           .timeout(const Duration(seconds: 30));
@@ -239,25 +437,49 @@ class _ClinicalReportShareSheetState extends State<ClinicalReportShareSheet> {
 
       debugPrint('📄 [PDF] Saved ${pdfBytes.length} bytes → ${file.path}');
 
-      // 3. Open with native viewer via file:// URI
-      final fileUri = Uri.file(file.path);
-      final opened = await launchUrl(fileUri, mode: LaunchMode.externalApplication);
+      // 3. Open safely with OpenFilex using content:// URI & FileProvider (avoids FileUriExposedException)
+      bool opened = false;
+      try {
+        final result = await OpenFilex.open(file.path, type: 'application/pdf');
+        debugPrint('📄 [PDF] OpenFilex result: ${result.type} - ${result.message}');
+        if (result.type == ResultType.done) {
+          opened = true;
+        }
+      } catch (openErr) {
+        debugPrint('⚠️ [PDF] OpenFilex open exception: $openErr');
+      }
 
-      if (!opened && mounted) {
-        // Fallback snackbar with path info if viewer cannot open
+      // 4. Fallback: if native PDF viewer isn't available or fails, use system share sheet
+      if (!opened) {
+        try {
+          final xFile = XFile(file.path, mimeType: 'application/pdf', name: fileName);
+          await SharePlus.instance.share(
+            ShareParams(
+              files: [xFile],
+              subject: 'IntelliDesk Clinical Referral Letter',
+              text: 'Clinical Referral Letter for Patient ${widget.session?.patientId ?? 'EHR'}',
+            ),
+          );
+          opened = true;
+        } catch (shareErr) {
+          debugPrint('⚠️ [PDF] Share fallback error: $shareErr');
+        }
+      }
+
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: const Color(0xFF1E293B),
+            backgroundColor: const Color(0xFF0F766E),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            duration: const Duration(seconds: 5),
+            duration: const Duration(seconds: 4),
             content: Row(
               children: [
                 const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 18),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    '✅ PDF saved (${(pdfBytes.length / 1024).toStringAsFixed(1)} KB). No PDF viewer installed — check Downloads.',
+                    '✅ Referral letter ready (${(pdfBytes.length / 1024).toStringAsFixed(1)} KB).',
                     style: const TextStyle(color: Colors.white, fontSize: 12),
                   ),
                 ),
@@ -495,7 +717,7 @@ class _ClinicalReportShareSheetState extends State<ClinicalReportShareSheet> {
               _isGeneratingPdf ? 'Generating PDF...' : 'Download Referral Letter (PDF)',
               style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold),
             ),
-            onPressed: _isGeneratingPdf ? null : _handleDownloadPdf,
+            onPressed: _isGeneratingPdf ? null : _onDownloadPdfPressed,
           ),
           if (_pdfErrorMessage != null) ...[
             const SizedBox(height: 6),

@@ -50,6 +50,8 @@ class RemoteBackendInferenceEngine implements InferenceEngineInterface {
       'patientName': ApiConfig.userName,
       'institutionId': ApiConfig.activeInstitutionId,
       'imageUrl': imageUrl,
+      'clinicalNotes': symptoms.additionalNotes,
+      'clinical_notes': symptoms.additionalNotes,
       'symptoms': symptoms.toMap(),
     };
 

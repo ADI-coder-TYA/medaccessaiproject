@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import '../../../config/api_config.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../screens/patient/health_records_screen.dart';
+import '../../../screens/patient/pharmacy_hub_screen.dart';
 
 // ── Data model ────────────────────────────────────────────────────
 class _ChatMsg {
@@ -11,12 +13,14 @@ class _ChatMsg {
   final bool isUser;
   final DateTime ts;
   final bool isCrisis;
+  final List<Map<String, dynamic>>? suggestedActions;
 
   const _ChatMsg({
     required this.text,
     required this.isUser,
     required this.ts,
     this.isCrisis = false,
+    this.suggestedActions,
   });
 }
 
@@ -101,7 +105,7 @@ class _DiagnosticChatScreenState extends State<DiagnosticChatScreen>
     _scrollToBottom();
 
     final auth = context.read<AuthProvider>();
-    final patientId = auth.user?.patientId ?? auth.user?.id ?? 'anonymous';
+    final patientId = auth.user?.id ?? auth.user?.patientId ?? auth.user?.email ?? 'anonymous';
 
     try {
       final uri = Uri.parse('${ApiConfig.baseUrl}/chat/mental-health');
@@ -126,12 +130,20 @@ class _DiagnosticChatScreenState extends State<DiagnosticChatScreen>
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         final reply = (data['reply'] as String? ?? '').trim();
         final isCrisis = data['isCrisis'] == true;
+        final rawActions = data['suggestedActions'] as List<dynamic>?;
+        final actions = rawActions?.map((a) => Map<String, dynamic>.from(a as Map)).toList();
 
         _history.add(_HistoryEntry('model', reply));
 
         setState(() {
           _isTyping = false;
-          _messages.add(_ChatMsg(text: reply, isUser: false, ts: DateTime.now(), isCrisis: isCrisis));
+          _messages.add(_ChatMsg(
+            text: reply,
+            isUser: false,
+            ts: DateTime.now(),
+            isCrisis: isCrisis,
+            suggestedActions: actions,
+          ));
         });
         _scrollToBottom();
 
@@ -366,6 +378,38 @@ class _DiagnosticChatScreenState extends State<DiagnosticChatScreen>
                     ),
                   ),
                 ),
+                if (!isUser && msg.suggestedActions != null && msg.suggestedActions!.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: msg.suggestedActions!.map((act) {
+                      final title = act['title']?.toString() ?? 'Action';
+                      final actionType = act['action']?.toString() ?? '';
+                      return ActionChip(
+                        avatar: Icon(
+                          actionType == 'OPEN_SCREENING'
+                              ? Icons.assignment_outlined
+                              : Icons.medication_outlined,
+                          size: 15,
+                          color: _tealLight,
+                        ),
+                        label: Text(
+                          title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        backgroundColor: const Color(0xFF0F766E).withValues(alpha: 0.35),
+                        side: const BorderSide(color: Color(0xFF0D9488), width: 0.8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        onPressed: () => _handleAction(act),
+                      );
+                    }).toList(),
+                  ),
+                ],
                 const SizedBox(height: 3),
                 Text(
                   _formatTime(msg.ts),
@@ -378,6 +422,21 @@ class _DiagnosticChatScreenState extends State<DiagnosticChatScreen>
         ],
       ),
     );
+  }
+
+  void _handleAction(Map<String, dynamic> act) {
+    final actionType = act['action']?.toString() ?? '';
+    if (actionType == 'OPEN_SCREENING') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const HealthRecordsScreen()),
+      );
+    } else if (actionType == 'OPEN_PHARMACY') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const PharmacyHubScreen()),
+      );
+    }
   }
 
   Widget _ariaAvatar() {

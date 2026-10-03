@@ -181,6 +181,73 @@ void main() {
       expect(restored.differentialDiagnoses.length, 3);
       expect(restored.treatmentPathway.recommendedRx.length, 2);
     });
+
+    test('CDSSEvaluationResult correctly deserializes Supabase snake_case database row', () {
+      final dbRow = {
+        'id': 'cd0008ba-f78a-4524-a65f-9ba166c1c87f',
+        'screening_id': 'c2f86594-61e8-4748-bb61-8ed0480ab4cb',
+        'patient_id': 'usr_pat_PAT-9470',
+        'primary_icd11_code': '1B10.0',
+        'differential_diagnoses': [
+          {
+            'uri': 'http://id.who.int/icd/release/11/mms/1B10.0',
+            'code': '1B10.0',
+            'title': 'Acute Upper Respiratory Tract Infection',
+            'category': 'Respiratory Diseases',
+            'logit_score': 2.1,
+            'probability': 0.4946,
+            'matched_criteria': ['General malaise', 'Throat / Oral Cavity'],
+            'clinical_rationale': 'Patient presents with upper respiratory distress',
+          },
+          {
+            'uri': 'http://id.who.int/icd/release/11/mms/CA00',
+            'code': 'CA00',
+            'title': 'Acute Bronchitis',
+            'category': 'Respiratory Diseases',
+            'logitScore': 0.5,
+            'probability': 0.1375,
+            'matchedCriteria': ['Throat discomfort'],
+            'clinicalRationale': 'Secondary differential',
+          }
+        ],
+        'treatment_pathway': {
+          'primary_code': '1B10.0',
+          'primary_title': 'Acute Upper Respiratory Tract Infection',
+          'recommended_rx': [
+            {
+              'generic_name': 'Acetaminophen',
+              'dosage': '500 mg',
+              'frequency': 'Q6H PRN',
+              'duration': '3 - 5 days',
+              'clinical_notes': 'Antipyretic and analgesic',
+            }
+          ],
+          'lab_orders': ['Rapid Influenza A/B Antigen', 'SARS-CoV-2 RT-PCR'],
+          'imaging_orders': ['Chest X-Ray only if dyspnea develops'],
+          'urgent_red_flags': ['Stridor at rest'],
+          'urgency_level': 'IMMEDIATE_EMERGENCY',
+          'monitoring_frequency': 'Daily symptom check',
+          'follow_up_days': 5,
+        },
+        'regulatory_disclaimer': 'AI Clinical Decision Support Tool — For Licensed Practitioner Reference Only. Requires Attending Physician Validation.',
+        'temperature_scaling': 1.25,
+        'attending_clinician_approval': null,
+      };
+
+      final eval = CDSSEvaluationResult.fromJson(dbRow);
+      expect(eval.primaryICD11Code, '1B10.0');
+      expect(eval.primaryICD11Title, 'Acute Upper Respiratory Tract Infection');
+      expect(eval.differentialDiagnoses.length, 2);
+      expect(eval.differentialDiagnoses[0].code, '1B10.0');
+      expect(eval.differentialDiagnoses[0].title, 'Acute Upper Respiratory Tract Infection');
+      expect(eval.differentialDiagnoses[0].matchedCriteria.length, 2);
+      expect(eval.treatmentPathway.primaryCode, '1B10.0');
+      expect(eval.treatmentPathway.labOrders.length, 2);
+      expect(eval.treatmentPathway.recommendedRx.length, 1);
+      expect(eval.treatmentPathway.recommendedRx[0].genericName, 'Acetaminophen');
+      expect(eval.treatmentPathway.imagingOrders.length, 1);
+      expect(eval.treatmentPathway.urgentRedFlags.length, 1);
+    });
   });
 
   group('CDSS Service Fallback & Offline Tests', () {

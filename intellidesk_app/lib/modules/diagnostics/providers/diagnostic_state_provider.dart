@@ -19,7 +19,7 @@ class DiagnosticStateProvider extends ChangeNotifier {
 
   // Demographics State
   int? _age;
-  String? _gender = 'Female';
+  String? _gender;
   final Set<String> _preExistingConditions = {};
   String? _notes;
 
@@ -240,7 +240,7 @@ class DiagnosticStateProvider extends ChangeNotifier {
     _temperatureCelsius = 37.0;
     _selectedSecondarySymptoms.clear();
     _age = null;
-    _gender = 'Female';
+    _gender = null;
     _preExistingConditions.clear();
     _notes = null;
     _imageMetadata = null;

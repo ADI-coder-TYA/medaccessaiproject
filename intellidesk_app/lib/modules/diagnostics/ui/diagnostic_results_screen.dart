@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../providers/diagnostics_provider.dart';
 import '../models/risk_assessment.dart';
@@ -6,6 +8,7 @@ import '../models/emergency_facility.dart';
 import '../providers/diagnostic_state_provider.dart';
 import '../services/inference_engine_interface.dart';
 import 'diagnostic_chat_screen.dart';
+import 'diagnostic_intake_screen.dart';
 import 'EmergencyFacilitySheet.dart';
 import '../../cdss/services/cdss_service.dart';
 import '../../cdss/models/cdss_evaluation.dart';
@@ -34,6 +37,49 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
   bool _hasAutoTriggeredEmergencySheet = false;
   bool _isLoadingCDSS = false;
   CDSSEvaluationResult? _cachedCDSSResult;
+  bool _isLoadingFallback = false;
+  RiskAssessment? _fetchedAssessment;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.assessmentOverride == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _checkAndFetchLatestScreening();
+      });
+    }
+  }
+
+  Future<void> _checkAndFetchLatestScreening() async {
+    final diag = context.read<DiagnosticsProvider>();
+    final stateProvider = context.read<DiagnosticStateProvider>();
+    if (diag.currentSession?.riskAssessment != null || stateProvider.assessmentResult != null) {
+      return;
+    }
+
+    setState(() => _isLoadingFallback = true);
+    try {
+      final auth = context.read<AuthProvider>();
+      final patientId = auth.user?.patientId ?? auth.user?.id ?? ApiConfig.userId;
+      final uri = Uri.parse('${ApiConfig.baseUrl}/diagnostics/patient/$patientId/overview');
+      final res = await http.get(uri).timeout(const Duration(seconds: 4));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final screening = data['latestScreening'];
+        if (screening is Map) {
+          final mapped = RiskAssessment.fromDbScreening(Map<String, dynamic>.from(screening));
+          if (mounted) {
+            setState(() {
+              _fetchedAssessment = mapped;
+              _isLoadingFallback = false;
+            });
+            return;
+          }
+        }
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _isLoadingFallback = false);
+  }
 
   Color _getRiskColor(ClinicalRiskLevel level) {
     switch (level) {
@@ -53,12 +99,67 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
     final diag = context.watch<DiagnosticsProvider>();
     final stateProvider = context.watch<DiagnosticStateProvider>();
     final session = diag.currentSession;
-    final assessment = widget.assessmentOverride ?? session?.riskAssessment ?? stateProvider.assessmentResult;
+    final assessment = widget.assessmentOverride ?? _fetchedAssessment ?? session?.riskAssessment ?? stateProvider.assessmentResult;
 
     if (assessment == null) {
+      if (_isLoadingFallback) {
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Clinical Assessment Report', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+          body: const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: Color(0xFF0D9488)),
+                SizedBox(height: 16),
+                Text('Loading clinical diagnostic report...', style: TextStyle(color: Color(0xFF64748B), fontSize: 13)),
+              ],
+            ),
+          ),
+        );
+      }
       return Scaffold(
-        appBar: AppBar(title: const Text('Diagnostic Results')),
-        body: const Center(child: Text('No active assessment results found.')),
+        appBar: AppBar(title: const Text('Clinical Assessment Report', style: TextStyle(fontWeight: FontWeight.bold))),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.assignment_late_outlined, size: 48, color: Color(0xFF94A3B8)),
+                const SizedBox(height: 12),
+                const Text(
+                  'No Diagnostic Assessment Found',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A)),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'You have not completed any clinical checkups yet. Start a quick multimodal checkup to evaluate your symptoms, vitals, and condition.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0D9488),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  icon: const Icon(Icons.health_and_safety, size: 18),
+                  label: const Text('Start Clinical Checkup', style: TextStyle(fontWeight: FontWeight.bold)),
+                  onPressed: () {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (_) => const DiagnosticIntakeScreen()),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
@@ -170,7 +271,7 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            'Zero network transmission • Secure On-Device Processing • 100% HIPAA Private',
+                            'Zero network transmission • TFLite Quantized Neural Pipeline • 100% HIPAA Private',
                             style: TextStyle(
                               color: Colors.white.withOpacity(0.85),
                               fontSize: 11,
